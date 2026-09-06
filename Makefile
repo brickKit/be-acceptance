@@ -6,15 +6,10 @@ check-version:
 	@echo "N/A：非组件仓库，没有 component.yaml"
 
 test:
-	@pkgs="$$(go list ./... 2>/dev/null)"; \
-	if [ -z "$$pkgs" ]; then \
-		echo "⏳ 还没有 .go 文件（Task 9 起才有），暂不算失败"; \
-		exit 0; \
-	fi; \
 	go test ./... -race
 
 image:
-	@echo "N/A：没有 main 包，不产出可执行文件"
+	@echo "N/A：本仓库是本地/CI 用的验收 CLI，不作为 brickKit 服务部署，不需要镜像"
 
 migrate-idempotent:
 	@echo "N/A：非组件仓库，没有迁移"
@@ -38,9 +33,12 @@ smoke:
 module-check:
 	@echo "N/A：非组件仓库，没有 module.New 契约"
 
-# gates：本仓库自己的活——铁律六 import 扫描 + 拆回门禁（阶段四加）+
-# 平台验收 20 条 + 业务闭环。Task 9 起逐个实现，现在只是占位。
+# gates：本仓库自己的活——铁律六 import 扫描（已实现，Task 9）+ 拆回门禁
+# （阶段四加）+ 平台验收 20 条 + 业务闭环（各自先决组件出现后逐条实现）。
+# 规范入口是仓库根的 `make gates`（--root 指向装配根）；这里的目标假设
+# 本仓库位于 <装配根>/tools/be-acceptance/，只在单独调试本仓库时使用。
 gates:
-	@echo "⏳ 尚未实现（Task 9）"
+	@go build -o build/be-acceptance ./cmd/be-acceptance
+	@./build/be-acceptance gate import-scan --root ../..
 
 all: check-version test image migrate-idempotent dag-check contract-check import-scan smoke module-check

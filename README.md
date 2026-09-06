@@ -12,9 +12,11 @@
 
 ⚠️ **`module-check`（铁律七）不在这里**：那是逐仓库的 grep 检查，落在各组件自己的 `Makefile`（总纲 §I 门禁 9）。`be-acceptance` 只管跨仓库才看得出来的那些。
 
-## 现状（阶段一 Task 6）
+## 现状（阶段一 Task 9）
 
-只有目录骨架。铁律六 import 扫描见 **Task 9**。
+`gates/` 的铁律六 import 扫描已实现（`gates.ImportScan` + `cmd/be-acceptance` 的 `gate import-scan` 子命令），用 `go/parser` 解析每个组件目录的 `.go` 文件，命中本组织下、不在 `be-sdk-*` 白名单、也不是自己 module 的 import 就判违规。目前只扫 Go——Python 组件出现前不实现 Python 扫描（没有真实样本可核对 import 路径写法，见 `gates/importscan.go` 的注释）。
+
+`platform/` 与 `closedloop/` 仍只是任务清单（各 20 条 / 13 条），阶段二、三分别实现。
 
 ## 为什么这条门禁要在档 0 之前就装好
 
