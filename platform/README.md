@@ -12,7 +12,7 @@
 
 | # | 验什么 | 怎么验 | 对应本书 | 状态 |
 |---|---|---|---|---|
-| 1 | 未知键当场报错 | 往 `component.yaml` 塞一个 `assembly_role: optional`，期望 `up` 失败 | §3.5 | ⏳ 待实现 |
+| 1 | 未知键当场报错 | 往 `component.yaml` 塞一个 `assembly_role: optional`，期望 `up` 失败 | §3.5 | ✅ 已验证（Task 13，`mdm/customer`）：`brickkit up --dry-run` 报 `MANIFEST_INVALID`，退出码 1，明确点出 `assembly_role：未知字段（第 75 行）` |
 | 2 | `assembly.yaml` 靠 `artifacts` 随组件分发 | 声明 `type: metadata`，`up` 后检查 `.brickkit/artifacts/<服务名>/metadata/assembly.yaml` 在 | §3.5 | ⏳ 待实现 |
 | 3 | 地址变量名由 ID 推导、不带版本号 | 断言 `MDM_CUSTOMER_ENDPOINT=http://mdm-customer-1-0-0:8080` | §2.1、§3.4 | ⏳ 待实现 |
 | 4 | 额外端口地址是 `http://` 而不是 `grpc://` | 断言 `MDM_CUSTOMER_GRPC_ENDPOINT` 的值以 `http://` 开头，且组件的 gRPC 客户端剥掉 scheme 后能连上 | §2.1 | ⏳ 待实现 |
