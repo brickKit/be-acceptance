@@ -1,7 +1,7 @@
 # be-acceptance 不是 brickKit 组件，但仍按总纲 §I 的 9 个门禁目标写。
 .DEFAULT_GOAL := help
 .PHONY: help check-version test image migrate-idempotent dag-check contract-check \
-        import-scan smoke module-check gates tier0 all
+        import-scan smoke module-check gates tier0 tier1 all
 
 help:  ## 列出所有目标
 	@awk 'BEGIN{FS=":.*##"; printf "\n用法: make <目标>\n\n"} \
@@ -30,10 +30,11 @@ module-check:  ## N/A：没有 module.New 契约
 
 ##@ 对本仓库真正有意义的
 # ⚠️ closedloop/ 的档 0/档 2 测试要真的 docker stop postgres、brickkit
-# down && up，routine 的 `make test`/`make all` 不该顺手把这些跑了——
-# 单独用 `make tier0` 触发。
-test:  ## 跑除 closedloop/ 外的全部单测（-race）
-	go test $$(go list ./... | grep -v '/closedloop$$') -race
+# down && up；platform/ 的 20 条平台断言要真的起临时容器、跑 brickkit
+# CLI，其中一条真等 45+ 秒——routine 的 `make test`/`make all` 都不该
+# 顺手把这两块跑了，各自用 `make tier0`/`make tier1` 单独触发。
+test:  ## 跑除 closedloop/、platform/ 外的全部单测（-race）
+	go test $$(go list ./... | grep -vE '/(closedloop|platform)$$') -race
 
 dag-check:  ## 包依赖图无环（Go 编译器本身就不允许循环 import，这条恒过）
 	@go list ./... >/dev/null && echo "✓ 包依赖图无环（Go 编译器本身就不允许循环 import）"
@@ -57,6 +58,15 @@ gates:  ## 铁律六 import 扫描（对着装配根跑，单独调试本仓库�
 # ⚠️ 会真的临时停掉 postgres、跑一次 brickkit down/up——先确认没有别人在用。
 tier0:  ## 档 0 六项验收，每加一个组件都要重跑（§9.6.1 档 4）
 	go test ./closedloop/ -run 'Test档0' -v -count=1
+
+# ⚠️ 20 条平台断言（设计书 §9.6.2）。每条测试自己在 t.TempDir() 里现搭
+# 隔离的 brickkit 工作区，不碰装配仓库真实的 brickkit.yaml；用例 10 的
+# 后半段要真等 45+ 秒（真实冷启动计时，不是 mock），所以给了比默认长
+# 的超时。红的条目（当前是用例 9 后半段，一个真实的 brickKit bug）
+# 原样跑、原样红——不许为了让这条命令全绿而悄悄放宽断言或跳过它
+# （platform/README.md 记录了红的原因，§9.6.2 的判据）。
+tier1:  ## 20 条平台断言，未完成的组（B/C/F）随 Task 20 逐步补齐
+	go test ./platform/... -run TestPlatform -v -count=1 -timeout 300s
 
 ##@ 汇总
 all: check-version test image migrate-idempotent dag-check contract-check import-scan smoke module-check  ## 跑完整 9 项（不含 gates/tier0，含上面几条 N/A 直接过）

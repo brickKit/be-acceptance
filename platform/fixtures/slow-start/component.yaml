@@ -1,0 +1,16 @@
+apiVersion: brickkit/v1
+kind: Component
+metadata:
+  id: fixture/slow-start
+  name: 冷启动假组件
+  version: 1.0.0
+  description: 平台断言 10 专用——45 秒冷启动，验证默认 60 秒宽限真的顶得住
+  license: Apache-2.0
+  vendor: brickKit
+deployment:
+  type: container
+  image: brickenterprise/fixture-slow-start:1.0.0
+  port: 19003
+healthCheck:
+  type: http
+  path: /healthz
