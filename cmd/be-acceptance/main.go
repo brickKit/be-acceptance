@@ -9,7 +9,9 @@ import (
 )
 
 // be-acceptance 是验收测试仓库，不是 brickKit 组件（总纲 §2.3）。
-// 目前只有一个门禁：铁律六 import 扫描（阶段一 Task 9）。
+// 三个跨仓库门禁：铁律六 import 扫描（阶段一 Task 9）、SystemClient 误用
+// 扫描 + 裸 gin 路由扫描（阶段二 Task 2，Task 1 造出来的两处签名必须马上
+// 配上机器守卫，否则下一个组件就会写错）。
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -33,23 +35,39 @@ func main() {
 func printUsage() {
 	fmt.Println("be-acceptance —— BrickEnterprise 验收测试")
 	fmt.Println()
-	fmt.Println("  gate import-scan --root <path>   铁律六 import 扫描")
+	fmt.Println("  gate import-scan         --root <path>   铁律六 import 扫描")
+	fmt.Println("  gate system-client-scan  --root <path>   SystemClient 不许出现在用户请求路径上")
+	fmt.Println("  gate bare-gin-scan       --root <path>   业务代码不许裸用 gin 的路由方法")
 }
 
-// runGate 派发到具体门禁子命令。⚠️ 子命令词（"import-scan"）必须在
+// runGate 派发到具体门禁子命令。⚠️ 子命令词（如 "import-scan"）必须在
 // fs.Parse 之前先摘掉——flag.Parse 遇到第一个非 flag 参数就停止解析，
 // 见 tools/be-ops 同一个坑（docs/dev/实测踩坑记录.md C3）。
 func runGate(args []string) error {
-	if len(args) < 1 || args[0] != "import-scan" {
-		return fmt.Errorf("用法：be-acceptance gate import-scan --root <path>")
+	if len(args) < 1 {
+		return fmt.Errorf("用法：be-acceptance gate <import-scan|system-client-scan|bare-gin-scan> --root <path>")
 	}
-	fs := flag.NewFlagSet("import-scan", flag.ExitOnError)
+	sub, rest := args[0], args[1:]
+	fs := flag.NewFlagSet(sub, flag.ExitOnError)
 	root := fs.String("root", ".", "装配仓库根目录")
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := fs.Parse(rest); err != nil {
 		return err
 	}
 
-	violations, err := gates.ImportScan(*root)
+	switch sub {
+	case "import-scan":
+		return runImportScan(*root)
+	case "system-client-scan":
+		return runSystemClientScan(*root)
+	case "bare-gin-scan":
+		return runBareGinScan(*root)
+	default:
+		return fmt.Errorf("门禁 %q 未知", sub)
+	}
+}
+
+func runImportScan(root string) error {
+	violations, err := gates.ImportScan(root)
 	if err != nil {
 		return err
 	}
@@ -61,5 +79,37 @@ func runGate(args []string) error {
 		return fmt.Errorf("铁律六 import 扫描发现 %d 条违规", len(violations))
 	}
 	fmt.Println("✓ 铁律六 import 扫描：0 条违规")
+	return nil
+}
+
+func runSystemClientScan(root string) error {
+	violations, err := gates.SystemClientScan(root)
+	if err != nil {
+		return err
+	}
+	if len(violations) > 0 {
+		for _, v := range violations {
+			fmt.Fprintf(os.Stderr, "✗ %s:%d：%s 在用户请求路径上用了 SystemClient（§14.2.6：数据权限被绕过，不报错，返回的数据只是「多了一些」）\n",
+				v.File, v.Line, v.Component)
+		}
+		return fmt.Errorf("SystemClient 误用扫描发现 %d 条违规", len(violations))
+	}
+	fmt.Println("✓ SystemClient 误用扫描：0 条违规")
+	return nil
+}
+
+func runBareGinScan(root string) error {
+	violations, err := gates.BareGinScan(root)
+	if err != nil {
+		return err
+	}
+	if len(violations) > 0 {
+		for _, v := range violations {
+			fmt.Fprintf(os.Stderr, "✗ %s:%d：%s 裸用了 gin 的 %s(...)，绕开了 besdk.%s(r, path, perm, h) 的权限键强制（导读第 23 条）\n",
+				v.File, v.Line, v.Component, v.Method, v.Method)
+		}
+		return fmt.Errorf("裸用 gin 路由方法扫描发现 %d 条违规", len(violations))
+	}
+	fmt.Println("✓ 裸用 gin 路由方法扫描：0 条违规")
 	return nil
 }
