@@ -2,9 +2,11 @@
 
 被测对象是**我们的业务**，验的是"一条跨组件业务链真的跑通"，不是平台本身（平台断言在 `../platform/`）。
 
-## 现状（阶段一 Task 9）
+⚠️ **`tier0_test.go` 也放在这个目录**（Task 17，`make tier0`）——它是档 0 的六项验收，规模比下面这张档 2 大表小得多（单组件闭环，不是跨组件业务链），但同属"真的把业务跑起来验，不是验平台断言"这一类，按计划原文的文件位置放在这里，不单独开一个 `tier0/` 目录。
 
-只有清单。**阶段三**（档 2，加 `crm/opportunity`、`infra-iam-casdoor`、`infra-workflow`、`infra-notification`、1 个 IM 通道、`infra-print`、`infra-bff-mobile`、`frontend-standard` 共 13 个组件后）逐步实现为可执行测试。
+## 现状（阶段一 Task 17）
+
+档 0 六项验收（`tier0_test.go`）已实现并全绿，见根 `docs/dev/实测踩坑记录.md`（Task 16/17 相关条目）与 `../platform/README.md`。下面这张档 2 大表仍只是清单——**阶段三**（档 2，加 `crm/opportunity`、`infra-iam-casdoor`、`infra-workflow`、`infra-notification`、1 个 IM 通道、`infra-print`、`infra-bff-mobile`、`frontend-standard` 共 13 个组件后）逐步实现为可执行测试。
 
 ## 场景：CRM 赢单转 ERP 订单（附录 E 事件沙盘）
 

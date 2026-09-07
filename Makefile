@@ -1,12 +1,15 @@
 # be-acceptance 不是 brickKit 组件，但仍按总纲 §I 的 9 个门禁目标写。
 .PHONY: check-version test image migrate-idempotent dag-check contract-check \
-        import-scan smoke module-check gates all
+        import-scan smoke module-check gates tier0 all
 
 check-version:
 	@echo "N/A：非组件仓库，没有 component.yaml"
 
+# ⚠️ closedloop/ 的档 0/档 2 测试要真的 docker stop postgres、brickkit
+# down && up，routine 的 `make test`/`make all` 不该顺手把这些跑了——
+# 单独用 `make tier0` 触发。
 test:
-	go test ./... -race
+	go test $$(go list ./... | grep -v '/closedloop$$') -race
 
 image:
 	@echo "N/A：本仓库是本地/CI 用的验收 CLI，不作为 brickKit 服务部署，不需要镜像"
@@ -40,5 +43,10 @@ module-check:
 gates:
 	@go build -o build/be-acceptance ./cmd/be-acceptance
 	@./build/be-acceptance gate import-scan --root ../..
+
+##@ 验收
+# ⚠️ 会真的临时停掉 postgres、跑一次 brickkit down/up——先确认没有别人在用。
+tier0:  ## 档 0 六项验收，每加一个组件都要重跑（§9.6.1 档 4）
+	go test ./closedloop/ -run 'Test档0' -v -count=1
 
 all: check-version test image migrate-idempotent dag-check contract-check import-scan smoke module-check
