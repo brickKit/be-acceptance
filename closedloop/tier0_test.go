@@ -26,11 +26,17 @@ import (
 	"time"
 )
 
+// ⚠️ 这三个常量按组件当前版本号硬编码容器/镜像名——mdm-customer 每次
+// 版本升级（包括纯粹的镜像重新构建，不影响功能的那种）都要跟着改一遍。
+// 阶段三 Task 4 真的因为这几个常量停在 v1.0.0、而 mdm-customer 早就
+// 升到 v1.0.2，导致 Test档0_1/2/3/5 全部 SKIP、Test档0_4 直接 FAIL——
+// 且这条漂移在 v1.0.1 那次升级时就已经发生，一直没人重跑 tier0 才没
+// 被发现（实测踩坑记录类别 F）。
 const (
-	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-0-1"
-	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-0-migration-1"
+	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-2-1"
+	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-2-migration-1"
 	postgresContainer = "be-postgres"
-	mdmImage          = "brickenterprise/mdm-customer:1.0.0"
+	mdmImage          = "brickenterprise/mdm-customer:1.0.2"
 	httpBase          = "http://localhost:8080"
 	grpcServiceName   = "mdm.customer.v1.CustomerService"
 )
@@ -189,7 +195,7 @@ func grpcurlList(t *testing.T, addr, service string) []string {
 func Test档0_1_单独up起来(t *testing.T) {
 	status := dockerHealth(t, mdmContainer)
 	if status != "healthy" {
-		t.Fatalf("期望 mdm-customer-1-0-0 容器 healthy，实际 %q", status)
+		t.Fatalf("期望 mdm-customer-1-0-2 容器 healthy，实际 %q", status)
 	}
 }
 
