@@ -10,8 +10,9 @@ import (
 
 // be-acceptance 是验收测试仓库，不是 brickKit 组件（总纲 §2.3）。
 // 三个跨仓库门禁：铁律六 import 扫描（阶段一 Task 9）、SystemClient 误用
-// 扫描 + 裸 gin 路由扫描（阶段二 Task 2，Task 1 造出来的两处签名必须马上
-// 配上机器守卫，否则下一个组件就会写错）。
+// 扫描 + 裸路由/裸 resolver 扫描（阶段二 Task 2 起造，阶段三 Task 3 把
+// 后两条从 Go-only 扩展到 Python/TS——本阶段第一次出现这两种语言的
+// 组件，判据必须跟上）。
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -36,8 +37,8 @@ func printUsage() {
 	fmt.Println("be-acceptance —— BrickEnterprise 验收测试")
 	fmt.Println()
 	fmt.Println("  gate import-scan         --root <path>   铁律六 import 扫描")
-	fmt.Println("  gate system-client-scan  --root <path>   SystemClient 不许出现在用户请求路径上")
-	fmt.Println("  gate bare-gin-scan       --root <path>   业务代码不许裸用 gin 的路由方法")
+	fmt.Println("  gate system-client-scan  --root <path>   SystemClient 不许出现在用户请求路径上（Go/Python/TS）")
+	fmt.Println("  gate bare-route-scan     --root <path>   业务代码不许裸注册路由/resolver（Go gin/Python FastAPI/TS resolver）")
 }
 
 // runGate 派发到具体门禁子命令。⚠️ 子命令词（如 "import-scan"）必须在
@@ -45,7 +46,7 @@ func printUsage() {
 // 见 tools/be-ops 同一个坑（docs/dev/实测踩坑记录.md C3）。
 func runGate(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("用法：be-acceptance gate <import-scan|system-client-scan|bare-gin-scan> --root <path>")
+		return fmt.Errorf("用法：be-acceptance gate <import-scan|system-client-scan|bare-route-scan> --root <path>")
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet(sub, flag.ExitOnError)
@@ -59,8 +60,8 @@ func runGate(args []string) error {
 		return runImportScan(*root)
 	case "system-client-scan":
 		return runSystemClientScan(*root)
-	case "bare-gin-scan":
-		return runBareGinScan(*root)
+	case "bare-route-scan":
+		return runBareRouteScan(*root)
 	default:
 		return fmt.Errorf("门禁 %q 未知", sub)
 	}
@@ -98,18 +99,18 @@ func runSystemClientScan(root string) error {
 	return nil
 }
 
-func runBareGinScan(root string) error {
-	violations, err := gates.BareGinScan(root)
+func runBareRouteScan(root string) error {
+	violations, err := gates.BareRouteScan(root)
 	if err != nil {
 		return err
 	}
 	if len(violations) > 0 {
 		for _, v := range violations {
-			fmt.Fprintf(os.Stderr, "✗ %s:%d：%s 裸用了 gin 的 %s(...)，绕开了 besdk.%s(r, path, perm, h) 的权限键强制（导读第 23 条）\n",
-				v.File, v.Line, v.Component, v.Method, v.Method)
+			fmt.Fprintf(os.Stderr, "✗ %s:%d：%s 裸注册了 %s，绕开了 besdk 的权限键强制（导读第 23 条）\n",
+				v.File, v.Line, v.Component, v.Method)
 		}
-		return fmt.Errorf("裸用 gin 路由方法扫描发现 %d 条违规", len(violations))
+		return fmt.Errorf("裸路由/裸 resolver 扫描发现 %d 条违规", len(violations))
 	}
-	fmt.Println("✓ 裸用 gin 路由方法扫描：0 条违规")
+	fmt.Println("✓ 裸路由/裸 resolver 扫描：0 条违规")
 	return nil
 }

@@ -18,6 +18,25 @@
 
 `platform/` 与 `closedloop/` 仍只是任务清单（各 20 条 / 13 条），阶段二、三分别实现。
 
+## 现状（阶段三 Task 3）
+
+`system-client-scan`（`gates.SystemClientScan`）与 `bare-route-scan`（`gates.BareRouteScan`，阶段二叫
+`bare-gin-scan`/`BareGinScan`，本阶段改名——它现在不只扫 gin）从 Go-only 扩展到 Python/TS，本阶段第一次出现
+这两种语言的组件：
+
+- **Python**：危险目录是 `backend/app/http`、`backend/app/grpc`（Go 的 `backend/internal/http`/`grpc` 对应
+  位置，阶段三新拍板，见总纲 SOP-B）。没有 `go/ast` 可用，退化成逐行正则——`system_client(` 识别 SystemClient
+  误用；`@router.get(...)` 这类装饰器 + `.add_api_route(` 识别裸路由（判据只认装饰器/`add_api_route` 形态，
+  不认任意 `.get(`——`dict.get()`/配置读取里的 `.get(` 极常见，纯文本匹配会把它们全部误判）。
+- **TS**：危险目录是 `src/resolvers`（`infra-bff-mobile` 的 GraphQL resolver map 存放约定，这个目录不放
+  别的东西）。`systemClient(` 识别 SystemClient 误用；resolver 字段的值不是以 `requirePermission(` 开头、
+  又长得像函数（箭头函数/`function` 关键字）就判裸 resolver——GraphQL 场景没有"裸路由"这个概念，判据是
+  阶段三 Task 3 重新设计的，不是照抄 Go 版。
+
+两条门禁都是"目录约定 + 语言相应的语法识别"，互不需要显式判断组件是什么语言——一个组件只会真的落在
+三套目录约定中的一套。已知精度上限记在各自源文件的注释里（`gates/systemclientscan.go`、
+`gates/bareginscan.go`）。
+
 ## 为什么这条门禁要在档 0 之前就装好
 
 设计书决策 91：前五条铁律破了当场起不来，一小时能修；**铁律六破了没有任何症状**，系统跑得更快了，直到某天要上 K8s 全拆才发现拆不动，那时的代价是重写。装晚一天，就多一天没人看着。

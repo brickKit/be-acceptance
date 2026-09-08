@@ -98,3 +98,92 @@ func listHandler(ctx context.Context) {
 		t.Fatalf("UserClient 不该被这条扫描当成违规，得到 %v", violations)
 	}
 }
+
+// TestSystemClientScan_Python版出现在http目录里要红 是阶段三 Task 3 的
+// Python 版判据：backend/app/http（Go 的 backend/internal/http 对应目录，
+// 阶段三新拍板）里出现 system_client(...) 就是同一条误用。
+func TestSystemClientScan_Python版出现在http目录里要红(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/infra/print/backend/app/http/routes.py"),
+		`from besdk.client import system_client
+
+async def list_templates():
+    channel = system_client("mdm/customer")
+    return channel
+`)
+	violations, err := SystemClientScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 1 {
+		t.Fatalf("期望 1 条违规，得到 %d 条：%v", len(violations), violations)
+	}
+	if violations[0].Component != "infra/print" {
+		t.Fatalf("违规组件不对：%+v", violations[0])
+	}
+}
+
+// TestSystemClientScan_Python版user_client不触发 同 Go 版判据：只认函数
+// 名，user_client 本来就该出现在请求路径上。
+func TestSystemClientScan_Python版user_client不触发(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/infra/print/backend/app/http/routes.py"),
+		`from besdk.client import user_client
+
+async def list_templates(auth: str):
+    channel = user_client(auth, "mdm/customer")
+    return channel
+`)
+	violations, err := SystemClientScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("user_client 不该被这条扫描当成违规，得到 %v", violations)
+	}
+}
+
+// TestSystemClientScan_TS版出现在resolvers目录里要红 是 TS 版判据：
+// GraphQL resolver 没有"路由注册"这个动作，请求路径就是 resolver 本身，
+// 约定死的危险目录是 src/resolvers/（阶段三 Task 3 新拍板）。
+func TestSystemClientScan_TS版出现在resolvers目录里要红(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/infra/bff-mobile/src/resolvers/orders.ts"),
+		`import { systemClient, requirePermission } from "@brickkit/be-sdk-ts";
+
+export const orders = requirePermission("erp.sales.view", async () => {
+  const dial = systemClient("erp/sales");
+  return dial;
+});
+`)
+	violations, err := SystemClientScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 1 {
+		t.Fatalf("期望 1 条违规，得到 %d 条：%v", len(violations), violations)
+	}
+	if violations[0].Component != "infra/bff-mobile" {
+		t.Fatalf("违规组件不对：%+v", violations[0])
+	}
+}
+
+// TestSystemClientScan_TS版userClient不触发 同 Go/Python 版判据。
+func TestSystemClientScan_TS版userClient不触发(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/infra/bff-mobile/src/resolvers/orders.ts"),
+		`import { userClient, requirePermission } from "@brickkit/be-sdk-ts";
+
+export const orders = requirePermission("erp.sales.view", async (_src: unknown, _args: unknown, ctx: { auth: string }) => {
+  const dial = userClient(ctx.auth, "erp/sales");
+  return dial;
+});
+`)
+	violations, err := SystemClientScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("userClient 不该被这条扫描当成违规，得到 %v", violations)
+	}
+}
