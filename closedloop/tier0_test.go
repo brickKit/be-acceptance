@@ -20,7 +20,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -31,12 +30,17 @@ import (
 // 阶段三 Task 4 真的因为这几个常量停在 v1.0.0、而 mdm-customer 早就
 // 升到 v1.0.2，导致 Test档0_1/2/3/5 全部 SKIP、Test档0_4 直接 FAIL——
 // 且这条漂移在 v1.0.1 那次升级时就已经发生，一直没人重跑 tier0 才没
-// 被发现（实测踩坑记录类别 F）。
+// 被发现（实测踩坑记录类别 F）。⚠️ 阶段三 Task 6 又真实发生了一次
+// （1.0.2 → 1.0.3）——这不是假设性的风险，是这份手动同步的负担会
+// 反复兑现；接受它（不改成动态读 component.yaml 解析版本号）是 SOP-P
+// 判据下的刻意选择：这只是六个硬编码字符串，加一层解析代码换来的是
+// "版本号对不上"这类错误从编译期挪到运行期，不划算。**每次给
+// mdm-customer 出新版本，先来改这三行，再跑 tier0。**
 const (
-	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-2-1"
-	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-2-migration-1"
+	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-3-1"
+	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-3-migration-1"
 	postgresContainer = "be-postgres"
-	mdmImage          = "brickenterprise/mdm-customer:1.0.2"
+	mdmImage          = "brickenterprise/mdm-customer:1.0.3"
 	httpBase          = "http://localhost:8080"
 	grpcServiceName   = "mdm.customer.v1.CustomerService"
 )
@@ -203,6 +207,16 @@ func Test档0_1_单独up起来(t *testing.T) {
 // 验收 2：curl 打通 HTTP
 // ────────────────────────────────────────────────────────────────
 
+// ⚠️ 阶段三 Task 6 之后：/mdm/customer/customers 的创建/列表两条路由已经
+// 换成真实权限键（mdm.customer.create/view），不再是 besdk.Public。而
+// iamJwksUrl 要到阶段三 Task 7（infra-iam-casdoor 建仓库）才有真实签发方
+// 可配——在那之前全系统没有任何调用方能拿到一个真的能验签过的 JWT，
+// RequirePermission 退化成"没配 iamJwksUrl"的 fail-closed stub，非
+// Public/Authenticated 一律 403。这条测试因此从"验证建单+查询业务逻辑
+// 本身"改成"验证权限判定真的挡住了未认证请求"——业务逻辑本身的端到端
+// 验证（真实签名的 JWT）留给 Task 7 之后的验收补，不在档 0 平台级冒烟
+// 测试的职责范围内（档 0 测的是"brickkit 本身能不能把组件跑起来"，不是
+// 某条具体业务规则）。
 func Test档0_2_curl打通HTTP(t *testing.T) {
 	if status := dockerHealth(t, mdmContainer); status != "healthy" {
 		t.Skipf("mdm-customer 容器不 healthy（%s），先 brickkit up", status)
@@ -215,7 +229,7 @@ func Test档0_2_curl打通HTTP(t *testing.T) {
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("/healthz 期望 200，得到 %d", resp.StatusCode)
+		t.Fatalf("/healthz 期望 200（besdk.NewGinEngine 统一挂的健康检查，不受权限判定影响），得到 %d", resp.StatusCode)
 	}
 
 	idemKey := fmt.Sprintf("tier0-http-%d", time.Now().UnixNano())
@@ -225,16 +239,9 @@ func Test档0_2_curl打通HTTP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("POST /mdm/customer/customers 失败：%v", err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("创建客户期望 200，得到 %d", resp.StatusCode)
-	}
-	var created map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
-		t.Fatalf("创建响应不是合法 JSON：%v", err)
-	}
-	if v, _ := strconv.Atoi(fmt.Sprint(created["version"])); v != 1 {
-		t.Fatalf("新建客户的 version 期望 1，得到 %v", created["version"])
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("mdm.customer.create 未配置真实 IAM 时期望 403（fail-closed stub），得到 %d", resp.StatusCode)
 	}
 
 	resp, err = client.Get(httpBase + "/mdm/customer/customers?page_size=10")
@@ -242,8 +249,8 @@ func Test档0_2_curl打通HTTP(t *testing.T) {
 		t.Fatalf("GET 列表失败：%v", err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("列表期望 200，得到 %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("mdm.customer.view 未配置真实 IAM 时期望 403（fail-closed stub），得到 %d", resp.StatusCode)
 	}
 }
 
