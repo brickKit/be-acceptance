@@ -199,7 +199,7 @@ func grpcurlList(t *testing.T, addr, service string) []string {
 func Test档0_1_单独up起来(t *testing.T) {
 	status := dockerHealth(t, mdmContainer)
 	if status != "healthy" {
-		t.Fatalf("期望 mdm-customer-1-0-2 容器 healthy，实际 %q", status)
+		t.Fatalf("期望 mdm-customer-1-0-3 容器 healthy，实际 %q", status)
 	}
 }
 
@@ -207,16 +207,15 @@ func Test档0_1_单独up起来(t *testing.T) {
 // 验收 2：curl 打通 HTTP
 // ────────────────────────────────────────────────────────────────
 
-// ⚠️ 阶段三 Task 6 之后：/mdm/customer/customers 的创建/列表两条路由已经
-// 换成真实权限键（mdm.customer.create/view），不再是 besdk.Public。而
-// iamJwksUrl 要到阶段三 Task 7（infra-iam-casdoor 建仓库）才有真实签发方
-// 可配——在那之前全系统没有任何调用方能拿到一个真的能验签过的 JWT，
-// RequirePermission 退化成"没配 iamJwksUrl"的 fail-closed stub，非
-// Public/Authenticated 一律 403。这条测试因此从"验证建单+查询业务逻辑
-// 本身"改成"验证权限判定真的挡住了未认证请求"——业务逻辑本身的端到端
-// 验证（真实签名的 JWT）留给 Task 7 之后的验收补，不在档 0 平台级冒烟
-// 测试的职责范围内（档 0 测的是"brickkit 本身能不能把组件跑起来"，不是
-// 某条具体业务规则）。
+// ⚠️ 阶段三 Task 7 之后：/mdm/customer/customers 的创建/列表两条路由是
+// 真实权限键（mdm.customer.create/view），iamJwksUrl 也已经配成真实签发方
+// （infra-iam-casdoor）——RequirePermission 走的是真判定链，不再是"没配
+// iamJwksUrl"的 fail-closed stub。这条测试不带 Authorization header，
+// 判定链第 2 步（bearerToken 取不到）就返回 401，不会走到 403 那一步——
+// 401 与 403 的区别正是"没证明你是谁"与"证明了但没权限"，本条只测前者。
+// 带真实签名 JWT 的端到端权限验证（能不能拿到 200/403）属于具体业务
+// 规则，不在档 0 平台级冒烟测试的职责范围内（档 0 测的是"brickkit 本身
+// 能不能把组件跑起来"）。
 func Test档0_2_curl打通HTTP(t *testing.T) {
 	if status := dockerHealth(t, mdmContainer); status != "healthy" {
 		t.Skipf("mdm-customer 容器不 healthy（%s），先 brickkit up", status)
@@ -240,8 +239,8 @@ func Test档0_2_curl打通HTTP(t *testing.T) {
 		t.Fatalf("POST /mdm/customer/customers 失败：%v", err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("mdm.customer.create 未配置真实 IAM 时期望 403（fail-closed stub），得到 %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("mdm.customer.create 不带 Authorization 时期望 401（缺少凭据，真判定链第 2 步），得到 %d", resp.StatusCode)
 	}
 
 	resp, err = client.Get(httpBase + "/mdm/customer/customers?page_size=10")
@@ -249,8 +248,8 @@ func Test档0_2_curl打通HTTP(t *testing.T) {
 		t.Fatalf("GET 列表失败：%v", err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("mdm.customer.view 未配置真实 IAM 时期望 403（fail-closed stub），得到 %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("mdm.customer.view 不带 Authorization 时期望 401（缺少凭据，真判定链第 2 步），得到 %d", resp.StatusCode)
 	}
 }
 
