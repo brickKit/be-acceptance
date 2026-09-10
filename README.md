@@ -37,6 +37,16 @@
 三套目录约定中的一套。已知精度上限记在各自源文件的注释里（`gates/systemclientscan.go`、
 `gates/bareginscan.go`）。
 
+## 现状（阶段三收官后）
+
+新增第 4 个 gate `events-breaking-scan`（`gates.EventsBreakingScan` + `gate events-breaking-scan` 子命令）。
+`buf breaking` 只认 `.proto`，`contracts/events/*.json` 的"只增不删不改"（设计书 §3.10、决策 19）此前
+完全没有机器门禁（总纲 SOP-W-8）。这个 gate 把每个组件的 events JSON 工作区版本与其 git `main` 版本
+各自拍平成一组签名（`event::<subject>` 存在性 + `<字段路径>::type=<t>`），`main` 里的签名少一条就报违规
+——删字段、改类型、删 subject 都会让某条旧签名消失；追加新字段/新事件只产生新签名，不触发。拿不到
+`main` 基线（新文件/无 main ref/非 git 仓库）就跳过那个文件，同 `buf breaking` 无 `.git` 时的行为。
+没写成通用 JSON Schema diff——events JSON 是自定义的 envelope+events 结构，专门写一个反而更准更简单。
+
 ## 为什么这条门禁要在档 0 之前就装好
 
 设计书决策 91：前五条铁律破了当场起不来，一小时能修；**铁律六破了没有任何症状**，系统跑得更快了，直到某天要上 K8s 全拆才发现拆不动，那时的代价是重写。装晚一天，就多一天没人看着。
