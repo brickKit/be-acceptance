@@ -31,16 +31,20 @@ import (
 // 升到 v1.0.2，导致 Test档0_1/2/3/5 全部 SKIP、Test档0_4 直接 FAIL——
 // 且这条漂移在 v1.0.1 那次升级时就已经发生，一直没人重跑 tier0 才没
 // 被发现（实测踩坑记录类别 F）。⚠️ 阶段三 Task 6 又真实发生了一次
-// （1.0.2 → 1.0.3）——这不是假设性的风险，是这份手动同步的负担会
-// 反复兑现；接受它（不改成动态读 component.yaml 解析版本号）是 SOP-P
-// 判据下的刻意选择：这只是六个硬编码字符串，加一层解析代码换来的是
-// "版本号对不上"这类错误从编译期挪到运行期，不划算。**每次给
-// mdm-customer 出新版本，先来改这三行，再跑 tier0。**
+// （1.0.2 → 1.0.3）；阶段三收官后的 SOP-W-7 种子数据样板（mdm-customer
+// 补 make seed）又发生第三次（1.0.3 → 1.0.4，Test档0_4 直接 FAIL，
+// 这次没有影响 Test档0_1/2/3/5——它们判据里的容器/镜像名也读这三个
+// 常量，只是没有测试真的先跑一遍暴露出来，直到这次才发现是真漏改）——
+// 这不是假设性的风险，是这份手动同步的负担会反复兑现；接受它（不改成
+// 动态读 component.yaml 解析版本号）是 SOP-P 判据下的刻意选择：这只是
+// 六个硬编码字符串，加一层解析代码换来的是"版本号对不上"这类错误从
+// 编译期挪到运行期，不划算。**每次给 mdm-customer 出新版本，先来改
+// 这三行，再跑 tier0。**
 const (
-	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-3-1"
-	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-3-migration-1"
+	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-4-1"
+	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-4-migration-1"
 	postgresContainer = "be-postgres"
-	mdmImage          = "brickenterprise/mdm-customer:1.0.3"
+	mdmImage          = "brickenterprise/mdm-customer:1.0.4"
 	httpBase          = "http://localhost:8080"
 	grpcServiceName   = "mdm.customer.v1.CustomerService"
 )
@@ -199,7 +203,7 @@ func grpcurlList(t *testing.T, addr, service string) []string {
 func Test档0_1_单独up起来(t *testing.T) {
 	status := dockerHealth(t, mdmContainer)
 	if status != "healthy" {
-		t.Fatalf("期望 mdm-customer-1-0-3 容器 healthy，实际 %q", status)
+		t.Fatalf("期望 mdm-customer-1-0-4 容器 healthy，实际 %q", status)
 	}
 }
 
