@@ -27,6 +27,15 @@ func TestHasDataScopeSignal_孤立的拒绝不算数(t *testing.T) {
 	}
 }
 
+// ⚠️ 实测踩坑（跟"孤立的拒绝不算数"反过来）：infra-notification 真写了
+// 一条边界测试，但按大白话起名没用 owner/越权 这类术语词，第一版信号词
+// 表会把它误判成"没测过"。
+func TestHasDataScopeSignal_别人加看不到的大白话组合也算数(t *testing.T) {
+	if !hasDataScopeSignal("TestListMyRecords_别人的通知看不到_即使故意传了别人的sub") {
+		t.Fatal("别人+看不到这个大白话组合应该算数，不该强迫测试名塞术语词")
+	}
+}
+
 func TestHasDataScopeSignal_范围内可以看到本身不算数(t *testing.T) {
 	// "范围内可以看到"只验证了正向路径（能看到自己范围内的数据），没有
 	// 验证越权会被拒绝——这条本身不该被当成"边界已测过"的证据。

@@ -30,10 +30,14 @@ var dimensionRe = regexp.MustCompile(`dimension:\s*([a-z_]+)`)
 //     "拒绝"/"看不到"这类词太泛，会跟"客户不存在""参数校验失败"这类
 //     完全无关的拒绝撞上（实测踩坑：`crm-opportunity` 的
 //     `TestCreateOpportunity_真实客户不存在时拒绝` 只是校验错误，第一版
-//     只用单词表会把它误判成"已经测过数据权限边界"）。
+//     只用单词表会把它误判成"已经测过数据权限边界"）。⚠️ `别人`/`他人`
+//     是反过来的实测踩坑：`infra-notification` 真写了一条货真价实的
+//     边界测试（`TestListMyRecords_别人的通知看不到...`），但名字里没有
+//     "owner"/"越权"这类术语词，第一版判定成"没测过"——按这个组件自己
+//     惯用的大白话补上限定词，比强迫所有组件的测试名都塞术语词更自然。
 var (
 	strongSignals   = []string{"forbidden"}
-	scopeQualifiers = []string{"授权", "范围", "越权", "scope", "owner", "warehouse", "legal", "org", "dept"}
+	scopeQualifiers = []string{"授权", "范围", "越权", "scope", "owner", "warehouse", "legal", "org", "dept", "别人", "他人"}
 	denialWords     = []string{"拒绝", "看不到", "查不到", "没有"}
 )
 
