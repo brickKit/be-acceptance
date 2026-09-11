@@ -47,6 +47,21 @@
 `main` 基线（新文件/无 main ref/非 git 仓库）就跳过那个文件，同 `buf breaking` 无 `.git` 时的行为。
 没写成通用 JSON Schema diff——events JSON 是自定义的 envelope+events 结构，专门写一个反而更准更简单。
 
+## 现状（测试体系扩展，总纲 SOP-W-8）
+
+补第 5、6 个 gate（第 5 个当时漏记本节，一并补上）：
+
+- `data-scope-test-scan`（`gates.DataScopeTestScan`）：声明了真实 `data_scopes` 维度（非 `none`）的组件，
+  测试文件里必须至少有一条"越权/超出范围被拒绝"形状的测试——判据是组件级"至少一条"，不是逐维度，精度
+  上限见 `gates/datascopetestscan.go` 注释。
+- `dependency-version-scan`（`gates.DependencyVersionScan`）：`brickkit` 对依赖版本号逐字匹配（导读"平台
+  的四条铁律"第 1 条），任何一处"声明版本"落后于"依赖方真实版本"都会让 `brickkit up --dry-run` 把同一
+  个组件解析成两个独立节点——本仓库历史上这条坑至少复发过 4 次（踩坑记录 C16）。这个 gate 比对两类
+  声明：①每个组件 `component.yaml` 的 `dependencies.components` 引用 vs 被依赖组件自己的
+  `metadata.version`；②`brickkit.yaml` 顶层 `components[].version` 这个顶层 pin vs 对应组件自己的
+  `metadata.version`。两类都不用 YAML 库，跟 `data-scope-test-scan` 一样走"提取顶层文本块 + 正则"这条
+  既有技术路线。引用了本仓库不存在的组件 ID 时查不出真实版本，静默跳过，不报违规。
+
 ## 为什么这条门禁要在档 0 之前就装好
 
 设计书决策 91：前五条铁律破了当场起不来，一小时能修；**铁律六破了没有任何症状**，系统跑得更快了，直到某天要上 K8s 全拆才发现拆不动，那时的代价是重写。装晚一天，就多一天没人看着。

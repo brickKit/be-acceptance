@@ -43,6 +43,7 @@ func printUsage() {
 	fmt.Println("  gate bare-route-scan      --root <path>   业务代码不许裸注册路由/resolver（Go gin/Python FastAPI/TS resolver）")
 	fmt.Println("  gate events-breaking-scan --root <path>   contracts/events/*.json 只增不删不改（§3.10，buf 只管 .proto）")
 	fmt.Println("  gate data-scope-test-scan --root <path>   声明了 data_scopes 维度的组件必须有越权/拒绝形状的测试（总纲 SOP-W-8）")
+	fmt.Println("  gate dependency-version-scan --root <path> 依赖版本号必须跟依赖方真实版本一致（component.yaml 互相引用 + brickkit.yaml 顶层 pin，踩坑记录 C16）")
 }
 
 // runGate 派发到具体门禁子命令。⚠️ 子命令词（如 "import-scan"）必须在
@@ -50,7 +51,7 @@ func printUsage() {
 // 见 tools/be-ops 同一个坑（docs/dev/实测踩坑记录.md C3）。
 func runGate(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("用法：be-acceptance gate <import-scan|system-client-scan|bare-route-scan|events-breaking-scan|data-scope-test-scan> --root <path>")
+		return fmt.Errorf("用法：be-acceptance gate <import-scan|system-client-scan|bare-route-scan|events-breaking-scan|data-scope-test-scan|dependency-version-scan> --root <path>")
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet(sub, flag.ExitOnError)
@@ -70,6 +71,8 @@ func runGate(args []string) error {
 		return runEventsBreakingScan(*root)
 	case "data-scope-test-scan":
 		return runDataScopeTestScan(*root)
+	case "dependency-version-scan":
+		return runDependencyVersionScan(*root)
 	default:
 		return fmt.Errorf("门禁 %q 未知", sub)
 	}
@@ -152,5 +155,21 @@ func runDataScopeTestScan(root string) error {
 		return fmt.Errorf("data-scope-test-scan 发现 %d 个组件缺失数据权限边界测试", len(gaps))
 	}
 	fmt.Println("✓ data-scope-test-scan：0 条违规")
+	return nil
+}
+
+func runDependencyVersionScan(root string) error {
+	mismatches, err := gates.DependencyVersionScan(root)
+	if err != nil {
+		return err
+	}
+	if len(mismatches) > 0 {
+		for _, m := range mismatches {
+			fmt.Fprintf(os.Stderr, "✗ %s 声明依赖 %s@%s，但 %s 自己 component.yaml 里的真实版本是 %s——brickkit 逐字匹配版本号，会把两者解析成两个独立节点（踩坑记录 C16）\n",
+				m.Declarer, m.Dependency, m.DeclaredVersion, m.Dependency, m.ActualVersion)
+		}
+		return fmt.Errorf("dependency-version-scan 发现 %d 条依赖版本号漂移", len(mismatches))
+	}
+	fmt.Println("✓ dependency-version-scan：0 条违规")
 	return nil
 }
