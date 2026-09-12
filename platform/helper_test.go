@@ -31,6 +31,26 @@ func requireCommand(t *testing.T, name string) string {
 	return path
 }
 
+// dockerContainerByPrefix 用 docker ps 的名字前缀过滤动态找容器，不
+// 把版本号编进常量里——b_test.go 的 erpSalesContainer 曾经硬编码到
+// "...-1-0-1-1"，erp-sales 升级之后 docker exec 找不到这个精确名字只会
+// 静默 Skip 不会 FAIL，`make tier1` 因此长期"显示全绿"但实际验证不到
+// 任何东西（真机验证过：即使容器真实健康跑着，这个坑一样不会被发现）。
+// 新写的、需要找真实容器的测试都该用这个函数，不要再走"把当前版本号
+// 拼进常量"这条路。
+func dockerContainerByPrefix(t *testing.T, prefix string) string {
+	t.Helper()
+	out, err := exec.Command("docker", "ps", "--filter", "name="+prefix, "--format", "{{.Names}}").CombinedOutput()
+	if err != nil {
+		t.Skipf("docker ps 失败：%v\n%s", err, out)
+	}
+	name := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
+	if name == "" {
+		t.Skipf("找不到名字前缀是 %q 的容器（先 brickkit up）", prefix)
+	}
+	return name
+}
+
 // repoRoot 返回装配仓库根目录——固定仓库结构，不是配置项（同 closedloop
 // 包 tier0_test.go 的既有判据：go test 的 CWD 是包目录本身，这里是
 // tools/be-acceptance/platform/，到仓库根是 3 层 ..）。

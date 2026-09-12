@@ -18,15 +18,18 @@ import (
 	"testing"
 )
 
-// ⚠️ 真实踩过的坑：erpSalesContainer 这个常量曾经停在 "...-1-0-1-1"，
-// 而 erp-sales 早就升级到远超这个版本——docker exec 找不到这个容器名时
+// ⚠️ 真实踩过的坑：这里曾经是一个硬编码到 "...-1-0-1-1" 的常量，
+// erp-sales 早就升级到远超这个版本——docker exec 找不到这个容器名时
 // 只会 t.Skipf，不会 FAIL，`make tier1` 因此长期"显示全绿"，实际上这
 // 三条用例从 erp-sales 升过 1.0.1 之后就再没有真的验证过任何东西（同
 // closedloop/tier0_test.go 的既有教训，这里不是"崩"是更隐蔽的"静默不测"）。
-// 本仓库不是 brickKit 组件，不在 be-acceptance/versionbump 的传播范围
-// 内，没有工具会替它自动同步——**每次给 erp-sales 出新版本，回来改这
-// 一行**。
-const erpSalesContainer = "brickkit-be-assembly-standard-erp-sales-1-0-18-1"
+// 改成用 dockerContainerByPrefix 动态发现容器名（helper_test.go），
+// 不再把具体版本号编进代码——erp-sales 以后再怎么升级都不需要回来改
+// 这一行。
+func erpSalesContainer(t *testing.T) string {
+	t.Helper()
+	return dockerContainerByPrefix(t, "brickkit-be-assembly-standard-erp-sales-")
+}
 
 // dockerEnv 返回真实容器里某个环境变量的值（连同 ok 表示这个键存不存在）
 // ——用 `env` 列出全部再逐行匹配，而不是 `printenv KEY`（后者对不存在的
@@ -61,7 +64,7 @@ var mdmCustomerEndpointRe = regexp.MustCompile(`^http://mdm-customer-\d+-\d+-\d+
 
 func TestPlatform03_地址变量名由ID推导不带版本号(t *testing.T) {
 	requireCommand(t, "docker")
-	val, ok := dockerEnv(t, erpSalesContainer, "MDM_CUSTOMER_ENDPOINT")
+	val, ok := dockerEnv(t, erpSalesContainer(t), "MDM_CUSTOMER_ENDPOINT")
 	if !ok {
 		t.Fatal("期望 erp-sales 容器里有 MDM_CUSTOMER_ENDPOINT，实际没有这个键")
 	}
@@ -76,7 +79,7 @@ func TestPlatform03_地址变量名由ID推导不带版本号(t *testing.T) {
 
 func TestPlatform04_额外端口地址是http不是grpc(t *testing.T) {
 	requireCommand(t, "docker")
-	val, ok := dockerEnv(t, erpSalesContainer, "MDM_CUSTOMER_GRPC_ENDPOINT")
+	val, ok := dockerEnv(t, erpSalesContainer(t), "MDM_CUSTOMER_GRPC_ENDPOINT")
 	if !ok {
 		t.Fatal("期望 erp-sales 容器里有 MDM_CUSTOMER_GRPC_ENDPOINT，实际没有这个键")
 	}
