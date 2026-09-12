@@ -38,13 +38,19 @@ import (
 // 这不是假设性的风险，是这份手动同步的负担会反复兑现；接受它（不改成
 // 动态读 component.yaml 解析版本号）是 SOP-P 判据下的刻意选择：这只是
 // 六个硬编码字符串，加一层解析代码换来的是"版本号对不上"这类错误从
-// 编译期挪到运行期，不划算。**每次给 mdm-customer 出新版本，先来改
-// 这三行，再跑 tier0。**
+// 编译期挪到运行期，不划算。⚠️ 第四次真实发生（1.0.4 → 1.0.5，种子
+// 数据丰富度批量整改期间），这次是跑完整个 `go test ./...`（而不是单独
+// 重跑 `Test档0`）才暴露——本仓库自己 `bump-version` 那批工作没有覆盖
+// 这三个常量，是刻意的：`bump-version` 只管 `components/*/*/
+// component.yaml` 互相引用的那张依赖图，这三个常量是**另一个仓库**
+// （be-acceptance 自己）里的测试夹具，不在那张图里，仍然要靠这条注释
+// 提醒人工同步。**每次给 mdm-customer 出新版本，先来改这三行，再跑
+// tier0。**
 const (
-	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-4-1"
-	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-4-migration-1"
+	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-5-1"
+	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-5-migration-1"
 	postgresContainer = "be-postgres"
-	mdmImage          = "brickenterprise/mdm-customer:1.0.4"
+	mdmImage          = "brickenterprise/mdm-customer:1.0.5"
 	httpBase          = "http://localhost:8080"
 	grpcServiceName   = "mdm.customer.v1.CustomerService"
 )
@@ -203,7 +209,7 @@ func grpcurlList(t *testing.T, addr, service string) []string {
 func Test档0_1_单独up起来(t *testing.T) {
 	status := dockerHealth(t, mdmContainer)
 	if status != "healthy" {
-		t.Fatalf("期望 mdm-customer-1-0-4 容器 healthy，实际 %q", status)
+		t.Fatalf("期望 %s 容器 healthy，实际 %q", mdmContainer, status)
 	}
 }
 
