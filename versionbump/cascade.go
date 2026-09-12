@@ -34,6 +34,36 @@ func BumpPatch(version string) (string, error) {
 	return fmt.Sprintf("%s.%s.%d", parts[0], parts[1], patch+1), nil
 }
 
+// normalizeReason 把一段理由文字压成单行——ParsePlanFile 允许 reason
+// 字段跨多行写（方便人在计划文件里排版），但 Apply 阶段这段文字最终要
+// 塞进 component.yaml/brickkit.yaml 里"一个 # 开头就是一整条注释"的
+// 单行注释里，原样保留换行符会把后续几行变成裸露的 YAML 内容，直接
+// 撞坏文件——真机验证时在写盘之前就发现了这个问题（一条真的换行过的
+// 计划文件跑 --apply 会生成语法错误的 component.yaml）。
+//
+// ⚠️ 不能无脑用空格拼回去：本项目理由文字全是中文夹英文术语，中文本身
+// 词与词之间不加空格（标点断句），只有紧贴英文/数字的地方才需要一个
+// 空格分隔（本仓库通篇的既有排版习惯，比如"跟 test-cross 桥接"）——
+// 如果不管三七二十一每个断行处都插一个空格，会在两个纯中文片段之间
+// 平白多出一个不该有的空格（同样是真机验证换行文本时发现的问题）。
+// 判据：断开处两侧只要有一侧是 ASCII 字符（英文单词/数字/标点），才
+// 插空格；两侧都是中文就直接拼上，不留空格。
+func normalizeReason(reason string) string {
+	fields := strings.Fields(reason)
+	var b strings.Builder
+	for i, f := range fields {
+		if i > 0 {
+			prevRunes := []rune(fields[i-1])
+			curRunes := []rune(f)
+			if prevRunes[len(prevRunes)-1] < 128 || curRunes[0] < 128 {
+				b.WriteByte(' ')
+			}
+		}
+		b.WriteString(f)
+	}
+	return b.String()
+}
+
 // SeedChange 是调用方（人/AI）明确指定的一条根变更的输入形状——见
 // planfile.go 的 planfile 格式。
 type SeedChange struct {
@@ -74,7 +104,7 @@ func ComputeCascade(reg map[string]*Component, seeds []SeedChange) ([]Change, er
 			return nil, fmt.Errorf("组件 %q 在根变更列表里出现了不止一次", s.ID)
 		}
 		changed[s.ID] = newVer
-		order = append(order, Change{ID: s.ID, OldVer: comp.Version, NewVer: newVer, Reason: s.Reason, IsCascade: false})
+		order = append(order, Change{ID: s.ID, OldVer: comp.Version, NewVer: newVer, Reason: normalizeReason(s.Reason), IsCascade: false})
 	}
 
 	// 反向依赖图：dep id -> 依赖它的组件 id 列表。

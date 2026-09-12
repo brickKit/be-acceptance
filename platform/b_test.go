@@ -13,11 +13,20 @@ package platform_test
 
 import (
 	"os/exec"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-const erpSalesContainer = "brickkit-be-assembly-standard-erp-sales-1-0-1-1"
+// ⚠️ 真实踩过的坑：erpSalesContainer 这个常量曾经停在 "...-1-0-1-1"，
+// 而 erp-sales 早就升级到远超这个版本——docker exec 找不到这个容器名时
+// 只会 t.Skipf，不会 FAIL，`make tier1` 因此长期"显示全绿"，实际上这
+// 三条用例从 erp-sales 升过 1.0.1 之后就再没有真的验证过任何东西（同
+// closedloop/tier0_test.go 的既有教训，这里不是"崩"是更隐蔽的"静默不测"）。
+// 本仓库不是 brickKit 组件，不在 be-acceptance/versionbump 的传播范围
+// 内，没有工具会替它自动同步——**每次给 erp-sales 出新版本，回来改这
+// 一行**。
+const erpSalesContainer = "brickkit-be-assembly-standard-erp-sales-1-0-18-1"
 
 // dockerEnv 返回真实容器里某个环境变量的值（连同 ok 表示这个键存不存在）
 // ——用 `env` 列出全部再逐行匹配，而不是 `printenv KEY`（后者对不存在的
@@ -42,14 +51,22 @@ func dockerEnv(t *testing.T, container, key string) (string, bool) {
 // 用例 3：地址变量名由组件 ID 推导、不带版本号（值带版本号）
 // ────────────────────────────────────────────────────────────────
 
+// ⚠️ 真实踩过的坑：这条断言曾经硬编码期望值
+// "http://mdm-customer-1-0-0:8080"——mdm-customer 早就升级过好几个版本，
+// 这个精确值本身也会跟着漂移，跟 erpSalesContainer 是同一类维护负担。
+// 判据要测的其实是"变量名不带版本号、值里带版本号"这条结构性规则，跟
+// mdm-customer 现在到底是哪个版本无关，改用正则只锁定形状，不锁定
+// 具体数字，就不再需要跟着 mdm-customer 每次升级回来改一遍。
+var mdmCustomerEndpointRe = regexp.MustCompile(`^http://mdm-customer-\d+-\d+-\d+:8080$`)
+
 func TestPlatform03_地址变量名由ID推导不带版本号(t *testing.T) {
 	requireCommand(t, "docker")
 	val, ok := dockerEnv(t, erpSalesContainer, "MDM_CUSTOMER_ENDPOINT")
 	if !ok {
 		t.Fatal("期望 erp-sales 容器里有 MDM_CUSTOMER_ENDPOINT，实际没有这个键")
 	}
-	if val != "http://mdm-customer-1-0-0:8080" {
-		t.Fatalf("期望 MDM_CUSTOMER_ENDPOINT=http://mdm-customer-1-0-0:8080，实际 %q", val)
+	if !mdmCustomerEndpointRe.MatchString(val) {
+		t.Fatalf("期望 MDM_CUSTOMER_ENDPOINT 形如 http://mdm-customer-X-Y-Z:8080（变量名不带版本号、值带版本号），实际 %q", val)
 	}
 }
 
@@ -78,12 +95,61 @@ func TestPlatform04_额外端口地址是http不是grpc(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 // 用例 5：弱依赖缺失时容器里根本没有这个键（不是空串）
 // ────────────────────────────────────────────────────────────────
-
+//
+// ⚠️ 这条用例原来直接对着真实部署断言"erp-sales 里没有
+// INFRA_WORKFLOW_ENDPOINT"（写这条用例时 infra-workflow 还没建仓库）。
+// 阶段三 Task 8 把 infra-workflow 建出来、装进了标准的 14 组件装配之后，
+// 这条前提就不再成立——erp-sales 现在总是跟 infra-workflow 一起部署，
+// 现在装配里的每一条弱依赖对应的组件其实都在，找不出第二对"弱依赖
+// 声明了、但对方确实没装"的真实组合。改用隔离 fixture（同用例 8/9b
+// 的既有做法）而不是继续依赖真实部署的组件搭配——后者会随装配组成
+// 演变而失效，前者不会。
 func TestPlatform05_弱依赖缺失时键根本不存在(t *testing.T) {
-	requireCommand(t, "docker")
-	val, ok := dockerEnv(t, erpSalesContainer, "INFRA_WORKFLOW_ENDPOINT")
-	if ok {
-		t.Fatalf("infra/workflow 是缺失的弱依赖，期望 INFRA_WORKFLOW_ENDPOINT 这个键根本不存在，实际存在且值为 %q", val)
+	f := newFixture(t)
+	f.writeFile("brickkit.yaml", `project: b5
+deploy:
+  target: docker
+sources:
+  - id: local-dev
+    type: local
+    path: ./components
+components:
+  - id: baz/qux
+    version: 1.0.0
+`)
+	// ⚠️ 故意不写 components/foo/bar/——这条用例要验证的正是"弱依赖声明
+	// 了、但对应组件压根没装（不在 brickkit.yaml 的 components 列表里，
+	// 也没有任何源能提供它）"这个最直接的场景，不是 09b 测的"曾经装过、
+	// metadata.id 后来变了"那个更间接的场景。
+	f.writeFile("components/baz/qux/component.yaml", `apiVersion: brickkit/v1
+kind: Component
+metadata:
+  id: baz/qux
+  name: 依赖方
+  version: 1.0.0
+  description: 弱依赖一个没装的组件
+  license: Apache-2.0
+  vendor: brickKit
+dependencies:
+  components:
+    - { id: foo/bar@1.0.0, optional: true }
+deployment:
+  type: container
+  image: brickenterprise/fixture:1.0.0
+  port: 19001
+healthCheck:
+  type: http
+  path: /healthz
+`)
+	res := f.run("up", "--dry-run")
+	if res.exitCode != 0 {
+		t.Fatalf("弱依赖缺失只该警告，不该阻断，实际退出码 %d：%s", res.exitCode, res.stdout)
+	}
+	if !strings.Contains(res.stdout, "弱依赖缺失") || !strings.Contains(res.stdout, "FOO_BAR_ENDPOINT") {
+		t.Fatalf("期望警告说清「弱依赖缺失」且点名 FOO_BAR_ENDPOINT 不会被注入，实际输出：%s", res.stdout)
+	}
+	if strings.Contains(f.generatedCompose(), "FOO_BAR_ENDPOINT") {
+		t.Fatalf("弱依赖压根没装，baz/qux 容器里不该有 FOO_BAR_ENDPOINT，实际 compose：%s", f.generatedCompose())
 	}
 }
 

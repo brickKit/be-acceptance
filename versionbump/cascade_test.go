@@ -124,6 +124,47 @@ func TestComputeCascade_一个组件被两个刚变更的依赖同时牵连只�
 	}
 }
 
+// TestComputeCascade_根变更理由的换行会被压成单行 是真机验证 bump-version
+// 时才发现的真实 bug：ParsePlanFile 允许 reason 字段跨多行写（方便在
+// 计划文件里排版），但这段文字最终要塞进 component.yaml 的单行注释
+// 里，原样带着换行符写进去会把后续内容变成裸露的 YAML、直接撞坏文件。
+// 在写盘之前，ComputeCascade 就该把它压成单行。
+func TestComputeCascade_根变更理由的换行会被压成单行(t *testing.T) {
+	reg := testRegistry()
+	changes, err := ComputeCascade(reg, []SeedChange{
+		{ID: "erp/inventory", Reason: "第一行理由，\n  第二行理由，\n\t第三行理由。"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(changes[0].Reason, "\n") {
+		t.Fatalf("理由里不该再有换行符，实际：%q", changes[0].Reason)
+	}
+	// 纯中文断行之间不该插空格（中文本身词与词之间不加空格）。
+	want := "第一行理由，第二行理由，第三行理由。"
+	if changes[0].Reason != want {
+		t.Fatalf("期望压成 %q，实际 %q", want, changes[0].Reason)
+	}
+}
+
+// TestComputeCascade_理由换行在中英文边界正确保留空格 是
+// TestComputeCascade_根变更理由的换行会被压成单行 的补充：断在纯中文
+// 片段之间不该插空格，但断在英文术语（test-cross）跟中文之间必须保留
+// 空格，否则会拼成"真实test-cross桥接"这种既有排版习惯里不允许的形状。
+func TestComputeCascade_理由换行在中英文边界正确保留空格(t *testing.T) {
+	reg := testRegistry()
+	changes, err := ComputeCascade(reg, []SeedChange{
+		{ID: "erp/inventory", Reason: "真实\ntest-cross\n桥接的容器。"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "真实 test-cross 桥接的容器。"
+	if changes[0].Reason != want {
+		t.Fatalf("期望 %q，实际 %q", want, changes[0].Reason)
+	}
+}
+
 func TestComputeCascade_显式目标版本覆盖patch自增(t *testing.T) {
 	reg := testRegistry()
 	changes, err := ComputeCascade(reg, []SeedChange{
