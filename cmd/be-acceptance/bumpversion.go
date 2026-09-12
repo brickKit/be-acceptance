@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/brickKit/be-acceptance/versionbump"
 )
@@ -83,12 +84,30 @@ func runBumpVersion(args []string) error {
 		}
 		fmt.Printf("  %s：%s → %s（%s）\n", r.ID, r.OldVer, r.NewVer, kind)
 		fmt.Printf("    理由：%s\n", r.Reason)
+		var relComponentFiles []string
 		for _, f := range r.FilesChanged {
 			rel, relErr := filepath.Rel(absRoot, f)
 			if relErr != nil {
 				rel = f
 			}
 			fmt.Printf("    - %s\n", rel)
+			if comp, ok := reg[r.ID]; ok && strings.HasPrefix(f, comp.Dir) {
+				compRel, err := filepath.Rel(comp.Dir, f)
+				if err == nil {
+					relComponentFiles = append(relComponentFiles, compRel)
+				}
+			}
+		}
+		if *apply {
+			comp := reg[r.ID]
+			compRelFromRoot, _ := filepath.Rel(absRoot, comp.Dir)
+			fmt.Printf("    接下来（在 %s 目录下，先加上这次真正改的代码/测试文件，再照下面收尾）：\n", compRelFromRoot)
+			fmt.Printf("      跑这个组件自己的测试，必须全绿才能往下走\n")
+			fmt.Printf("      git add %s <这次真正改动涉及的其它文件>\n", strings.Join(relComponentFiles, " "))
+			fmt.Printf("      git commit -F <写着理由的临时消息文件>   # 别用内联 -m 夹带长文本/双引号\n")
+			fmt.Printf("      git tag -a v%s -m %q\n", r.NewVer, "v"+r.NewVer+": "+firstLine(r.Reason))
+			fmt.Printf("      make image\n")
+			fmt.Printf("      git push origin main && git push origin v%s\n", r.NewVer)
 		}
 		fmt.Println()
 	}
@@ -96,9 +115,20 @@ func runBumpVersion(args []string) error {
 	if !*apply {
 		fmt.Println("以上是计划——确认没问题后加 --apply 重跑一遍才会真的写文件。")
 	} else {
-		fmt.Println("文件已落地。接下来逐个组件（按上面打印的顺序）review diff、跑测试、" +
-			"git commit/tag/`make image`/push，最后提交装配仓库自己的改动——" +
-			"这几步这个工具不代劳，见 01-documentation-standard.md 新增小节的理由。")
+		fmt.Println("文件已落地。按上面打印的顺序逐个组件收尾；全部做完后提交装配仓库自己的改动" +
+			"（brickkit.yaml/两份 AGENTS.md/.brickkit 目录）、跑 make gates、真机 brickkit up 验证、push。" +
+			"完整流程、什么时候该停下来问人，见 .claude/skills/version-bump-ship/ 或 " +
+			"00-master-guide.md SOP-W-11。")
 	}
 	return nil
+}
+
+// firstLine 取一段理由文字的第一行，给 git tag -a 的 -m 用——tag message
+// 只需要一句话概括，完整理由已经写进了 component.yaml 的变更记录里，
+// 不用重复整段塞进 tag message。
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
