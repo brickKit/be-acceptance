@@ -25,6 +25,8 @@ func main() {
 	switch os.Args[1] {
 	case "gate":
 		err = runGate(os.Args[2:])
+	case "bump-version":
+		err = runBumpVersion(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "子命令 %q 未知\n", os.Args[1])
 		os.Exit(1)
@@ -44,6 +46,8 @@ func printUsage() {
 	fmt.Println("  gate events-breaking-scan --root <path>   contracts/events/*.json 只增不删不改（§3.10，buf 只管 .proto）")
 	fmt.Println("  gate data-scope-test-scan --root <path>   声明了 data_scopes 维度的组件必须有越权/拒绝形状的测试（总纲 SOP-W-8）")
 	fmt.Println("  gate dependency-version-scan --root <path> 依赖版本号必须跟依赖方真实版本一致（component.yaml 互相引用 + brickkit.yaml 顶层 pin，踩坑记录 C16）")
+	fmt.Println()
+	fmt.Println("  bump-version --root <path> --plan <计划文件> [--apply]   自动传播一次版本变更（算出所有下游要跟着同步的组件，改好全部文件），计划文件格式见 versionbump 包文档")
 }
 
 // runGate 派发到具体门禁子命令。⚠️ 子命令词（如 "import-scan"）必须在
