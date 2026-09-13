@@ -4,6 +4,14 @@
 
 ⚠️ **这不是占位符，是任务清单。** 发现平台真有问题时，先在这里记一条用例（哪怕是红的），再回 brickKit 仓库修——不许在业务侧绕过去。绕过去的那一条，会在 62 个组件时变成 61 处绕法（设计书 §9.6.2）。
 
+⚠️ **本文件的编号维护纪律延伸到了 tier2**：阶段四 Task 11 新增的两条合并态
+专属断言（用例 24-25）编号紧接在下面 23 条之后，但它们不测"brickKit 自身
+行为"（那才是本文件、`make tier1` 真正的范围），测的是"合并部署这一刻磨掉
+了多少组件性"——档位不同，命令是 `make tier2` 不是 `make tier1`，用例本身
+落在 `tier2:` 一节，物理位置也不在这几个 `_test.go` 文件里（原因见那一节）。
+沿用同一份编号只是为了保持"这个项目一共验证过多少条断言"这件事有一个
+单一、连续、可追溯的清单，不是把它们并进 23 条里。
+
 ## 现状（阶段二 Task 19-20 的 20 条 + 阶段三 Task 15 补的 3 条，共 23 条全部落地）
 
 `a`~`g`_test.go 固化成 `go test` 自动化测试，`make tier1` 一条命令跑完，**23 条全绿**。
@@ -87,3 +95,24 @@ B 组的用例 3/4/5（`TestPlatform03/04/05`）需要装配仓库根目录已�
 `exitCode` 是 `0`，不是错误——两个组件都被标成"不启动"，各自给出清楚的理由，这是一次优雅的级联降级，不是配置校验失败。
 
 `TestPlatform08b` 用完全相同的 `foo/bar`→`baz/qux` 强依赖结构做对照，只改一个变量：把 `foo/bar` 的顶层条目**整条不写**（不是写 `enabled: false`）。结果是 `foo/bar` 被正常解析、自动拉进来启动，`baz/qux` 也正常拿到 `FOO_BAR_ENDPOINT`——这才是"删条目"与"`enabled: false`"真正不等价的地方：`enabled: false` 是**显式**声明"我知道这个组件存在，但明确不要它启动"，会强制级联断开所有需要它的边；不写条目只是**没有主动要求**它启动，安装源里能找到就照样会被依赖解析拉进来。两者只有在"真的没有任何组件需要它"时结果才相同（都不启动）——导读第 10 条"客户没买的组件写 `enabled: false`……没买的正确写法是整条不写进 `brickkit.yaml`"说的正是这个差异：如果这个组件确实被别的（客户买了的）组件依赖着，写 `enabled: false` 会连累那个依赖方一起停摆，而不写条目不会。
+
+## tier2：合并态专属断言（阶段四 Task 11，用例 24-25）
+
+`make tier2`（根 Makefile / 本仓库 Makefile 都有同名目标）。跟上面 23 条的
+根本区别：上面测的是"brickKit 自身行为"（哪怕借了真实容器做断言，被测对象
+始终是平台的某个机制），这两条测的是"把 N 个模块塞进一个外壳进程"这件事
+本身有没有磨掉组件性——被测对象是**我们自己的**`shells/*`+`be-sdk-go`，
+不是 brickKit。
+
+| # | 验什么 | 怎么验 | 对应本书 | 状态 |
+|---|---|---|---|---|
+| 24 | 单个模块 panic 不拖垮外壳其余模块 | 同一个 `shell.Run` 里混进 2 个真实、零依赖组件模块（`mdm/customer`/`mdm/product`）+ 1 个故意在 `Start()` 里 panic 的假模块，断言 panic 发生后两个真实模块依然正常响应 | 设计书 §13.3 铁律七的合并态延伸 | ✅ `TestRun_一个模块panic不影响其它真实模块继续服务`（`shells/go/internal/shell/real_modules_test.go`）：**真实红过一次**——写这条测试时 `shell.go` 的 `Start` goroutine 还是把 recover 到的 panic 转成 error 原样 return 给 errgroup，`errgroup.WithContext` 的 `gctx` 被取消，两个真实模块的 `/healthz`/业务路由全部跟着停止响应；修复（该分支 recover 之后只记日志，不把 error 流回 `g`）后重跑转绿，完整过程见 `shell.go` 对应位置的注释与 `shells/go` 的 `README.md` |
+| 25 | 共享连接池下 `SET LOCAL` 越权测试：漏加 schema 限定仍只读到自己 schema 的数据 | 用测试自己建的临时同名探针表（`mdm_customer`/`mdm_product` 各一份，跑完即删），真实并发交替用 `besdk.WithTx` 切两个真实组件角色（`mdm_customer_rw`/`mdm_product_rw`）跑不带 schema 限定的裸表名查询，收窄连接池上限逼真实复用同一条物理连接 | 设计书 §13.3 铁律二（"最难查的一个坑"） | ✅ `TestTier2_共享连接池下漏加schema限定仍只读到自己schema的数据`（`tools/be-acceptance/tier2/schema_boundary_test.go`）：机制本身（`WithTx` 的 `SET LOCAL ROLE`+`SET LOCAL search_path`）从写下来就是对的，所以这条测试第一次跑就是绿的——按 Task 11 的判据额外做了一次反向验证：故意把其中一个探针的期望值改成邻居 schema 的标记，确认测试真的会红（证明比较逻辑不是重言式），改回来确认转绿 |
+
+⚠️ **用例 24 为什么不在本目录、不是 `platform_test` 包**：它要真的调用
+`shells/go` 的 `internal/shell.Run`，那是另一个 Go module 自己的
+`internal` 包，跨 module 天然不可见（Go 编译器层面的限制，不是铁律六
+import-scan 门禁的问题——即使门禁允许，Go 也不让）。`make tier2` 因此会
+`cd` 进 `../../shells/go` 单独跑那一条，两处都需要真实可达的
+`TEST_PG_DSN`/`TEST_NATS_URL`（同 `shells/go` 自己 `real_modules_test.go`
+的既有前提，未设置就跳过，不是放宽断言）。
