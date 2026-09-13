@@ -28,13 +28,37 @@ type Violation struct {
 // 不是任何组件，是另一个独立仓库）。
 const brickKitOrgPrefix = "github.com/brickKit/"
 
-// allowedShared 是唯一的白名单：横切基础库。
+// allowedShared 是第一类白名单：横切基础库。
 // ⚠️ 往这里加东西之前先回答一个问题：它有没有业务逻辑或组件 model？
 // 有就不许加——那正是铁律六要禁的（§13.3）。
 var allowedShared = map[string]bool{
 	"github.com/brickKit/be-sdk-go":     true,
 	"github.com/brickKit/be-sdk-python": true,
 	"github.com/brickKit/be-sdk-ts":     true,
+}
+
+// isGeneratedContractImport 判断一条跨组件 import 是不是第二类白名单：某组件
+// 自己发布的生成物契约包（`gen/<domain>/<name>`，protoc-gen-go/-grpc 直接
+// 生成，只含消息类型与客户端 stub，不含任何业务逻辑）。
+//
+// 加这一类白名单的原因：阶段四合并部署时发现，erp-sales 曾经"逐字复制"一份
+// 别的组件的生成代码放在自己仓库里当"只读镜像"（vendored-contract 模式），
+// 图的是不直接 import 别的组件仓库；但一旦两边被分进同一个外壳、编译进同一
+// 个进程，两份内容相同、import path 不同的生成代码会各自在 protobuf 全局
+// 注册表里注册一次同一个文件/类型全名，直接 panic——Go 的 module system
+// 无法把两个不同 import path 的包合并成一份编译实例，`replace` 也解决不了
+// （阶段四调研记录 04 §13 有完整推演，含最小复现）。真正的解法是让"生成物
+// 契约包"本身升级为第二类白名单——与 be-sdk-* 同类：横切、无业务逻辑，
+// 各组件直接 import 彼此的真身，不再各自逐字复制一份。
+//
+// 判据：路径形如 `github.com/brickKit/<repo>/gen/<...>`——即组织前缀之后
+// 第二段字面量是 "gen"。按约定这一层必须独立成嵌套 go module（module 边界
+// 切在协议版本目录 v1 的上一级，因为 Go 模块路径禁止以字面量 /v1 结尾），
+// 这样发布/引用走的是正常的 go get/require，不是文件复制。
+func isGeneratedContractImport(path string) bool {
+	rest := strings.TrimPrefix(path, brickKitOrgPrefix)
+	parts := strings.SplitN(rest, "/", 3)
+	return len(parts) >= 2 && parts[1] == "gen"
 }
 
 // ImportScan 扫描 root/components/ 下每个组件目录，返回全部违规。
@@ -161,6 +185,9 @@ func scanDir(dir, fromID, ownModule string, repoToComponent map[string]string) (
 				continue // 标准库、第三方，不归铁律六管
 			}
 			if allowedShared[path] {
+				continue
+			}
+			if isGeneratedContractImport(path) {
 				continue
 			}
 			if path == ownModule || strings.HasPrefix(path, ownModule+"/") {

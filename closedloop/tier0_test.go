@@ -44,13 +44,16 @@ import (
 // 这三个常量，是刻意的：`bump-version` 只管 `components/*/*/
 // component.yaml` 互相引用的那张依赖图，这三个常量是**另一个仓库**
 // （be-acceptance 自己）里的测试夹具，不在那张图里，仍然要靠这条注释
-// 提醒人工同步。**每次给 mdm-customer 出新版本，先来改这三行，再跑
-// tier0。**
+// 提醒人工同步。⚠️ 第五次真实发生（1.0.5 → 1.0.6，阶段四把 erp-sales
+// vendor mdm-customer 契约的方式从逐字复制改成直接 import 真身 gen/ 包，
+// mdm-customer 自己的 gen/mdm/customer 顺带拆成独立嵌套 go module，
+// component.yaml 版本号跟着跳）。**每次给 mdm-customer 出新版本，先来
+// 改这三行，再跑 tier0。**
 const (
-	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-5-1"
-	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-5-migration-1"
+	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-6-1"
+	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-6-migration-1"
 	postgresContainer = "be-postgres"
-	mdmImage          = "brickenterprise/mdm-customer:1.0.5"
+	mdmImage          = "brickenterprise/mdm-customer:1.0.6"
 	httpBase          = "http://localhost:8080"
 	grpcServiceName   = "mdm.customer.v1.CustomerService"
 )
