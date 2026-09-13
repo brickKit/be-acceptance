@@ -158,49 +158,77 @@ func componentID(componentsDir, compDir string) string {
 	return filepath.ToSlash(rel)
 }
 
-// scanDir 用 go/parser 解析目录下每个 .go 文件的 import 块，命中本组织
-// 下、白名单之外、且不是自己 module 的路径就记一条违规。
+// scanDir 用 go/parser 解析组件目录**及其全部子目录**下每个 .go 文件的
+// import 块，命中本组织下、白名单之外、且不是自己 module 的路径就记一条
+// 违规。
+//
+// ⚠️⚠️ 阶段四 Task 10 真机验证拆回门禁时才发现的严重 bug：这个函数原来
+// 只用 os.ReadDir 读**一层**目录、遇到子目录直接跳过（`if e.IsDir() {
+// continue }`，没有任何递归调用）——而每个组件真正的业务代码全部在
+// `backend/...`/`gen/...` 这类嵌套目录里，`components/<scope>/<name>/`
+// 这一层本身通常一个 .go 文件都没有。也就是说本函数从建仓库第一天起就
+// 一直在扫一个空目录：故意在 `erp-sales` 的
+// `backend/internal/client/client.go` 里加一行真实的跨组件 import
+// （`crm-opportunity/backend/internal/service`）验证时，`make gates`
+// 依然打印"0 条违规"——铁律六的守卫其实从来没有真的守过任何东西，
+// `importscan_test.go` 原有的全部用例也凑巧只在组件目录**顶层**放测试
+// 文件（`components/erp/sales/svc.go`），同一个盲区连测试自己都没有
+// 覆盖到，才让这个 bug 藏到现在。现在改成真正递归整棵目录树（用
+// filepath.WalkDir，跳过以 "." 开头的目录——不需要专门处理
+// `components/.archived`，那一层在 componentDirs 阶段就已经被排除，
+// 这里的隐藏目录判据只是防御性地不进任何组件自己内部可能出现的隐藏
+// 目录，比如 `.git`）。
 func scanDir(dir, fromID, ownModule string, repoToComponent map[string]string) ([]Violation, error) {
 	var violations []Violation
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
 	fset := token.NewFileSet()
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
-			continue
-		}
-		filePath := filepath.Join(dir, e.Name())
-		f, err := parser.ParseFile(fset, filePath, nil, parser.ImportsOnly)
+
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil, fmt.Errorf("解析 %s：%w", filePath, err)
+			return err
+		}
+		if d.IsDir() {
+			if path != dir && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".go") {
+			return nil
+		}
+
+		f, ferr := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+		if ferr != nil {
+			return fmt.Errorf("解析 %s：%w", path, ferr)
 		}
 		for _, imp := range f.Imports {
-			path, err := strconv.Unquote(imp.Path.Value)
-			if err != nil {
+			impPath, uerr := strconv.Unquote(imp.Path.Value)
+			if uerr != nil {
 				continue
 			}
-			if !strings.HasPrefix(path, brickKitOrgPrefix) {
+			if !strings.HasPrefix(impPath, brickKitOrgPrefix) {
 				continue // 标准库、第三方，不归铁律六管
 			}
-			if allowedShared[path] {
+			if allowedShared[impPath] {
 				continue
 			}
-			if isGeneratedContractImport(path) {
+			if isGeneratedContractImport(impPath) {
 				continue
 			}
-			if path == ownModule || strings.HasPrefix(path, ownModule+"/") {
+			if impPath == ownModule || strings.HasPrefix(impPath, ownModule+"/") {
 				continue // 自己内部的包
 			}
 			pos := fset.Position(imp.Pos())
 			violations = append(violations, Violation{
 				From: fromID,
-				To:   resolveComponentID(path, repoToComponent),
-				File: filePath,
+				To:   resolveComponentID(impPath, repoToComponent),
+				File: path,
 				Line: pos.Line,
 			})
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return violations, nil
 }

@@ -25,38 +25,94 @@ import (
 	"time"
 )
 
-// ⚠️ 这三个常量按组件当前版本号硬编码容器/镜像名——mdm-customer 每次
-// 版本升级（包括纯粹的镜像重新构建，不影响功能的那种）都要跟着改一遍。
-// 阶段三 Task 4 真的因为这几个常量停在 v1.0.0、而 mdm-customer 早就
-// 升到 v1.0.2，导致 Test档0_1/2/3/5 全部 SKIP、Test档0_4 直接 FAIL——
-// 且这条漂移在 v1.0.1 那次升级时就已经发生，一直没人重跑 tier0 才没
-// 被发现（实测踩坑记录类别 F）。⚠️ 阶段三 Task 6 又真实发生了一次
-// （1.0.2 → 1.0.3）；阶段三收官后的 SOP-W-7 种子数据样板（mdm-customer
-// 补 make seed）又发生第三次（1.0.3 → 1.0.4，Test档0_4 直接 FAIL，
-// 这次没有影响 Test档0_1/2/3/5——它们判据里的容器/镜像名也读这三个
-// 常量，只是没有测试真的先跑一遍暴露出来，直到这次才发现是真漏改）——
-// 这不是假设性的风险，是这份手动同步的负担会反复兑现；接受它（不改成
-// 动态读 component.yaml 解析版本号）是 SOP-P 判据下的刻意选择：这只是
-// 六个硬编码字符串，加一层解析代码换来的是"版本号对不上"这类错误从
-// 编译期挪到运行期，不划算。⚠️ 第四次真实发生（1.0.4 → 1.0.5，种子
-// 数据丰富度批量整改期间），这次是跑完整个 `go test ./...`（而不是单独
-// 重跑 `Test档0`）才暴露——本仓库自己 `bump-version` 那批工作没有覆盖
-// 这三个常量，是刻意的：`bump-version` 只管 `components/*/*/
-// component.yaml` 互相引用的那张依赖图，这三个常量是**另一个仓库**
-// （be-acceptance 自己）里的测试夹具，不在那张图里，仍然要靠这条注释
-// 提醒人工同步。⚠️ 第五次真实发生（1.0.5 → 1.0.6，阶段四把 erp-sales
-// vendor mdm-customer 契约的方式从逐字复制改成直接 import 真身 gen/ 包，
-// mdm-customer 自己的 gen/mdm/customer 顺带拆成独立嵌套 go module，
-// component.yaml 版本号跟着跳）。**每次给 mdm-customer 出新版本，先来
-// 改这三行，再跑 tier0。**
+// ⚠️ 这三项曾经是按组件当前版本号硬编码的常量——mdm-customer 每次版本
+// 升级（包括纯粹的镜像重新构建，不影响功能的那种）都要跟着手动改一遍，
+// 真实漏改过 **六次**（阶段三 Task 4：v1.0.0 停留、v1.0.1 升级当时就
+// 漏改但没人发现；阶段三 Task 6：1.0.2→1.0.3；阶段三收官 SOP-W-7 种子
+// 数据样板：1.0.3→1.0.4；种子数据丰富度批量整改：1.0.4→1.0.5；阶段四
+// erp-sales vendor 改直接 import 真身包连带 mdm-customer 版本跳动：
+// 1.0.5→1.0.6；阶段四 Task 10 拆回门禁真机验证时又发生第七次：
+// 1.0.6→1.0.7，这次直接促成了本次修复）。曾经的判断是"只是六个硬编码
+// 字符串，加一层解析代码换来的是版本号对不上这类错误从编译期挪到运行期，
+// 不划算"——但那个判断针对的是"解析 component.yaml 拿版本号"这条路，
+// 七次真实复发之后，用 `platform` 包 `helper_test.go` 已经验证过的
+// `dockerContainerByPrefix`（`docker ps` 按名字前缀动态发现，不解析任何
+// YAML）明显更划算：镜像/容器名里的版本号不用再跟 mdm-customer 的
+// `component.yaml` 手动保持同步，`mdm-customer` 以后升到任何版本都不需要
+// 回来改这个文件。
+//
+// ⚠️ 与 `platform` 包不能直接共享同一个 `dockerContainerByPrefix`——两个
+// 包是不同的 Go package（`closedloop_test` vs `platform_test`），本文件
+// 里的测试助手历来是各自独立一份（`requireCommand` 已经是这个先例），
+// 这里延续同样的做法，不新起一个共享的 internal 包。
+//
+// ⚠️ 迁移容器（`mdmMigContainer`）不能用 `dockerContainerByPrefix`
+// （`docker ps` 默认只列运行中的容器）——迁移跑完就退出，`docker ps`
+// （不带 `-a`）找不到已退出的容器，`docker logs` 却能对着已退出的容器
+// 正常工作，这是两者语义不同导致的真实差异，见
+// `dockerContainerByPrefixAll`。
 const (
-	mdmContainer      = "brickkit-be-assembly-standard-mdm-customer-1-0-6-1"
-	mdmMigContainer   = "brickkit-be-assembly-standard-mdm-customer-1-0-6-migration-1"
 	postgresContainer = "be-postgres"
-	mdmImage          = "brickenterprise/mdm-customer:1.0.6"
 	httpBase          = "http://localhost:8080"
 	grpcServiceName   = "mdm.customer.v1.CustomerService"
 )
+
+func mdmContainer(t *testing.T) string {
+	t.Helper()
+	return dockerContainerByPrefix(t, "brickkit-be-assembly-standard-mdm-customer-")
+}
+
+func mdmMigContainer(t *testing.T) string {
+	t.Helper()
+	return dockerContainerByPrefixAll(t, "brickkit-be-assembly-standard-mdm-customer-", "-migration-")
+}
+
+// mdmImage 直接从已经在跑的容器身上读它实际使用的镜像引用（`docker ps`
+// 的 `.Image` 列），不是另起一次 `docker images` 按名字模糊匹配——容器
+// 已经在跑，说明这就是"当前真实生效"的那个镜像，不需要另猜一遍。
+func mdmImage(t *testing.T) string {
+	t.Helper()
+	out, err := exec.Command("docker", "inspect", "-f", "{{.Config.Image}}", mdmContainer(t)).Output()
+	if err != nil {
+		t.Skipf("docker inspect 拿不到镜像引用：%v", err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// dockerContainerByPrefix 用 docker ps 的名字前缀过滤动态找运行中的容器
+// ——同 platform 包 helper_test.go 的既有判据（那边的注释有完整的踩坑
+// 记录，这里不重复）。
+func dockerContainerByPrefix(t *testing.T, prefix string) string {
+	t.Helper()
+	out, err := exec.Command("docker", "ps", "--filter", "name="+prefix, "--format", "{{.Names}}").CombinedOutput()
+	if err != nil {
+		t.Skipf("docker ps 失败：%v\n%s", err, out)
+	}
+	name := strings.TrimSpace(strings.SplitN(string(out), "\n", 2)[0])
+	if name == "" {
+		t.Skipf("找不到名字前缀是 %q 的容器（先 brickkit up）", prefix)
+	}
+	return name
+}
+
+// dockerContainerByPrefixAll 同上，但用 `docker ps -a`（含已退出的容器）
+// ——迁移容器跑完迁移就退出，不会出现在不带 `-a` 的 docker ps 里。
+// nameContains 是第二道过滤（比如 "-migration-"），避免主容器和迁移
+// 容器共享同一个名字前缀时互相混淆。
+func dockerContainerByPrefixAll(t *testing.T, prefix, nameContains string) string {
+	t.Helper()
+	out, err := exec.Command("docker", "ps", "-a", "--filter", "name="+prefix, "--format", "{{.Names}}").CombinedOutput()
+	if err != nil {
+		t.Skipf("docker ps -a 失败：%v\n%s", err, out)
+	}
+	for _, name := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.Contains(name, nameContains) {
+			return name
+		}
+	}
+	t.Skipf("找不到名字前缀是 %q 且包含 %q 的容器（先 brickkit up）", prefix, nameContains)
+	return ""
+}
 
 // repoRoot 返回装配仓库根目录的绝对路径。go test 的 CWD 是包目录本身
 // （tools/be-acceptance/closedloop/），不是模块根——所以是 3 层 ..，
@@ -210,9 +266,10 @@ func grpcurlList(t *testing.T, addr, service string) []string {
 // ────────────────────────────────────────────────────────────────
 
 func Test档0_1_单独up起来(t *testing.T) {
-	status := dockerHealth(t, mdmContainer)
+	container := mdmContainer(t)
+	status := dockerHealth(t, container)
 	if status != "healthy" {
-		t.Fatalf("期望 %s 容器 healthy，实际 %q", mdmContainer, status)
+		t.Fatalf("期望 %s 容器 healthy，实际 %q", container, status)
 	}
 }
 
@@ -230,7 +287,7 @@ func Test档0_1_单独up起来(t *testing.T) {
 // 规则，不在档 0 平台级冒烟测试的职责范围内（档 0 测的是"brickkit 本身
 // 能不能把组件跑起来"）。
 func Test档0_2_curl打通HTTP(t *testing.T) {
-	if status := dockerHealth(t, mdmContainer); status != "healthy" {
+	if status := dockerHealth(t, mdmContainer(t)); status != "healthy" {
 		t.Skipf("mdm-customer 容器不 healthy（%s），先 brickkit up", status)
 	}
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -271,10 +328,10 @@ func Test档0_2_curl打通HTTP(t *testing.T) {
 // ────────────────────────────────────────────────────────────────
 
 func Test档0_3_grpcurl打通三个rpc(t *testing.T) {
-	if status := dockerHealth(t, mdmContainer); status != "healthy" {
+	if status := dockerHealth(t, mdmContainer(t)); status != "healthy" {
 		t.Skipf("mdm-customer 容器不 healthy（%s），先 brickkit up", status)
 	}
-	ip := dockerContainerIP(t, mdmContainer)
+	ip := dockerContainerIP(t, mdmContainer(t))
 	addr := ip + ":9090"
 
 	methods := grpcurlList(t, addr, grpcServiceName)
@@ -339,15 +396,16 @@ func Test档0_4_迁移可重跑(t *testing.T) {
 	run("down")
 	run("up")
 
-	out, err := exec.Command("docker", "logs", mdmMigContainer).CombinedOutput()
+	migContainer := mdmMigContainer(t)
+	out, err := exec.Command("docker", "logs", migContainer).CombinedOutput()
 	if err != nil {
-		t.Fatalf("docker logs %s 失败：%v", mdmMigContainer, err)
+		t.Fatalf("docker logs %s 失败：%v", migContainer, err)
 	}
 	if !strings.Contains(string(out), "迁移完成") {
 		t.Fatalf("期望迁移日志包含「迁移完成」，实际：%s", out)
 	}
 
-	if status := dockerHealth(t, mdmContainer); status != "healthy" {
+	if status := dockerHealth(t, mdmContainer(t)); status != "healthy" {
 		t.Fatalf("第二次 up 之后期望 mdm-customer healthy，实际 %q", status)
 	}
 }
@@ -358,7 +416,7 @@ func Test档0_4_迁移可重跑(t *testing.T) {
 
 func Test档0_5_healthz不查库(t *testing.T) {
 	requireCommand(t, "docker")
-	if status := dockerHealth(t, mdmContainer); status != "healthy" {
+	if status := dockerHealth(t, mdmContainer(t)); status != "healthy" {
 		t.Skipf("mdm-customer 容器不 healthy（%s），先 brickkit up", status)
 	}
 
@@ -383,7 +441,7 @@ func Test档0_5_healthz不查库(t *testing.T) {
 		t.Fatalf("PG 停了之后 /healthz 期望仍是 200，得到 %d——说明实现里查了库（§12.3.6）", resp.StatusCode)
 	}
 
-	if status := dockerHealth(t, mdmContainer); status != "healthy" {
+	if status := dockerHealth(t, mdmContainer(t)); status != "healthy" {
 		t.Fatalf("PG 停着的这段时间容器不该重启/crash，实际状态 %q", status)
 	}
 }
@@ -394,10 +452,11 @@ func Test档0_5_healthz不查库(t *testing.T) {
 
 func Test档0_6_镜像有shell和wget(t *testing.T) {
 	requireCommand(t, "docker")
+	image := mdmImage(t)
 	out, err := exec.Command("docker", "run", "--rm", "--entrypoint", "sh",
-		mdmImage, "-c", "wget --version | head -1").CombinedOutput()
+		image, "-c", "wget --version | head -1").CombinedOutput()
 	if err != nil {
-		t.Skipf("镜像 %s 不在本地（先 make image）：%v", mdmImage, err)
+		t.Skipf("镜像 %s 不在本地（先 make image）：%v", image, err)
 	}
 	if !strings.Contains(string(out), "Wget") {
 		t.Fatalf("期望输出包含 wget 版本号，实际：%s", out)

@@ -165,6 +165,61 @@ import "github.com/brickKit/mdm-customer/model"
 	}
 }
 
+// TestImportScan_嵌套子目录里的违规也要红 是阶段四 Task 10 真机验证拆回
+// 门禁时才发现的真实 bug 的回归测试：scanDir 原来只用 os.ReadDir 读一层
+// 目录，子目录直接跳过，而每个组件真正的业务代码全部在
+// backend/...这类嵌套目录里——组件目录顶层本身通常一个 .go 文件都没有。
+// 结果是这个门禁从建仓库第一天起就一直在扫空目录，`make gates` 永远
+// 打印"0 条违规"，不管真实代码里有没有违规。本用例的夹具刻意模拟真实
+// 目录结构（backend/internal/client/client.go），不是顶层 svc.go——
+// 上面几条既有用例全部只在顶层放测试文件，同一个盲区连测试自己都没有
+// 覆盖到，这条用例专门补上。
+func TestImportScan_嵌套子目录里的违规也要红(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/erp/sales/go.mod"),
+		"module github.com/brickKit/erp-sales\n\ngo 1.25\n")
+	write(t, filepath.Join(root, "components/erp/sales/backend/internal/client/client.go"),
+		`package client
+
+import "github.com/brickKit/crm-opportunity/backend/internal/service" // ❌ 指向另一个组件仓库
+`)
+	write(t, filepath.Join(root, "components/crm/opportunity/go.mod"),
+		"module github.com/brickKit/crm-opportunity\n\ngo 1.25\n")
+
+	violations, err := ImportScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 1 {
+		t.Fatalf("期望 1 条违规，得到 %d 条：%v", len(violations), violations)
+	}
+	if violations[0].From != "erp/sales" || violations[0].To != "crm/opportunity" {
+		t.Fatalf("违规方向不对：%+v", violations[0])
+	}
+}
+
+// TestImportScan_跳过隐藏目录 确认递归遇到以 "." 开头的目录会跳过，不是
+// 因为业务上真的需要跳过 .git 这类目录（Go 组件的目录树里目前不会出现
+// 这种目录），而是防御性地不让递归意外扎进任何隐藏目录。
+func TestImportScan_跳过隐藏目录(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/erp/sales/go.mod"),
+		"module github.com/brickKit/erp-sales\n\ngo 1.25\n")
+	write(t, filepath.Join(root, "components/erp/sales/.hidden/bad.go"),
+		`package bad
+
+import "github.com/brickKit/mdm-customer/model"
+`)
+
+	violations, err := ImportScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 0 {
+		t.Fatalf("隐藏目录不该被扫描，得到 %v", violations)
+	}
+}
+
 func write(t *testing.T, p, s string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
