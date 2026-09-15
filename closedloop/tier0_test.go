@@ -394,7 +394,13 @@ func Test档0_4_迁移可重跑(t *testing.T) {
 	}
 
 	run("down")
-	run("up")
+	// ⚠️ 阶段四附加 Task 0.6：teardown 状态下 brickkit.yaml 里 servedBy
+	// 还在（brickKit v0.4.2 的 --ignore-served-by 只在内存里清空，不写回
+	// 文件，见 make teardown-up）——这里如果不带这个 flag，重新 up 起来的
+	// 是"servedBy 生效"的正常合并态，mdm/customer 会因为它声明的外壳
+	// （被 teardown-up 临时 enabled: false 掉）没有运行而报
+	// CONFIG_INVALID，不是这条测试想验证的东西。
+	run("up", "--ignore-served-by")
 
 	migContainer := mdmMigContainer(t)
 	out, err := exec.Command("docker", "logs", migContainer).CombinedOutput()
