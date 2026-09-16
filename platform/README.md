@@ -125,7 +125,7 @@ import-scan 门禁的问题——即使门禁允许，Go 也不让）。`make ti
 跟用例 24-25（tier2，测的是我们自己的合并机制）不同，这两条测的仍然是
 **brickKit 自身行为**，性质上属于 tier1，只是编号排在 tier2 之后——本仓库
 维护纪律是"一份连续、可追溯的清单"，不是"每个档位各自独立编号"，见
-`docs/plans/04b-部署矩阵验证.md` Task 1 的完整背景（brickKit 请求真机
+`docs/plans/05b-组合矩阵验证.md` Task 1 的完整背景（brickKit 请求真机
 验证"多版本共存 + `servedBy` 混合部署"场景时顺带发现的）。
 
 | # | 验什么 | 怎么验 | 对应本书 | 状态 |
@@ -137,5 +137,5 @@ import-scan 门禁的问题——即使门禁允许，Go 也不让）。`make ti
 嵌套/格式错误/与 `local:true` 互斥）暂不在此列——brickKit 仓库当前 HEAD
 已实现但还没打 tag，本机装的正式版 `brickkit` 里没有，写成永久断言会
 全员 SKIP，价值不大；真机验证的完整命令与输出记录在
-`docs/plans/04b-部署矩阵验证.md` Task 1.2，等 brickKit 正式发版后再补
+`docs/plans/05b-组合矩阵验证.md` Task 1.2，等 brickKit 正式发版后再补
 进来，预计编号 28-32。
