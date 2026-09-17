@@ -381,6 +381,7 @@ func Test档0_3_grpcurl打通三个rpc(t *testing.T) {
 func Test档0_4_迁移可重跑(t *testing.T) {
 	brickkit := requireCommand(t, "brickkit")
 	requireCommand(t, "docker")
+	python3 := requireCommand(t, "python3")
 	root := repoRoot(t)
 
 	run := func(args ...string) []byte {
@@ -391,6 +392,55 @@ func Test档0_4_迁移可重跑(t *testing.T) {
 			t.Fatalf("brickkit %s 失败：%v\n输出：%s", strings.Join(args, " "), err, out)
 		}
 		return out
+	}
+
+	// ⚠️ 05a（Phase 4b 附加 Task 0.4）把全部 12 个成员从 local:true 迁到
+	// 真实 servedBy 之后，这条测试一直没跟上：`--ignore-served-by` 只在
+	// 内存里清空 servedBy，让 12 个成员各自"看起来"变回独立组件，但
+	// `resources.bindings` 仍然只列了 4 个外壳自己的 componentId——每个
+	// 成员单独要用哪个资源，从来没在 brickkit.yaml 里声明过绑定，真实
+	// `brickkit up`（非 --dry-run）会因此对全部 12 个成员报
+	// `RESOURCE_UNBOUND`。`make teardown-up` 早就靠
+	// `infra/scripts/patch-teardown-bindings.py` 把这层缺失的绑定 +
+	// `expose: true` 临时补上（同时禁用 4 个外壳条目，见该脚本），这里必须
+	// 复用同一份脚本，不能只带 `--ignore-served-by` 裸跑——2026-09-17
+	// 05b Task 5 真机验证时才发现这条测试从 05a 之后就没有真正跑绿过。
+	//
+	// ⚠️ 本文件顶部注释写明"这批测试要求真实起着的 mdm-customer"——即
+	// Test档0_1/0_2/0_3/0_5/0_6 都假设人已经先手动 `make teardown-up` 过
+	// 一轮，这时 brickkit.yaml 天然是"脏"的（teardown-up 自己的安全检查
+	// 也是"不干净就拒绝重跑"，见 Makefile）。本测试如果无论如何都要求
+	// brickkit.yaml 干净、且收尾一律 git checkout，会在"人已经手动
+	// teardown-up 过，紧接着跑 make tier0"这个真实场景下，把外层那份
+	// 供其它五条测试用的拆回态从 git 层面强行 revert 掉——不能这么做。
+	// 因此这里按"进来时 brickkit.yaml 是否已经是脏的"分两条路径：已经脏
+	// 就当作外层已经打过补丁，只管做 down/up 验证，收尾不碰 git（留给外层
+	// 自己的 `make teardown-down`）；干净就自己打补丁、自己收尾还原——
+	// 保证这条测试单独跑（`go test -run Test档0_4`）时也是自给自足的。
+	gitStatus := exec.Command("git", "status", "--porcelain", "brickkit.yaml")
+	gitStatus.Dir = root
+	statusOut, err := gitStatus.Output()
+	if err != nil {
+		t.Fatalf("git status brickkit.yaml 失败：%v", err)
+	}
+	alreadyPatchedByCaller := len(strings.TrimSpace(string(statusOut))) > 0
+
+	if !alreadyPatchedByCaller {
+		patchCmd := exec.Command(python3, "infra/scripts/patch-teardown-bindings.py")
+		patchCmd.Dir = root
+		if out, err := patchCmd.CombinedOutput(); err != nil {
+			t.Fatalf("patch-teardown-bindings.py 失败：%v\n输出：%s", err, out)
+		}
+		t.Cleanup(func() {
+			downCmd := exec.Command(brickkit, "down")
+			downCmd.Dir = root
+			_ = downCmd.Run()
+			checkoutCmd := exec.Command("git", "checkout", "--", "brickkit.yaml")
+			checkoutCmd.Dir = root
+			if out, err := checkoutCmd.CombinedOutput(); err != nil {
+				t.Errorf("git checkout -- brickkit.yaml 还原失败：%v\n输出：%s", err, out)
+			}
+		})
 	}
 
 	run("down")
