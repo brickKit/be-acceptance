@@ -169,6 +169,11 @@ func runDependencyVersionScan(root string) error {
 	}
 	if len(mismatches) > 0 {
 		for _, m := range mismatches {
+			if strings.HasPrefix(m.Declarer, "shells/") {
+				fmt.Fprintf(os.Stderr, "✗ %s 声明依赖 %s@%s，但 %s 自己 component.yaml 里的真实版本是 %s——外壳镜像实际编译进去的是 go.mod 锁定的这个旧版本，brickkit up 不会校验、不会报错，合并部署的容器会悄悄服务旧代码（05b Task 4c）\n",
+					m.Declarer, m.Dependency, m.DeclaredVersion, m.Dependency, m.ActualVersion)
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "✗ %s 声明依赖 %s@%s，但 %s 自己 component.yaml 里的真实版本是 %s——brickkit 逐字匹配版本号，会把两者解析成两个独立节点（踩坑记录 C16）\n",
 				m.Declarer, m.Dependency, m.DeclaredVersion, m.Dependency, m.ActualVersion)
 		}

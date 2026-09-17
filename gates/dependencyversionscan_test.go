@@ -112,6 +112,56 @@ func TestDependencyVersionScan_brickkit顶层pin落后(t *testing.T) {
 	}
 }
 
+func TestDependencyVersionScan_外壳go点mod锁定版本落后(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/mdm/customer/component.yaml"),
+		componentYaml("mdm/customer", "1.0.9"))
+	// shells/go/go.mod 锁定的是旧版本——05b Task 4c 真机复现的真实场景。
+	write(t, filepath.Join(root, "shells/go/go.mod"),
+		"module github.com/brickKit/be-shell-go\n\ngo 1.25.11\n\nrequire (\n"+
+			"\tgithub.com/brickKit/be-sdk-go v0.2.7\n"+
+			"\tgithub.com/brickKit/mdm-customer v1.0.7\n"+
+			"\tgithub.com/brickKit/mdm-customer/gen/mdm/customer v1.0.6\n"+
+			")\n\nrequire (\n"+
+			"\tgithub.com/beorn7/perks v1.0.1 // indirect\n"+
+			")\n")
+
+	mismatches, err := DependencyVersionScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mismatches) != 1 {
+		t.Fatalf("期望 1 条违规，得到 %d 条：%+v", len(mismatches), mismatches)
+	}
+	got := mismatches[0]
+	if got.Declarer != "shells/go/go.mod" || got.Dependency != "mdm/customer" ||
+		got.DeclaredVersion != "1.0.7" || got.ActualVersion != "1.0.9" {
+		t.Fatalf("违规内容不对：%+v", got)
+	}
+}
+
+func TestDependencyVersionScan_外壳go点mod的gen子模块和间接依赖不参与比对(t *testing.T) {
+	root := t.TempDir()
+	// mdm/customer 自己版本是 1.0.9，go.mod 顶层引用也是 1.0.9（同步），
+	// 但 gen/mdm/customer 子模块版本落后（1.0.6）——这是刻意的独立发布
+	// 节奏（设计书 §13.3 铁律六第二类白名单），不该被这个门禁当成漂移。
+	write(t, filepath.Join(root, "components/mdm/customer/component.yaml"),
+		componentYaml("mdm/customer", "1.0.9"))
+	write(t, filepath.Join(root, "shells/go/go.mod"),
+		"module github.com/brickKit/be-shell-go\n\ngo 1.25.11\n\nrequire (\n"+
+			"\tgithub.com/brickKit/mdm-customer v1.0.9\n"+
+			"\tgithub.com/brickKit/mdm-customer/gen/mdm/customer v1.0.6\n"+
+			")\n")
+
+	mismatches, err := DependencyVersionScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mismatches) != 0 {
+		t.Fatalf("期望 0 条违规（gen 子模块版本独立、不参与比对），得到：%+v", mismatches)
+	}
+}
+
 func TestDependencyVersionScan_引用不存在的组件不报违规(t *testing.T) {
 	root := t.TempDir()
 	// erp-sales 引用了一个本仓库根本没有的组件 ID——查不出真实版本，
