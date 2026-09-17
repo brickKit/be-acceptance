@@ -136,6 +136,26 @@ func DependencyVersionScan(root string) ([]DependencyVersionMismatch, error) {
 		mismatches = append(mismatches, diffRefs(declarer, refs, actual)...)
 	}
 
+	// ④ 外壳自己 component.yaml 的 metadata.version 与 deployment.image
+	// 镜像 tag 是否一致——两个字段各自独立声明，没有任何一层会替我们同步。
+	// 05b 真机复测时真实漏改过一次：只 bump 了 version，deployment.image
+	// 停在旧 tag，`brickkit up` 全程不校验，真实拉起的容器悄悄用了旧镜像
+	// （表现跟第③类扫描要防的问题几乎一样，只是发生在同一份文件内部，
+	// 不是跨文件引用）。
+	shellComponentYAMLs, err := shellComponentYAMLPaths(root)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range shellComponentYAMLs {
+		mismatch, err := shellImageVersionMismatch(p, root)
+		if err != nil {
+			return nil, err
+		}
+		if mismatch != nil {
+			mismatches = append(mismatches, *mismatch)
+		}
+	}
+
 	sort.Slice(mismatches, func(i, j int) bool {
 		if mismatches[i].Declarer != mismatches[j].Declarer {
 			return mismatches[i].Declarer < mismatches[j].Declarer
@@ -263,6 +283,63 @@ func shellModuleRefs(path string, idsByRepoName map[string]string) ([]depRef, er
 		refs = append(refs, depRef{id: id, version: m[2]})
 	}
 	return refs, nil
+}
+
+// shellComponentYAMLPaths 找出全部 shells/<name>/deploy/shell/<slot>/component.yaml
+// （外壳自己的 manifest，不是 components/ 下的 62 个业务组件）。
+func shellComponentYAMLPaths(root string) ([]string, error) {
+	return filepath.Glob(filepath.Join(root, "shells", "*", "deploy", "shell", "*", "component.yaml"))
+}
+
+// deploymentImageTagRe 匹配 `deployment:` 段里 `image: <repo>:<version>` 这一行，
+// 只取冒号后面的精确版本号。
+var deploymentImageTagRe = regexp.MustCompile(`(?m)^\s*image:\s*\S+:([0-9]+\.[0-9]+\.[0-9]+)\s*$`)
+
+// idRe 匹配 `metadata:` 段里的 `id: shell/go-core`。
+var shellMetaIDRe = regexp.MustCompile(`(?m)^\s*id:\s*(\S+)`)
+
+// shellImageVersionMismatch 检查一份外壳 component.yaml 自己的
+// metadata.version 是否与 deployment.image 的镜像 tag 一致——查不到任何一边
+// 就静默跳过（同本文件其它扫描"查不到就不报"的既有判据）。
+func shellImageVersionMismatch(path, root string) (*DependencyVersionMismatch, error) {
+	metaBlock, err := topLevelBlock(path, "metadata:")
+	if err != nil {
+		return nil, err
+	}
+	vm := metaVersionRe.FindStringSubmatch(metaBlock)
+	if vm == nil {
+		return nil, nil
+	}
+	version := vm[1]
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	im := deploymentImageTagRe.FindStringSubmatch(string(data))
+	if im == nil {
+		return nil, nil
+	}
+	imageTag := im[1]
+
+	if version == imageTag {
+		return nil, nil
+	}
+
+	id := "?"
+	if idm := shellMetaIDRe.FindStringSubmatch(metaBlock); idm != nil {
+		id = idm[1]
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		rel = path
+	}
+	return &DependencyVersionMismatch{
+		Declarer:        rel,
+		Dependency:      id + " 自己的 deployment.image",
+		DeclaredVersion: version,
+		ActualVersion:   imageTag,
+	}, nil
 }
 
 func extractDepRefs(block string) []depRef {

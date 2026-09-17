@@ -162,6 +162,28 @@ func TestDependencyVersionScan_外壳go点mod的gen子模块和间接依赖不�
 	}
 }
 
+func TestDependencyVersionScan_外壳自己的version与deployment点image镜像tag不一致(t *testing.T) {
+	root := t.TempDir()
+	// 05b 真机复测时真实漏改过的场景：只 bump 了 metadata.version，
+	// deployment.image 停在旧 tag。
+	write(t, filepath.Join(root, "shells/go/deploy/shell/go-core/component.yaml"),
+		"apiVersion: brickkit/v1\nkind: Component\n\n"+
+			"metadata:\n  id: shell/go-core\n  name: x\n  version: 0.5.6\n  description: x\n\n"+
+			"deployment:\n  type: container\n  image: brickenterprise/be-shell-go:0.5.5\n  port: 8090\n")
+
+	mismatches, err := DependencyVersionScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mismatches) != 1 {
+		t.Fatalf("期望 1 条违规，得到 %d 条：%+v", len(mismatches), mismatches)
+	}
+	got := mismatches[0]
+	if got.DeclaredVersion != "0.5.6" || got.ActualVersion != "0.5.5" {
+		t.Fatalf("违规内容不对：%+v", got)
+	}
+}
+
 func TestDependencyVersionScan_引用不存在的组件不报违规(t *testing.T) {
 	root := t.TempDir()
 	// erp-sales 引用了一个本仓库根本没有的组件 ID——查不出真实版本，
