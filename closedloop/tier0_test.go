@@ -425,6 +425,29 @@ func Test档0_4_迁移可重跑(t *testing.T) {
 	}
 	alreadyPatchedByCaller := len(strings.TrimSpace(string(statusOut))) > 0
 
+	// ⚠️ 05b Task 10 真机验证时真实撞到的一个自造缺口：上面这条"干净就
+	// 自己接管"的判据只看 brickkit.yaml 的 git 状态，没看这个项目当前
+	// 是不是**真的有一个正常部署在跑**——干净状态既可能是"什么都没
+	// 起"，也可能是"刚用一次普通 brickkit up 起了真实部署，还没来得及
+	// 弄脏 brickkit.yaml"。后面这条路径下，本测试接下来的 run("down")
+	// 会把这个真实部署整个 down 掉（容器被删除，不是仅仅停止），而
+	// t.Cleanup 只 git checkout 复原配置文件，从来没有把那个真实部署
+	// 重新 up 回来——外层调用方看到的是"config 文件没变"，但正在跑的
+	// 部署已经被静默清空。用容器名前缀直接探测"这个 docker compose
+	// project 当前有没有任何容器"，不依赖 git 状态：探测到就跳过（不
+	// 猜哪个更重要，宁可跳过也不要静默销毁），留一句话让操作者自己
+	// `brickkit down` 之后重跑，或者走 `make teardown-up` 外层生命周期。
+	if !alreadyPatchedByCaller {
+		psCmd := exec.Command("docker", "ps", "--filter", "name=brickkit-be-assembly-standard-", "--format", "{{.Names}}")
+		psOut, err := psCmd.Output()
+		if err != nil {
+			t.Fatalf("docker ps 探测现有部署失败：%v", err)
+		}
+		if running := strings.TrimSpace(string(psOut)); running != "" {
+			t.Skipf("brickkit.yaml 是干净的，但这个项目当前真的有容器在跑（%s）——本测试接下来要 brickkit down 再重新 up 成拆回态，会把这个真实部署整个清空且收尾无法自动恢复。为避免静默破坏正在使用的部署，直接跳过：请先 brickkit down（确认不再需要这个部署）再单独重跑本测试，或改用 make teardown-up 走外层生命周期", running)
+		}
+	}
+
 	if !alreadyPatchedByCaller {
 		patchCmd := exec.Command(python3, "infra/scripts/patch-teardown-bindings.py")
 		patchCmd.Dir = root
