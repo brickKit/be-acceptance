@@ -31,7 +31,7 @@ func hostnameFromVersion(id, version string) string {
 }
 
 // Apply 把 ComputeCascade 算出来的整批变更写进磁盘：每个组件自己的
-// component.yaml + 根 brickkit.yaml 的顶层 pin + 根/docs/zh 两份
+// component.yaml + 根 brickkit.yaml 的顶层 pin + 根/AGENTS.zh.md 两份
 // AGENTS.md 的组件名录表 + （仅 infra/authz、infra/iam-casdoor 触发时）
 // 全项目 authzBundleUrl/iamJwksUrl 字面量同步。dryRun=true 时只计算、
 // 不写文件，返回值一致，方便调用方先过一遍人工审查。
@@ -69,7 +69,7 @@ func Apply(root string, reg map[string]*Component, changes []Change, dryRun bool
 
 		for _, rosterPath := range []string{
 			filepath.Join(root, "AGENTS.md"),
-			filepath.Join(root, "docs", "zh", "AGENTS.md"),
+			filepath.Join(root, "AGENTS.zh.md"),
 		} {
 			changedFile, err = rewriteRosterVersion(rosterPath, comp.RepoName(), c.NewVer, dryRun)
 			if err != nil {
@@ -260,7 +260,7 @@ func rewriteBrickkitPin(path string, c Change, dryRun bool) (bool, error) {
 	return true, os.WriteFile(path, []byte(newContent), 0o644)
 }
 
-// rewriteRosterVersion 改 AGENTS.md/docs/zh/AGENTS.md 组件名录表那一行
+// rewriteRosterVersion 改 AGENTS.md/AGENTS.zh.md 组件名录表那一行
 // 的版本号单元格。表里用的是仓库名（"erp-inventory"），不是组件 ID。
 func rewriteRosterVersion(path, repoName, newVer string, dryRun bool) (bool, error) {
 	data, err := os.ReadFile(path)

@@ -1,7 +1,7 @@
 // Package versionbump 自动传播一次组件版本变更：算出哪些别的组件因为
 // 依赖它而也要跟着升版本号（依赖版本号同步，踩坑记录 C16 复发过 4 次
 // 的那类坑），把每个组件自己的 component.yaml、根 brickkit.yaml 的顶层
-// pin、根 AGENTS.md/docs/zh/AGENTS.md 的组件名录表全部改到位。
+// pin、根 AGENTS.md/AGENTS.zh.md 的组件名录表全部改到位。
 //
 // ⚠️ 故意不引入 YAML 库，用正则在文本层面精确定位要改的那一行——原因
 // 与 gates.DependencyVersionScan 相同：component.yaml 里逐行的行内注释

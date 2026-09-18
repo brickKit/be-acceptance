@@ -94,7 +94,7 @@ func setupFixture(t *testing.T) string {
 	writeFile(t, filepath.Join(root, "components/erp/finance/component.yaml"), financeYAML)
 	writeFile(t, filepath.Join(root, "brickkit.yaml"), brickkitYAMLFixture)
 	writeFile(t, filepath.Join(root, "AGENTS.md"), agentsMDFixture)
-	writeFile(t, filepath.Join(root, "docs/zh/AGENTS.md"), agentsMDFixture)
+	writeFile(t, filepath.Join(root, "AGENTS.zh.md"), agentsMDFixture)
 	return root
 }
 
@@ -177,7 +177,7 @@ func TestApply_端到端级联落地(t *testing.T) {
 	}
 
 	// --- 两份 AGENTS.md 名录表 ---
-	for _, p := range []string{"AGENTS.md", "docs/zh/AGENTS.md"} {
+	for _, p := range []string{"AGENTS.md", "AGENTS.zh.md"} {
 		content := readFile(t, filepath.Join(root, p))
 		if !strings.Contains(content, "| `erp-inventory` | 1.0.13 |") {
 			t.Fatalf("%s 里 erp-inventory 的版本号应该更新，实际：\n%s", p, content)
