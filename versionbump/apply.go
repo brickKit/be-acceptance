@@ -14,31 +14,22 @@ type ApplyResult struct {
 	FilesChanged []string
 }
 
-// authzHostname 组件（`infra/authz`/`infra/iam-casdoor`）的版本号会被编进
-// 容器主机名，进而被 13 个组件手写进 authzBundleUrl/iamJwksUrl 配置项
-// 字面量（docs/dev/field-tested-pitfalls-log.md C18——dependency-version-
-// scan 门禁扫不出这类漂移，2026 年真的漏改过全部 25 处引用）。这两个
-// 组件的版本一变，这个包顺带机械同步这些字面量，把 C18 彻底堵死。
-var authzHostnameComponents = map[string]string{
-	"infra/authz":       "authzBundleUrl",
-	"infra/iam-casdoor": "iamJwksUrl",
-}
-
-// hostnameFromVersion 把 "erp/inventory"+"1.0.12" 变成
-// "erp-inventory-1-0-12"——brickkit 生成的容器名/主机名前缀的固定形状。
-func hostnameFromVersion(id, version string) string {
-	return strings.ReplaceAll(id, "/", "-") + "-" + strings.ReplaceAll(version, ".", "-")
-}
-
-// Apply 把 ComputeCascade 算出来的整批变更写进磁盘：每个组件自己的
-// component.yaml + 根 brickkit.yaml 的顶层 pin + 根/AGENTS.zh.md 两份
-// AGENTS.md 的组件名录表 + （仅 infra/authz、infra/iam-casdoor 触发时）
-// 全项目 authzBundleUrl/iamJwksUrl 字面量同步。dryRun=true 时只计算、
-// 不写文件，返回值一致，方便调用方先过一遍人工审查。
+// Apply 把 ComputeCascade 算出来的整批变更写进磁盘：每个组件/外壳自己的
+// component.yaml（version、变更记录、image tag、dependencies.components
+// 与 shell.members 里的引用）+ 全部外壳 go.mod 里对应成员的 require。
+// dryRun=true 时只计算、不写文件，返回值一致，方便调用方先过一遍人工审查。
 func Apply(root string, reg map[string]*Component, changes []Change, dryRun bool) ([]ApplyResult, error) {
 	newVerByID := map[string]string{}
 	for _, c := range changes {
 		newVerByID[c.ID] = c.NewVer
+	}
+
+	var goMods []string
+	for _, dir := range shellDirs(root) {
+		p := filepath.Join(dir, "go.mod")
+		if _, err := os.Stat(p); err == nil {
+			goMods = append(goMods, p)
+		}
 	}
 
 	var results []ApplyResult
@@ -58,36 +49,14 @@ func Apply(root string, reg map[string]*Component, changes []Change, dryRun bool
 			res.FilesChanged = append(res.FilesChanged, yamlPath)
 		}
 
-		brickkitPath := filepath.Join(root, "brickkit.yaml")
-		changedFile, err = rewriteBrickkitPin(brickkitPath, c, dryRun)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", brickkitPath, err)
-		}
-		if changedFile {
-			res.FilesChanged = append(res.FilesChanged, brickkitPath)
-		}
-
-		for _, rosterPath := range []string{
-			filepath.Join(root, "AGENTS.md"),
-			filepath.Join(root, "AGENTS.zh.md"),
-		} {
-			changedFile, err = rewriteRosterVersion(rosterPath, comp.RepoName(), c.NewVer, dryRun)
+		for _, goMod := range goMods {
+			changedFile, err := rewriteShellGoMod(goMod, comp.RepoName(), c.NewVer, dryRun)
 			if err != nil {
-				return nil, fmt.Errorf("%s: %w", rosterPath, err)
+				return nil, fmt.Errorf("%s: %w", goMod, err)
 			}
 			if changedFile {
-				res.FilesChanged = append(res.FilesChanged, rosterPath)
+				res.FilesChanged = append(res.FilesChanged, goMod)
 			}
-		}
-
-		if configKey, ok := authzHostnameComponents[c.ID]; ok {
-			oldHost := hostnameFromVersion(c.ID, c.OldVer)
-			newHost := hostnameFromVersion(c.ID, c.NewVer)
-			touched, err := syncHostnameLiteral(root, configKey, oldHost, newHost, dryRun)
-			if err != nil {
-				return nil, err
-			}
-			res.FilesChanged = append(res.FilesChanged, touched...)
 		}
 
 		results = append(results, res)
@@ -105,9 +74,9 @@ var imageLineTemplate = regexp.MustCompile(`(?m)^([ \t]*image:[ \t]*brickenterpr
 //  2. 紧跟着插入一行新的变更记录，缩进对齐到原 version 行 `#` 出现的
 //     列（没有 `#` 就退回一个默认列），不去动文件里任何其它字节；
 //  3. deployment.image 的 tag 原地替换；
-//  4. dependencies.components 段里，凡是引用到本批次里其它也变了版本
-//     的组件（newVerByID 的 key），把 `id@旧版本` 换成 `id@新版本`——
-//     只在 dependencies: 这一段内替换，不碰同一份文件里别处偶然出现的
+//  4. dependencies.components 段与外壳的 shell.members 段里，凡是引用到
+//     本批次里其它也变了版本的组件（newVerByID 的 key），把 `id@旧版本`
+//     换成 `id@新版本`——只在这两段内替换，不碰同一份文件里别处偶然出现的
 //     同一个子串（比如变更记录叙述里提到过的旧版本号）。
 func rewriteComponentYAML(path string, c Change, newVerByID map[string]string, dryRun bool) (bool, error) {
 	data, err := os.ReadFile(path)
@@ -143,9 +112,12 @@ func rewriteComponentYAML(path string, c Change, newVerByID map[string]string, d
 		return sub[1] + c.NewVer + sub[3]
 	})
 
-	content, err = rewriteDependencyRefs(content, newVerByID)
-	if err != nil {
-		return false, err
+	// dependencies.components 与外壳的 shell.members 都是 id@version 引用。
+	for _, key := range []string{"dependencies:", "shell:"} {
+		content, err = rewriteRefsInBlock(content, key, newVerByID)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	if content == original {
@@ -157,11 +129,11 @@ func rewriteComponentYAML(path string, c Change, newVerByID map[string]string, d
 	return true, os.WriteFile(path, []byte(content), 0o644)
 }
 
-// rewriteDependencyRefs 只在 dependencies: 顶层块内，把
+// rewriteRefsInBlock 只在 key（dependencies: / shell:）顶层块内，把
 // "id@任意版本号"（id 是 newVerByID 的 key）替换成 "id@新版本"。
-func rewriteDependencyRefs(content string, newVerByID map[string]string) (string, error) {
+func rewriteRefsInBlock(content, key string, newVerByID map[string]string) (string, error) {
 	lines := strings.Split(content, "\n")
-	start, end := topLevelBlockRange(lines, "dependencies:")
+	start, end := topLevelBlockRange(lines, key)
 	if start < 0 {
 		return content, nil
 	}
@@ -201,128 +173,46 @@ func topLevelBlockRange(lines []string, key string) (start, end int) {
 	return start, end
 }
 
-// rewriteBrickkitPin 处理根 brickkit.yaml 顶层 `components:` 列表里
-// `- id: <ID>` 紧跟着的 `version:` 那一行。这份文件的既有习惯跟
-// component.yaml 不同：version 行的行尾注释本身就是最新一条变更记录
-// （没有单独的"精确版本"说明文字），所以新版本落地时把旧的那一整条
-// 挪到下一行变成纯注释，而不是像 component.yaml 那样在下面另起一行。
-func rewriteBrickkitPin(path string, c Change, dryRun bool) (bool, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false, err
-	}
-	lines := strings.Split(string(data), "\n")
-
-	idLineRe := regexp.MustCompile(`^\s*-\s*id:\s*` + regexp.QuoteMeta(c.ID) + `\s*$`)
-	verLineRe := regexp.MustCompile(`^([ \t]*version:[ \t]*)([0-9]+\.[0-9]+\.[0-9]+)([ \t]*)(#.*)?$`)
-
-	idLine := -1
-	for i, l := range lines {
-		if idLineRe.MatchString(l) {
-			idLine = i
-			break
-		}
-	}
-	if idLine < 0 {
-		return false, nil // brickkit.yaml 没有 pin 这个组件（比如它不在当前装配里），不是错误
-	}
-
-	verLine := -1
-	for i := idLine + 1; i < len(lines) && i < idLine+5; i++ {
-		if verLineRe.MatchString(lines[i]) {
-			verLine = i
-			break
-		}
-	}
-	if verLine < 0 {
-		return false, fmt.Errorf("brickkit.yaml 里 %s 的 id 行后面找不到 version: 行", c.ID)
-	}
-
-	m := verLineRe.FindStringSubmatch(lines[verLine])
-	indentPrefix := lines[verLine][:len(lines[verLine])-len(strings.TrimLeft(lines[verLine], " \t"))]
-	oldComment := m[4] // 含开头的 "#"，可能为空（第一次给这个组件打 pin 时还没有历史记录）
-
-	newLine := indentPrefix + "version: " + c.NewVer + " # v" + c.NewVer + "：" + c.Reason
-	insertedLines := []string{newLine}
-	if oldComment != "" {
-		insertedLines = append(insertedLines, indentPrefix+"# "+strings.TrimSpace(strings.TrimPrefix(oldComment, "#")))
-	}
-
-	out := make([]string, 0, len(lines)+1)
-	out = append(out, lines[:verLine]...)
-	out = append(out, insertedLines...)
-	out = append(out, lines[verLine+1:]...)
-	newContent := strings.Join(out, "\n")
-
-	if dryRun {
-		return true, nil
-	}
-	return true, os.WriteFile(path, []byte(newContent), 0o644)
+// shellGoModLineRe 匹配 go.mod require 里一行顶层成员依赖（不含 /gen/ 契约
+// 子模块、不含 // indirect）：
+//
+//	\tgithub.com/brickKit/erp-inventory/v2 v2.0.12
+//	\tgithub.com/brickKit/erp-inventory v1.0.12
+//
+// 捕获组：1=缩进+仓库名前缀（含 github.com/brickKit/<repo>），2=可选的
+// /vN 路径后缀，3=版本号。
+func shellGoModLineRe(repoName string) *regexp.Regexp {
+	return regexp.MustCompile(`(?m)^([ \t]*github\.com/brickKit/` + regexp.QuoteMeta(repoName) + `)(/v[0-9]+)?([ \t]+v)[0-9]+\.[0-9]+\.[0-9]+([ \t]*)$`)
 }
 
-// rewriteRosterVersion 改 AGENTS.md/AGENTS.zh.md 组件名录表那一行
-// 的版本号单元格。表里用的是仓库名（"erp-inventory"），不是组件 ID。
-func rewriteRosterVersion(path, repoName, newVer string, dryRun bool) (bool, error) {
+// rewriteShellGoMod 改外壳 go.mod 里某个成员模块的 require 行：版本号
+// 跟着变，Go 的语义化导入版本规则要求 v2+ 的模块路径带 /vN 后缀（v0/v1
+// 不带），所以大版本变了路径后缀也一并改。
+func rewriteShellGoMod(path, repoName, newVer string, dryRun bool) (bool, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return false, err
 	}
-	re := regexp.MustCompile(`(?m)^(\| ` + "`" + regexp.QuoteMeta(repoName) + "`" + ` \| )[0-9]+\.[0-9]+\.[0-9]+( \|)`)
+	re := shellGoModLineRe(repoName)
 	if !re.Match(data) {
-		return false, nil // 这份名录表里没有这一行（比如工具仓库不在这张表里），不是错误
+		return false, nil // 这个外壳没有编进这个成员，不是错误
 	}
-	newContent := re.ReplaceAllString(string(data), "${1}"+newVer+"${2}")
+	major := newVer
+	if i := strings.Index(newVer, "."); i >= 0 {
+		major = newVer[:i]
+	}
+	suffix := ""
+	if major != "0" && major != "1" {
+		suffix = "/v" + major
+	}
+	// 注意 go.mod 里 // indirect 行也可能命中——外壳自己声明的直接依赖
+	// 行尾不带注释，正则末尾 `[ \t]*$` 已经把带 // indirect 的行排除了。
+	newContent := re.ReplaceAllString(string(data), "${1}"+suffix+"${3}"+newVer+"${4}")
+	if newContent == string(data) {
+		return false, nil
+	}
 	if dryRun {
 		return true, nil
 	}
 	return true, os.WriteFile(path, []byte(newContent), 0o644)
-}
-
-// syncHostnameLiteral 把全项目 component.yaml 的 config: 段里，指定
-// 配置键（authzBundleUrl/iamJwksUrl）值字符串里出现的旧主机名子串换成
-// 新主机名——只替换这两个键的取值，不做全文件无差别替换（避免动到
-// 别处偶然提到旧版本号的叙述文字）。
-func syncHostnameLiteral(root, configKey, oldHost, newHost string, dryRun bool) ([]string, error) {
-	var touched []string
-	lineRe := regexp.MustCompile(`^(\s*` + regexp.QuoteMeta(configKey) + `:\s*").*(")\s*(#.*)?$`)
-	oldHostRe := regexp.MustCompile(regexp.QuoteMeta(oldHost))
-
-	var candidates []string
-	compDirs := componentDirs(filepath.Join(root, "components"))
-	for _, dir := range compDirs {
-		candidates = append(candidates, filepath.Join(dir, "component.yaml"))
-	}
-	candidates = append(candidates, filepath.Join(root, "brickkit.yaml"))
-
-	for _, path := range candidates {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
-		}
-		lines := strings.Split(string(data), "\n")
-		changed := false
-		for i, l := range lines {
-			if !lineRe.MatchString(l) {
-				continue
-			}
-			if oldHostRe.MatchString(l) {
-				lines[i] = oldHostRe.ReplaceAllString(l, newHost)
-				changed = true
-			}
-		}
-		if !changed {
-			continue
-		}
-		touched = append(touched, path)
-		if dryRun {
-			continue
-		}
-		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
-			return nil, err
-		}
-	}
-	return touched, nil
 }

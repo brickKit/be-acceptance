@@ -45,7 +45,7 @@ func printUsage() {
 	fmt.Println("  gate bare-route-scan      --root <path>   业务代码不许裸注册路由/resolver（Go gin/Python FastAPI/TS resolver）")
 	fmt.Println("  gate events-breaking-scan --root <path>   contracts/events/*.json 只增不删不改（§3.10，buf 只管 .proto）")
 	fmt.Println("  gate data-scope-test-scan --root <path>   声明了 data_scopes 维度的组件必须有越权/拒绝形状的测试（总纲 SOP-W-8）")
-	fmt.Println("  gate dependency-version-scan --root <path> 依赖版本号必须跟依赖方真实版本一致（component.yaml 互相引用 + brickkit.yaml 顶层 pin，踩坑记录 C16）")
+	fmt.Println("  gate dependency-version-scan --root <path> 外壳 go.mod 锁定版本、外壳 version 与 image tag 必须跟真实版本一致（brickkit up --dry-run 拦不住的两类；组件依赖引用/顶层 pin/shell.members 交给 brickkit up --dry-run）")
 	fmt.Println()
 	fmt.Println("  bump-version --root <path> --plan <计划文件> [--apply]   自动传播一次版本变更（算出所有下游要跟着同步的组件，改好全部文件），计划文件格式见 versionbump 包文档")
 }
@@ -169,15 +169,15 @@ func runDependencyVersionScan(root string) error {
 	}
 	if len(mismatches) > 0 {
 		for _, m := range mismatches {
-			if strings.HasPrefix(m.Declarer, "shells/") {
+			if strings.HasSuffix(m.Declarer, "go.mod") {
 				fmt.Fprintf(os.Stderr, "✗ %s 声明依赖 %s@%s，但 %s 自己 component.yaml 里的真实版本是 %s——外壳镜像实际编译进去的是 go.mod 锁定的这个旧版本，brickkit up 不会校验、不会报错，合并部署的容器会悄悄服务旧代码（05b Task 4c）\n",
 					m.Declarer, m.Dependency, m.DeclaredVersion, m.Dependency, m.ActualVersion)
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "✗ %s 声明依赖 %s@%s，但 %s 自己 component.yaml 里的真实版本是 %s——brickkit 逐字匹配版本号，会把两者解析成两个独立节点（踩坑记录 C16）\n",
-				m.Declarer, m.Dependency, m.DeclaredVersion, m.Dependency, m.ActualVersion)
+			fmt.Fprintf(os.Stderr, "✗ %s：%s 声明的版本 %s 与真实版本 %s 不一致——brickkit v1 的 lint 与 up --dry-run 都不检查这一项\n",
+				m.Declarer, m.Dependency, m.DeclaredVersion, m.ActualVersion)
 		}
-		return fmt.Errorf("dependency-version-scan 发现 %d 条依赖版本号漂移", len(mismatches))
+		return fmt.Errorf("dependency-version-scan 发现 %d 条版本号漂移", len(mismatches))
 	}
 	fmt.Println("✓ dependency-version-scan：0 条违规")
 	return nil

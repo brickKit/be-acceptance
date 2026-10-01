@@ -35,16 +35,11 @@ import (
 // 1.0.6→1.0.7，这次直接促成了本次修复）。曾经的判断是"只是六个硬编码
 // 字符串，加一层解析代码换来的是版本号对不上这类错误从编译期挪到运行期，
 // 不划算"——但那个判断针对的是"解析 component.yaml 拿版本号"这条路，
-// 七次真实复发之后，用 `platform` 包 `helper_test.go` 已经验证过的
-// `dockerContainerByPrefix`（`docker ps` 按名字前缀动态发现，不解析任何
+// 七次真实复发之后，改用 `dockerContainerByPrefix`（`docker ps` 按名字
+// 前缀动态发现，不解析任何
 // YAML）明显更划算：镜像/容器名里的版本号不用再跟 mdm-customer 的
 // `component.yaml` 手动保持同步，`mdm-customer` 以后升到任何版本都不需要
 // 回来改这个文件。
-//
-// ⚠️ 与 `platform` 包不能直接共享同一个 `dockerContainerByPrefix`——两个
-// 包是不同的 Go package（`closedloop_test` vs `platform_test`），本文件
-// 里的测试助手历来是各自独立一份（`requireCommand` 已经是这个先例），
-// 这里延续同样的做法，不新起一个共享的 internal 包。
 //
 // ⚠️ 迁移容器（`mdmMigContainer`）不能用 `dockerContainerByPrefix`
 // （`docker ps` 默认只列运行中的容器）——迁移跑完就退出，`docker ps`
@@ -80,8 +75,7 @@ func mdmImage(t *testing.T) string {
 }
 
 // dockerContainerByPrefix 用 docker ps 的名字前缀过滤动态找运行中的容器
-// ——同 platform 包 helper_test.go 的既有判据（那边的注释有完整的踩坑
-// 记录，这里不重复）。
+// ——不解析任何 YAML，版本号随便怎么升都不用回来改。
 func dockerContainerByPrefix(t *testing.T, prefix string) string {
 	t.Helper()
 	out, err := exec.Command("docker", "ps", "--filter", "name="+prefix, "--format", "{{.Names}}").CombinedOutput()
@@ -381,7 +375,6 @@ func Test档0_3_grpcurl打通三个rpc(t *testing.T) {
 func Test档0_4_迁移可重跑(t *testing.T) {
 	brickkit := requireCommand(t, "brickkit")
 	requireCommand(t, "docker")
-	python3 := requireCommand(t, "python3")
 	root := repoRoot(t)
 
 	run := func(args ...string) []byte {
@@ -394,86 +387,35 @@ func Test档0_4_迁移可重跑(t *testing.T) {
 		return out
 	}
 
-	// ⚠️ 05a（Phase 4b 附加 Task 0.4）把全部 12 个成员从 local:true 迁到
-	// 真实 servedBy 之后，这条测试一直没跟上：`--ignore-served-by` 只在
-	// 内存里清空 servedBy，让 12 个成员各自"看起来"变回独立组件，但
-	// `resources.bindings` 仍然只列了 4 个外壳自己的 componentId——每个
-	// 成员单独要用哪个资源，从来没在 brickkit.yaml 里声明过绑定，真实
-	// `brickkit up`（非 --dry-run）会因此对全部 12 个成员报
-	// `RESOURCE_UNBOUND`。`make teardown-up` 早就靠
-	// `infra/scripts/patch-teardown-bindings.py` 把这层缺失的绑定 +
-	// `expose: true` 临时补上（同时禁用 4 个外壳条目，见该脚本），这里必须
-	// 复用同一份脚本，不能只带 `--ignore-served-by` 裸跑——2026-09-17
-	// 05b Task 5 真机验证时才发现这条测试从 05a 之后就没有真正跑绿过。
+	// brickKit v1 的 `brickkit up --ignore-shells` 只在内存里忽略每个外壳的
+	// members、不写回任何文件，12 个成员各自变回独立组件、各自用自己声明的
+	// 资源——不再需要 v0.4 时代靠 patch-teardown-bindings.py 改写
+	// brickkit.yaml 补绑定，也就不再有"文件是否已被外层打过补丁"的分支，
+	// 收尾也不需要 git checkout。
 	//
-	// ⚠️ 本文件顶部注释写明"这批测试要求真实起着的 mdm-customer"——即
-	// Test档0_1/0_2/0_3/0_5/0_6 都假设人已经先手动 `make teardown-up` 过
-	// 一轮，这时 brickkit.yaml 天然是"脏"的（teardown-up 自己的安全检查
-	// 也是"不干净就拒绝重跑"，见 Makefile）。本测试如果无论如何都要求
-	// brickkit.yaml 干净、且收尾一律 git checkout，会在"人已经手动
-	// teardown-up 过，紧接着跑 make tier0"这个真实场景下，把外层那份
-	// 供其它五条测试用的拆回态从 git 层面强行 revert 掉——不能这么做。
-	// 因此这里按"进来时 brickkit.yaml 是否已经是脏的"分两条路径：已经脏
-	// 就当作外层已经打过补丁，只管做 down/up 验证，收尾不碰 git（留给外层
-	// 自己的 `make teardown-down`）；干净就自己打补丁、自己收尾还原——
-	// 保证这条测试单独跑（`go test -run Test档0_4`）时也是自给自足的。
-	gitStatus := exec.Command("git", "status", "--porcelain", "brickkit.yaml")
-	gitStatus.Dir = root
-	statusOut, err := gitStatus.Output()
+	// ⚠️ 仍要防"静默销毁真实部署"：本测试要 `brickkit down` 再 up 回拆回态。
+	// 如果当前正跑着一个合并部署（容器在跑、但没有独立的 mdm-customer 容器），
+	// down 会把它整个清空且收尾无法恢复——直接跳过，请操作者自己先
+	// brickkit down，或走 `make teardown-up` 外层生命周期。什么都没在跑时
+	// 测试自给自足：自己 up --ignore-shells，收尾 down。
+	psOut, err := exec.Command("docker", "ps", "--filter", "name=brickkit-be-assembly-standard-", "--format", "{{.Names}}").Output()
 	if err != nil {
-		t.Fatalf("git status brickkit.yaml 失败：%v", err)
+		t.Fatalf("docker ps 探测现有部署失败：%v", err)
 	}
-	alreadyPatchedByCaller := len(strings.TrimSpace(string(statusOut))) > 0
-
-	// ⚠️ 05b Task 10 真机验证时真实撞到的一个自造缺口：上面这条"干净就
-	// 自己接管"的判据只看 brickkit.yaml 的 git 状态，没看这个项目当前
-	// 是不是**真的有一个正常部署在跑**——干净状态既可能是"什么都没
-	// 起"，也可能是"刚用一次普通 brickkit up 起了真实部署，还没来得及
-	// 弄脏 brickkit.yaml"。后面这条路径下，本测试接下来的 run("down")
-	// 会把这个真实部署整个 down 掉（容器被删除，不是仅仅停止），而
-	// t.Cleanup 只 git checkout 复原配置文件，从来没有把那个真实部署
-	// 重新 up 回来——外层调用方看到的是"config 文件没变"，但正在跑的
-	// 部署已经被静默清空。用容器名前缀直接探测"这个 docker compose
-	// project 当前有没有任何容器"，不依赖 git 状态：探测到就跳过（不
-	// 猜哪个更重要，宁可跳过也不要静默销毁），留一句话让操作者自己
-	// `brickkit down` 之后重跑，或者走 `make teardown-up` 外层生命周期。
-	if !alreadyPatchedByCaller {
-		psCmd := exec.Command("docker", "ps", "--filter", "name=brickkit-be-assembly-standard-", "--format", "{{.Names}}")
-		psOut, err := psCmd.Output()
-		if err != nil {
-			t.Fatalf("docker ps 探测现有部署失败：%v", err)
-		}
-		if running := strings.TrimSpace(string(psOut)); running != "" {
-			t.Skipf("brickkit.yaml 是干净的，但这个项目当前真的有容器在跑（%s）——本测试接下来要 brickkit down 再重新 up 成拆回态，会把这个真实部署整个清空且收尾无法自动恢复。为避免静默破坏正在使用的部署，直接跳过：请先 brickkit down（确认不再需要这个部署）再单独重跑本测试，或改用 make teardown-up 走外层生命周期", running)
-		}
-	}
-
-	if !alreadyPatchedByCaller {
-		patchCmd := exec.Command(python3, "infra/scripts/patch-teardown-bindings.py")
-		patchCmd.Dir = root
-		if out, err := patchCmd.CombinedOutput(); err != nil {
-			t.Fatalf("patch-teardown-bindings.py 失败：%v\n输出：%s", err, out)
-		}
+	running := strings.TrimSpace(string(psOut))
+	switch {
+	case running == "":
 		t.Cleanup(func() {
 			downCmd := exec.Command(brickkit, "down")
 			downCmd.Dir = root
 			_ = downCmd.Run()
-			checkoutCmd := exec.Command("git", "checkout", "--", "brickkit.yaml")
-			checkoutCmd.Dir = root
-			if out, err := checkoutCmd.CombinedOutput(); err != nil {
-				t.Errorf("git checkout -- brickkit.yaml 还原失败：%v\n输出：%s", err, out)
-			}
 		})
+	case !strings.Contains(running, "-mdm-customer-"):
+		t.Skipf("这个项目当前有容器在跑（%s）但没有独立的 mdm-customer 容器，看起来是合并部署——本测试要 brickkit down 再重新 up 成拆回态，会把这个真实部署整个清空且无法自动恢复。为避免静默破坏正在使用的部署，直接跳过：请先 brickkit down（确认不再需要这个部署）再单独重跑，或改用 make teardown-up", running)
 	}
 
 	run("down")
-	// ⚠️ 阶段四附加 Task 0.6：teardown 状态下 brickkit.yaml 里 servedBy
-	// 还在（brickKit v0.4.2 的 --ignore-served-by 只在内存里清空，不写回
-	// 文件，见 make teardown-up）——这里如果不带这个 flag，重新 up 起来的
-	// 是"servedBy 生效"的正常合并态，mdm/customer 会因为它声明的外壳
-	// （被 teardown-up 临时 enabled: false 掉）没有运行而报
-	// CONFIG_INVALID，不是这条测试想验证的东西。
-	run("up", "--ignore-served-by")
+	run("up", "--ignore-shells")
 
 	migContainer := mdmMigContainer(t)
 	out, err := exec.Command("docker", "logs", migContainer).CombinedOutput()

@@ -1,12 +1,11 @@
 # be-acceptance
 
-验收测试。**不是 brickKit 组件**——20 条平台验收 + 业务闭环 + 拆回门禁 + import 扫描（总纲 §2.3 非组件资产仓库表）。
+验收测试。**不是 brickKit 组件**——业务闭环 + 拆回门禁 + import 扫描（v0.4.0 起删除了 v0.4 的 `platform/` 平台断言，06f 按 brickKit v1 重写）（总纲 §2.3 非组件资产仓库表）。
 
-## 三个子目录
+## 子目录
 
 | 目录 | 装什么 | 什么时候 |
 |---|---|---|
-| `platform/` | 平台验收 20 条：brickKit 自己的行为断言（§9.6.2 档 0）——我们既是它的作者也是第一个真实用户 | 阶段一起逐步补 |
 | `closedloop/` | 业务闭环测试：跨组件事件握手、Saga 补偿等端到端场景 | 有第一条跨组件业务流程时 |
 | `gates/` | 跨仓库才看得出来的门禁：**铁律六**（组件互不 import）、**拆回门禁**（合并态能不能拆回去） | 铁律六见 Task 9；拆回门禁见阶段四 |
 
@@ -16,7 +15,7 @@
 
 `gates/` 的铁律六 import 扫描已实现（`gates.ImportScan` + `cmd/be-acceptance` 的 `gate import-scan` 子命令），用 `go/parser` 解析每个组件目录的 `.go` 文件，命中本组织下、不在 `be-sdk-*` 白名单、也不是自己 module 的 import 就判违规。目前只扫 Go——Python 组件出现前不实现 Python 扫描（没有真实样本可核对 import 路径写法，见 `gates/importscan.go` 的注释）。
 
-`platform/` 与 `closedloop/` 仍只是任务清单（各 20 条 / 13 条），阶段二、三分别实现。
+`closedloop/` 的业务闭环测试阶段三起逐步实现。
 
 ## 现状（阶段三 Task 3）
 
@@ -54,13 +53,14 @@
 - `data-scope-test-scan`（`gates.DataScopeTestScan`）：声明了真实 `data_scopes` 维度（非 `none`）的组件，
   测试文件里必须至少有一条"越权/超出范围被拒绝"形状的测试——判据是组件级"至少一条"，不是逐维度，精度
   上限见 `gates/datascopetestscan.go` 注释。
-- `dependency-version-scan`（`gates.DependencyVersionScan`）：`brickkit` 对依赖版本号逐字匹配（导读"平台
-  的四条铁律"第 1 条），任何一处"声明版本"落后于"依赖方真实版本"都会让 `brickkit up --dry-run` 把同一
-  个组件解析成两个独立节点——本仓库历史上这条坑至少复发过 4 次（踩坑记录 C16）。这个 gate 比对两类
-  声明：①每个组件 `component.yaml` 的 `dependencies.components` 引用 vs 被依赖组件自己的
-  `metadata.version`；②`brickkit.yaml` 顶层 `components[].version` 这个顶层 pin vs 对应组件自己的
-  `metadata.version`。两类都不用 YAML 库，跟 `data-scope-test-scan` 一样走"提取顶层文本块 + 正则"这条
-  既有技术路线。引用了本仓库不存在的组件 ID 时查不出真实版本，静默跳过，不报违规。
+- `dependency-version-scan`（`gates.DependencyVersionScan`）：v0.4.0 起缩减为 brickKit v1 自己拦不住的两类
+  （实验记录见装配仓库 `dev/test-records/06a/task10-version-checks-experiment.md`）：①外壳
+  `shell/be/<name>/go.mod` 锁定的成员版本 vs 对应组件自己的 `metadata.version`（v2+ 的 require 带 `/vN`
+  模块路径后缀）；②外壳自己 `metadata.version` vs `deployment.image` 镜像 tag。原先的组件依赖引用、
+  `brickkit.yaml` 顶层 pin、`shell.members` 三类漂移，v1 的 `brickkit up --dry-run` 会拦下并给出可操作提示，
+  不再重复检查——`make gates` 同时跑 `brickkit up --dry-run`。`bump-version` 同样缩减：只传播下游
+  `component.yaml` 的依赖版本、外壳 `shell.members`、外壳 `go.mod`，不再碰 `brickkit.yaml` pin
+  （`brickkit upgrade`）、`config:` 主机名字面量（`$var:`）、AGENTS 名册（CLI 维护块）。
 
 ## 为什么这条门禁要在档 0 之前就装好
 

@@ -12,8 +12,9 @@ import (
 
 // runBumpVersion 是"每个改动都跳版本号"这条纪律的自动化落地——见
 // 01-documentation-standard.md 附近的 SOP-W-11（新增文档小节）：本来每次
-// 改完代码/测试/文档后，都要挨个去查有哪些组件引用了它、brickkit.yaml
-// 的顶层 pin、两份 AGENTS.md 名录表分别在哪一行，手改一遍——这正是
+// 改完代码/测试/文档后，都要挨个去查有哪些组件/外壳引用了它（下游
+// component.yaml 的依赖版本、外壳 shell.members、外壳 go.mod 的 require），
+// 手改一遍——这正是
 // 01-testing-standard.md §1"能机制化的判据必须机制化"这条原则该管的
 // 那类事，只是这次机制化的不是"检查"，是"传播"本身。
 //
@@ -26,8 +27,12 @@ import (
 // 什么的根组件"，因为依赖它们而要跟着同步版本号的下游组件由
 // versionbump.ComputeCascade 自动算出来。
 //
-// ⚠️ 这个子命令只落地"文件层面"的版本传播（component.yaml/
-// brickkit.yaml/两份 AGENTS.md 名录表），不做 git commit/tag/`make
+// ⚠️ brickKit v1 之后，brickkit.yaml 顶层 pin 交给 `brickkit upgrade`、
+// config: 主机名字面量交给 `$var:`、AGENTS 名册交给 CLI 维护块，这个子命令
+// 都不再碰（实验记录 dev/test-records/06a/task10-version-checks-experiment.md）。
+//
+// ⚠️ 这个子命令只落地"文件层面"的版本传播（component.yaml 的依赖版本、
+// 外壳 shell.members、外壳 go.mod），不做 git commit/tag/`make
 // image`/push——那几步仍然逐个组件手动确认着做，理由见
 // 01-documentation-standard.md 附近新增小节："写文件"是可以安全批量
 // 自动化的机械操作，"推到远端"是这个项目一贯认定需要人在场确认的
@@ -116,7 +121,7 @@ func runBumpVersion(args []string) error {
 		fmt.Println("以上是计划——确认没问题后加 --apply 重跑一遍才会真的写文件。")
 	} else {
 		fmt.Println("文件已落地。按上面打印的顺序逐个组件收尾；全部做完后提交装配仓库自己的改动" +
-			"（brickkit.yaml/两份 AGENTS.md/.brickkit 目录）、跑 make gates、真机 brickkit up 验证、push。" +
+			"、对 brickkit.yaml 的顶层 pin 跑 `brickkit upgrade`、跑 make gates（含 brickkit up --dry-run）、真机 brickkit up 验证、push。" +
 			"完整流程、什么时候该停下来问人，见 .claude/skills/version-bump-ship/ 或 " +
 			"00-master-guide.md SOP-W-11。")
 	}

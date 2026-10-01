@@ -30,13 +30,12 @@ module-check:  ## N/A：没有 module.New 契约
 
 ##@ 对本仓库真正有意义的
 # ⚠️ closedloop/ 的档 0/档 2 测试要真的 docker stop postgres、brickkit
-# down && up；platform/ 的 20 条平台断言要真的起临时容器、跑 brickkit
-# CLI，其中一条真等 45+ 秒；tier2/ 需要真实可达的 TEST_PG_DSN（不像
-# closedloop/platform 那么破坏性，但同样是"需要真实外部前提"的一类）——
-# routine 的 `make test`/`make all` 都不该顺手把这三块跑了，各自用
-# `make tier0`/`make tier1`/`make tier2` 单独触发。
-test:  ## 跑除 closedloop/、platform/、tier2/ 外的全部单测（-race）
-	go test $$(go list ./... | grep -vE '/(closedloop|platform|tier2)$$') -race
+# down && up；tier2/ 需要真实可达的 TEST_PG_DSN（不像 closedloop/ 那么
+# 破坏性，但同样是"需要真实外部前提"的一类）——routine 的 `make test`/
+# `make all` 都不该顺手把这两块跑了，各自用 `make tier0`/`make tier2`
+# 单独触发。
+test:  ## 跑除 closedloop/、tier2/ 外的全部单测（-race）
+	go test $$(go list ./... | grep -vE '/(closedloop|tier2)$$') -race
 
 dag-check:  ## 包依赖图无环（Go 编译器本身就不允许循环 import，这条恒过）
 	@go list ./... >/dev/null && echo "✓ 包依赖图无环（Go 编译器本身就不允许循环 import）"
@@ -61,17 +60,12 @@ gates:  ## 铁律六 import 扫描（对着装配根跑，单独调试本仓库�
 tier0:  ## 档 0 六项验收，每加一个组件都要重跑（§9.6.1 档 4）
 	go test ./closedloop/ -run 'Test档0' -v -count=1
 
-# ⚠️ 20 条平台断言（设计书 §9.6.2）。每条测试自己在 t.TempDir() 里现搭
-# 隔离的 brickkit 工作区，不碰装配仓库真实的 brickkit.yaml；用例 10 的
-# 后半段要真等 45+ 秒（真实冷启动计时，不是 mock），所以给了比默认长
-# 的超时。红的条目（当前是用例 9 后半段，一个真实的 brickKit bug）
-# 原样跑、原样红——不许为了让这条命令全绿而悄悄放宽断言或跳过它
-# （platform/README.md 记录了红的原因，§9.6.2 的判据）。
-tier1:  ## 20 条平台断言，未完成的组（B/C/F）随 Task 20 逐步补齐
-	go test ./platform/... -run TestPlatform -v -count=1 -timeout 300s
+# v0.4 的 platform/ 平台断言已在 be-acceptance v0.4.0 删除（它们按 brickKit
+# v0.4 的行为写的），06f 按 v1 重写后再恢复这条目标。
+tier1:  ## 已删除：平台断言等 06f 按 brickKit v1 重写
+	@echo "tier1：platform/ 平台断言已随 v0.4.0 删除，06f 按 brickKit v1 重写"
 
-# ⚠️ 阶段四 Task 11：合并态专属断言（tier0/tier1 判据的延伸，用例 24-25，
-# 见 platform/README.md）。"共享连接池下 SET LOCAL 越权测试"（用例 25）
+# ⚠️ 阶段四 Task 11：合并态专属断言（tier0/tier1 判据的延伸，用例 24-25）。"共享连接池下 SET LOCAL 越权测试"（用例 25）
 # 落在本仓库的 tier2/，只需要真实可达的 TEST_PG_DSN（先 make test-db-init）
 # ——不需要 brickkit up，不碰 brickkit.yaml。"单个模块 panic 不拖垮外壳
 # 其余模块"（用例 24）物理上做不到放进本仓库：它要真的调用 shells/go 的

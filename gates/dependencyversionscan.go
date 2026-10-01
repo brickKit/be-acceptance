@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-// DependencyVersionMismatch 是一条依赖版本号漂移：Declarer 声明了要用
-// Dependency 的 DeclaredVersion，但 Dependency 自己 component.yaml 里
-// metadata.version 真实是 ActualVersion，两者不一致。
+// DependencyVersionMismatch 是一条版本号漂移：Declarer 声明了要用
+// Dependency 的 DeclaredVersion，但 Dependency 自己真实版本是
+// ActualVersion，两者不一致。
 type DependencyVersionMismatch struct {
-	Declarer        string // 声明方："组件 ID"、字面量 "brickkit.yaml"，或 "shells/<name>/go.mod"
+	Declarer        string // 声明方："shell/be/<name>/go.mod" 或外壳 component.yaml 的相对路径
 	Dependency      string // 被依赖的组件 ID，比如 "mdm/customer"
 	DeclaredVersion string
 	ActualVersion   string
@@ -24,61 +24,40 @@ type depRef struct {
 	version string
 }
 
-// 匹配 "scope/name@version" 这个子串——不区分它出现在纯字符串形式
-// （`- mdm/customer@1.0.3`）还是对象形式
-// （`- { id: infra/workflow@1.0.0, optional: true }`）里，两种形式里
-// id@version 长得一样，直接在块文本上正则扫比先按 YAML 结构切开更省事
-// （be-acceptance 目前零第三方依赖，不引入 YAML 库，同
-// DataScopeTestScan 的既有技术选择）。
-var depRefRe = regexp.MustCompile(`\b([a-z][a-z0-9_-]*/[a-z][a-z0-9_-]*)@([0-9]+\.[0-9]+\.[0-9]+)\b`)
-
-// brickkit.yaml 顶层 `components:` 列表的两行固定形状：
-//
-//	  - id: mdm/customer
-//	    version: 1.0.4 # 注释
-var pinIDRe = regexp.MustCompile(`^-\s*id:\s*([a-z][a-z0-9_-]*/[a-z][a-z0-9_-]*)\s*$`)
-var pinVersionRe = regexp.MustCompile(`^version:\s*([0-9]+\.[0-9]+\.[0-9]+)`)
-
 // component.yaml 的 metadata 段里的 `version: 1.0.4  # 注释...`。
 var metaVersionRe = regexp.MustCompile(`(?m)^\s*version:\s*(\S+)`)
 
 // shellGoModRe 匹配 go.mod `require` 块里的一行顶层依赖引用：
 //
+//	github.com/brickKit/mdm-customer/v2 v2.0.7
 //	github.com/brickKit/mdm-customer v1.0.7
 //
-// 故意不匹配 github.com/brickKit/mdm-customer/gen/mdm/customer 这类嵌套
-// 契约包（路径带 /gen/）——那份版本号是它自己独立发布节奏（设计书 §13.3
-// 铁律六第二类白名单），跟父模块（真正决定外壳里编译进去的是哪份业务
-// 代码）版本号本来就不需要一致，不是这里要盯的漂移。行内代码另外过滤掉
-// `// indirect` 传递依赖——那些不是外壳自己声明的直接依赖。
-var shellGoModRe = regexp.MustCompile(`^\s*github\.com/brickKit/([a-z][a-z0-9-]*)\s+v([0-9]+\.[0-9]+\.[0-9]+)\s*$`)
+// v2 及以上的模块路径必须带 /vN 后缀（Go 的语义化导入版本规则），v0/v1
+// 不带，所以后缀可选。故意不匹配 github.com/brickKit/mdm-customer/gen/mdm/customer
+// 这类嵌套契约包（路径带 /gen/，后缀位置之后还有别的路径段，天然不被
+// 本正则命中）——那份版本号是它自己独立发布节奏（设计书 §13.3 铁律六
+// 第二类白名单），跟父模块版本号本来就不需要一致。`// indirect`
+// 传递依赖另外过滤掉——那些不是外壳自己声明的直接依赖。
+var shellGoModRe = regexp.MustCompile(`^\s*github\.com/brickKit/([a-z][a-z0-9-]*)(?:/v[0-9]+)?\s+v([0-9]+\.[0-9]+\.[0-9]+)\s*$`)
 
-// DependencyVersionScan 比对三类"声明版本 vs 真实版本"：
+// DependencyVersionScan 比对两类 brickkit v1 自己拦不住的版本漂移：
 //
-//  1. 每个组件 component.yaml 的 `dependencies.components` 列表项，跟
-//     被依赖组件自己 component.yaml 的 `metadata.version` 比对；
-//  2. `brickkit.yaml` 顶层 `components[].version` 这个顶层 pin，同样
-//     跟对应组件自己 component.yaml 的 `metadata.version` 比对；
-//  3. `shells/<name>/go.mod` 锁定编译的各组件版本，同样跟对应组件自己
+//  1. `shell/be/<name>/go.mod` 锁定编译的各组件版本，跟对应组件自己
 //     component.yaml 的 `metadata.version` 比对——外壳镜像实际编译进去
-//     的是这里锁定的版本，不是 brickkit.yaml 顶层声明的那个（05b Task
-//     4c 真机验证：两者是完全独立的两件事，此前完全没有门禁盯这层，
-//     全部 11 个真实 Go 成员都已经漂移）。
+//     的是这里锁定的版本（05b Task 4c 真机验证：全部 11 个真实 Go 成员
+//     都已经漂移）。go.mod 不属于 brickkit 的任何一层文件，v1 不读也不校验；
+//  2. 外壳自己 component.yaml 的 `metadata.version` 与 `deployment.image`
+//     镜像 tag 是否一致——两个字段各自独立声明，v1 的 lint 和
+//     up --dry-run 实测都不查（实验记录 dev/test-records/06a/
+//     task10-version-checks-experiment.md）。
 //
-// 三类合起来才是 C16 那类坑的完整覆盖面（docs/dev/实测踩坑记录.md
-// C16）——本仓库历史上这条坑至少复发过 4 次：有的是①（一个组件的版本
-// 号改了，别的组件 `dependencies.components` 里引用它的那一行没跟着
-// 改），有的是②（顶层 pin 落后于组件自己已经发布的新版本）。
-//
-// brickkit 对依赖版本号做逐字匹配（导读"平台的四条铁律"第 1 条：
-// `1.2.0` 可以，`^1.2`/`latest` 一律不行），这两类漂移都会让
-// `brickkit up --dry-run` 把同一个组件解析成两个独立节点，真实生成两
-// 份迁移+启动指令——不是警告级别的坑，是真的会跑出重复资源。
+// 原先还有两类——组件间 `dependencies.components` 引用、`brickkit.yaml`
+// 顶层 pin——以及 shell.members，v1 的 `brickkit up --dry-run` 都会拦下
+// 并给出可操作的提示（同一份实验记录），不再在这里重复检查，
+// `make gates` 改为同时跑 `brickkit up --dry-run`。
 //
 // ⚠️ 判据只能验证"引用的组件在本仓库存在"这部分——引用了一个本仓库里
-// 根本没有的组件 ID（拼写错误/组件被归档）时，这里查不出真实版本，
-// 静默跳过那一条，不报违规（跟 W-6 人工评审分工：结构性的版本号漂移
-// 交给这个门禁，组件 ID 本身对不对交给别处）。
+// 根本没有的组件时，这里查不出真实版本，静默跳过那一条，不报违规。
 func DependencyVersionScan(root string) ([]DependencyVersionMismatch, error) {
 	componentsDir := filepath.Join(root, "components")
 	compDirs := componentDirs(componentsDir)
@@ -97,28 +76,7 @@ func DependencyVersionScan(root string) ([]DependencyVersionMismatch, error) {
 
 	var mismatches []DependencyVersionMismatch
 
-	// ① 组件之间的依赖引用
-	for _, compDir := range compDirs {
-		declarer := componentID(componentsDir, compDir)
-		refs, err := dependencyRefs(filepath.Join(compDir, "component.yaml"))
-		if err != nil {
-			return nil, err
-		}
-		mismatches = append(mismatches, diffRefs(declarer, refs, actual)...)
-	}
-
-	// ② brickkit.yaml 顶层 pin
-	pins, err := brickkitYamlPins(filepath.Join(root, "brickkit.yaml"))
-	if err != nil {
-		return nil, err
-	}
-	mismatches = append(mismatches, diffRefs("brickkit.yaml", pins, actual)...)
-
-	// ③ 外壳自己 go.mod 锁定的版本——外壳镜像实际编译进去的是这里锁定的
-	// 版本，不是 brickkit.yaml 顶层声明的那个（两者是完全不同的两件事，
-	// 05b Task 4c 真机验证过：go.mod 落后于顶层声明时，brickkit up 全程
-	// 不校验、不报错，容器悄悄服务旧代码）。这份锁定此前完全没有任何
-	// 门禁覆盖，05b Task 4c 真机发现全部 11 个真实 Go 成员都已经漂移。
+	// ① 外壳 go.mod 锁定的版本
 	idsByRepoName := map[string]string{}
 	for id := range actual {
 		idsByRepoName[repoNameOf(id)] = id
@@ -132,16 +90,14 @@ func DependencyVersionScan(root string) ([]DependencyVersionMismatch, error) {
 		if err != nil {
 			return nil, err
 		}
-		declarer := "shells/" + filepath.Base(filepath.Dir(p)) + "/go.mod"
-		mismatches = append(mismatches, diffRefs(declarer, refs, actual)...)
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			rel = p
+		}
+		mismatches = append(mismatches, diffRefs(filepath.ToSlash(rel), refs, actual)...)
 	}
 
-	// ④ 外壳自己 component.yaml 的 metadata.version 与 deployment.image
-	// 镜像 tag 是否一致——两个字段各自独立声明，没有任何一层会替我们同步。
-	// 05b 真机复测时真实漏改过一次：只 bump 了 version，deployment.image
-	// 停在旧 tag，`brickkit up` 全程不校验，真实拉起的容器悄悄用了旧镜像
-	// （表现跟第③类扫描要防的问题几乎一样，只是发生在同一份文件内部，
-	// 不是跨文件引用）。
+	// ② 外壳自己 component.yaml 的 metadata.version 与 deployment.image tag
 	shellComponentYAMLs, err := shellComponentYAMLPaths(root)
 	if err != nil {
 		return nil, err
@@ -195,50 +151,6 @@ func ownVersion(path string) (string, error) {
 	return m[1], nil
 }
 
-// dependencyRefs 从 component.yaml 的 `dependencies:` 段里抽取所有
-// "scope/name@version" 引用。⚠️ 故意不先按 `components:`/`resources:`
-// 子键切开再扫——`resources:` 段的条目（`{ kind: database, engine:
-// postgresql }` 这种形状）里不会出现 "id@version" 子串，整块一起扫天然
-// 不会误命中，比先做子键切分更省代码。
-func dependencyRefs(path string) ([]depRef, error) {
-	block, err := topLevelBlock(path, "dependencies:")
-	if err != nil {
-		return nil, err
-	}
-	return extractDepRefs(block), nil
-}
-
-// brickkitYamlPins 读 brickkit.yaml 顶层 `components:` 列表，把每个
-// `- id: <组件ID>` 跟紧随其后的 `version: <版本>` 配成一对。
-//
-// ⚠️ 不能像 dependencyRefs 一样直接对整块正则扫"id@version"——顶层 pin
-// 的 id 和 version 分写在两行（`- id: mdm/customer` 换行
-// `version: 1.0.4`），没有 `@` 连接符，必须按"最近一个 id 之后第一个
-// version"配对，逐行扫描。
-func brickkitYamlPins(path string) ([]depRef, error) {
-	block, err := topLevelBlock(path, "components:")
-	if err != nil {
-		return nil, err
-	}
-	var refs []depRef
-	var currentID string
-	for _, l := range strings.Split(block, "\n") {
-		t := strings.TrimSpace(l)
-		if m := pinIDRe.FindStringSubmatch(t); m != nil {
-			currentID = m[1]
-			continue
-		}
-		if currentID == "" {
-			continue
-		}
-		if m := pinVersionRe.FindStringSubmatch(t); m != nil {
-			refs = append(refs, depRef{id: currentID, version: m[1]})
-			currentID = ""
-		}
-	}
-	return refs, nil
-}
-
 // repoNameOf 把 "erp/inventory" 变成 "erp-inventory"——go.mod 里的模块
 // 路径、AGENTS.md 组件名录表、brickkit up 生成的容器名前缀，用的都是这个
 // 形状。跟 versionbump.Component.RepoName() 是同一个变换，这里独立实现
@@ -247,11 +159,11 @@ func repoNameOf(componentID string) string {
 	return strings.ReplaceAll(componentID, "/", "-")
 }
 
-// shellGoModPaths 找出全部 shells/<name>/go.mod（目前只有 shells/go 一个，
-// 不硬编码这一个名字——以后如果出现别的 Go 外壳，这里自动覆盖到；
-// shells/python 用的不是 go.mod，天然不会被这个 glob 命中）。
+// shellGoModPaths 找出全部 shell/be/<name>/go.mod（v1 布局：外壳是项目代码，
+// 住在装配仓库的 shell/be/<name>/；Python 外壳用的不是 go.mod，天然不会被
+// 这个 glob 命中）。
 func shellGoModPaths(root string) ([]string, error) {
-	return filepath.Glob(filepath.Join(root, "shells", "*", "go.mod"))
+	return filepath.Glob(filepath.Join(root, "shell", "be", "*", "go.mod"))
 }
 
 // shellModuleRefs 从一份 shells/<name>/go.mod 里抽取全部顶层组件依赖引用，
@@ -285,17 +197,17 @@ func shellModuleRefs(path string, idsByRepoName map[string]string) ([]depRef, er
 	return refs, nil
 }
 
-// shellComponentYAMLPaths 找出全部 shells/<name>/deploy/shell/<slot>/component.yaml
-// （外壳自己的 manifest，不是 components/ 下的 62 个业务组件）。
+// shellComponentYAMLPaths 找出全部 shell/be/<name>/component.yaml
+// （外壳自己的 manifest，不是 components/ 下的业务组件）。
 func shellComponentYAMLPaths(root string) ([]string, error) {
-	return filepath.Glob(filepath.Join(root, "shells", "*", "deploy", "shell", "*", "component.yaml"))
+	return filepath.Glob(filepath.Join(root, "shell", "be", "*", "component.yaml"))
 }
 
 // deploymentImageTagRe 匹配 `deployment:` 段里 `image: <repo>:<version>` 这一行，
 // 只取冒号后面的精确版本号。
 var deploymentImageTagRe = regexp.MustCompile(`(?m)^\s*image:\s*\S+:([0-9]+\.[0-9]+\.[0-9]+)\s*$`)
 
-// idRe 匹配 `metadata:` 段里的 `id: shell/go-core`。
+// shellMetaIDRe 匹配 `metadata:` 段里的 `id: be/go-core`。
 var shellMetaIDRe = regexp.MustCompile(`(?m)^\s*id:\s*(\S+)`)
 
 // shellImageVersionMismatch 检查一份外壳 component.yaml 自己的
@@ -340,14 +252,6 @@ func shellImageVersionMismatch(path, root string) (*DependencyVersionMismatch, e
 		DeclaredVersion: version,
 		ActualVersion:   imageTag,
 	}, nil
-}
-
-func extractDepRefs(block string) []depRef {
-	var refs []depRef
-	for _, m := range depRefRe.FindAllStringSubmatch(block, -1) {
-		refs = append(refs, depRef{id: m[1], version: m[2]})
-	}
-	return refs
 }
 
 // topLevelBlock 从"顶格 <key>"这一行开始，收集到下一个顶格行为止的
