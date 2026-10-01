@@ -117,7 +117,7 @@ func runBumpVersion(args []string) error {
 const applyFooter = "文件已落地。按上面打印的顺序逐个组件收尾（先被依赖者，后依赖者）；全部做完后对每个发布过的组件跑 " +
 	"`brickkit upgrade <id>@<新版本>`、跑 make gates 与 make version-check、真机验证、提交并推送装配仓库自己的改动。" +
 	"完整流程、什么时候该停下来问人，见 .claude/skills/version-bump-ship/SKILL.md 与 " +
-	"docs/conventions/development-workflow.md（Releasing）。"
+	"docs/en/01-conventions/01-development-workflow.md（Releasing）。"
 
 // nextSteps 按 v1 发布规则打印一个组件/外壳在 --apply 之后的收尾步骤：
 //   - 组件：提交并推送 → `brickkit release --notes-file`（tag `<ver>`，不带 v，注解 tag，自动推送）

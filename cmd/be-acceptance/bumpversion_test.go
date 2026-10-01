@@ -101,7 +101,7 @@ func TestNextSteps_外壳在自己的仓库里发布且只打裸版本tag(t *tes
 
 func TestBumpVersionFooter不再指向已退役的总纲(t *testing.T) {
 	mustNotContain(t, applyFooter, "00-master-guide", "SOP-W")
-	mustContain(t, applyFooter, ".claude/skills/version-bump-ship/", "docs/conventions/development-workflow.md")
+	mustContain(t, applyFooter, ".claude/skills/version-bump-ship/", "docs/en/01-conventions/01-development-workflow.md")
 }
 
 // 成员升版本时外壳 go.mod 的改动记在成员那条结果里；外壳的 git add 也必须带上它。
