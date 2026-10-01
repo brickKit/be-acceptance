@@ -141,8 +141,8 @@ func TestApply_端到端级联落地(t *testing.T) {
 	if !strings.Contains(invContent, "version: 2.0.13                    # 精确版本，不接受 ^ / ~ / latest") {
 		t.Fatalf("version 行的原有说明文字应该原样保留，实际：\n%s", invContent)
 	}
-	if !strings.Contains(invContent, "# v2.0.13：补属性测试，无行为/契约变更。") {
-		t.Fatalf("新的变更记录应该插入进去，实际：\n%s", invContent)
+	if strings.Contains(invContent, "# v2.0.13") || strings.Contains(invContent, "补属性测试") {
+		t.Fatalf("component.yaml 不承载历史，不该写入新的变更记录注释，实际：\n%s", invContent)
 	}
 	if !strings.Contains(invContent, "# v2.0.12：上一条历史记录，保持原样不动") {
 		t.Fatalf("旧的历史记录应该原样保留，实际：\n%s", invContent)
@@ -156,8 +156,8 @@ func TestApply_端到端级联落地(t *testing.T) {
 	if !strings.Contains(salesContent, "version: 2.0.18") {
 		t.Fatalf("erp/sales 应该被级联到 2.0.18，实际：\n%s", salesContent)
 	}
-	if !strings.Contains(salesContent, "# v2.0.18：依赖版本号同步跟进 erp/inventory@2.0.13，无破坏性变更。") {
-		t.Fatalf("erp/sales 应该有自动生成的依赖同步理由，实际：\n%s", salesContent)
+	if strings.Contains(salesContent, "# v2.0.18") {
+		t.Fatalf("erp/sales 不该写入变更记录注释，实际：\n%s", salesContent)
 	}
 	if !strings.Contains(salesContent, "- erp/inventory@2.0.13") {
 		t.Fatalf("erp/sales 对 erp/inventory 的依赖引用应该同步到新版本，实际：\n%s", salesContent)
@@ -356,5 +356,106 @@ func TestApply_v0和v1的补丁升级不加v后缀(t *testing.T) {
 		if !strings.Contains(goMod, want) || strings.Contains(goMod, "/v0") || strings.Contains(goMod, "/v1 ") {
 			t.Fatalf("%s→%s 应该只改版本号、不带后缀，实际：\n%s", tc.old, tc.new, goMod)
 		}
+	}
+}
+
+// 只改 version 行的版本号：不新增任何以 `# v` 开头的行，文件里已有的注释
+// （含行尾注释、独立注释行）原样保留；改动前后唯一的差异应当只在版本号、
+// image tag 和依赖引用上。
+func TestApply_只改版本号不新增也不改动任何注释行(t *testing.T) {
+	root := setupFixture(t)
+	path := filepath.Join(root, "components/erp/inventory/component.yaml")
+	before := readFile(t, path)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes, err := ComputeCascade(reg, []SeedChange{{ID: "erp/inventory", Reason: "不该落进文件的理由"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(root, reg, changes, false); err != nil {
+		t.Fatal(err)
+	}
+	after := readFile(t, path)
+	want := strings.NewReplacer("2.0.12                    #", "2.0.13                    #", "erp-inventory:2.0.12", "erp-inventory:2.0.13").Replace(before)
+	// 历史注释行里的 v2.0.12 不能被上面的替换动到
+	want = strings.Replace(want, "# v2.0.13：上一条", "# v2.0.12：上一条", 1)
+	if after != want {
+		t.Fatalf("除版本号与 image tag 外不该有任何差异。\n期望：\n%s\n实际：\n%s", want, after)
+	}
+	if strings.Count(after, "\n") != strings.Count(before, "\n") {
+		t.Fatal("行数变了，说明插入或删除了行")
+	}
+}
+
+// v1 允许只写 deployment.build、不写 image：没有 image 行时不报错、不改别的；
+// 任意 registry 的 image 只要 tag 等于旧版本就跟着改，tag 与组件版本无关的
+// 第三方镜像不碰。
+func TestApply_没有image行或image前缀不同也能正确处理(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "components/erp/inventory/component.yaml"), `apiVersion: brickkit/v1
+kind: Component
+
+metadata:
+  id: erp/inventory
+  version: 2.0.12
+
+deployment:
+  type: container
+  build:
+    context: .
+`)
+	writeFile(t, filepath.Join(root, "components/erp/sales/component.yaml"), `apiVersion: brickkit/v1
+kind: Component
+
+metadata:
+  id: erp/sales
+  version: 2.0.17
+
+dependencies:
+  components:
+    - erp/inventory@2.0.12
+
+deployment:
+  type: container
+  image: registry.example.com:5000/acme/erp-sales:2.0.17
+`)
+	writeFile(t, filepath.Join(root, "components/erp/finance/component.yaml"), `apiVersion: brickkit/v1
+kind: Component
+
+metadata:
+  id: erp/finance
+  version: 2.0.8
+
+deployment:
+  type: container
+  image: postgres:16.3.1
+`)
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes, err := ComputeCascade(reg, []SeedChange{
+		{ID: "erp/inventory", Reason: "x"},
+		{ID: "erp/finance", Reason: "y"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(root, reg, changes, false); err != nil {
+		t.Fatal(err)
+	}
+	inv := readFile(t, filepath.Join(root, "components/erp/inventory/component.yaml"))
+	if !strings.Contains(inv, "version: 2.0.13") || strings.Contains(inv, "image:") {
+		t.Fatalf("没有 image 行时只改 version，实际：\n%s", inv)
+	}
+	sales := readFile(t, filepath.Join(root, "components/erp/sales/component.yaml"))
+	if !strings.Contains(sales, "image: registry.example.com:5000/acme/erp-sales:2.0.18") {
+		t.Fatalf("任意 registry 的 image tag 应该跟着改，实际：\n%s", sales)
+	}
+	fin := readFile(t, filepath.Join(root, "components/erp/finance/component.yaml"))
+	if !strings.Contains(fin, "version: 2.0.9") || !strings.Contains(fin, "image: postgres:16.3.1") {
+		t.Fatalf("tag 不等于旧版本的第三方镜像不该被改，实际：\n%s", fin)
 	}
 }

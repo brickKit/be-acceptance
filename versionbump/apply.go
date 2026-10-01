@@ -65,19 +65,24 @@ func Apply(root string, reg map[string]*Component, changes []Change, dryRun bool
 }
 
 var versionLineTemplate = regexp.MustCompile(`(?m)^([ \t]*version:[ \t]*)([0-9]+\.[0-9]+\.[0-9]+)(.*)$`)
-var imageLineTemplate = regexp.MustCompile(`(?m)^([ \t]*image:[ \t]*brickenterprise/[a-z0-9_-]+:)([0-9]+\.[0-9]+\.[0-9]+)([ \t]*)$`)
+
+// imageLineRe 匹配 deployment.image 的 `image: <任意镜像仓库路径>:<版本>` 一行。
+// v1 里 image 可以不写（只写 deployment.build），也可以是任意 registry——
+// 所以不再写死前缀；是否改写由调用方按"tag 等于旧版本"判断，第三方镜像
+// （tag 本来就跟组件版本无关）不会被误改，没有 image 行时一行都不动。
+var imageLineRe = regexp.MustCompile(`(?m)^([ \t]*image:[ \t]*[^\s:#]+(?::[0-9]+)?(?:/[^\s:#]+)*:)([0-9]+\.[0-9]+\.[0-9]+)([ \t]*)$`)
 
 // rewriteComponentYAML 处理一个组件自己的 component.yaml：
-//  1. version 那一行的版本号原地替换，这一行原有的行尾注释（不管是
-//     固定的"精确版本，不接受…"说明，还是像 infra-print 那样已经把
-//     历史变更记录写在同一行）完全不动；
-//  2. 紧跟着插入一行新的变更记录，缩进对齐到原 version 行 `#` 出现的
-//     列（没有 `#` 就退回一个默认列），不去动文件里任何其它字节；
-//  3. deployment.image 的 tag 原地替换；
-//  4. dependencies.components 段与外壳的 shell.members 段里，凡是引用到
+//  1. version 那一行的版本号原地替换，这一行原有的行尾注释完全不动；
+//     不插入、不修改任何注释行——component.yaml 不承载历史（历史在 git 与
+//     tag 的发布说明里），计划文件里的 reason 只用于终端打印和 tag 消息，
+//     不写进文件；
+//  2. deployment.image 的 tag 等于旧版本时原地替换（没有 image 行就什么
+//     都不做）；
+//  3. dependencies.components 段与外壳的 shell.members 段里，凡是引用到
 //     本批次里其它也变了版本的组件（newVerByID 的 key），把 `id@旧版本`
 //     换成 `id@新版本`——只在这两段内替换，不碰同一份文件里别处偶然出现的
-//     同一个子串（比如变更记录叙述里提到过的旧版本号）。
+//     同一个子串。
 func rewriteComponentYAML(path string, c Change, newVerByID map[string]string, dryRun bool) (bool, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -90,7 +95,6 @@ func rewriteComponentYAML(path string, c Change, newVerByID map[string]string, d
 	if loc == nil {
 		return false, fmt.Errorf("找不到 version: 那一行")
 	}
-	versionLine := content[loc[0]:loc[1]]
 	prefix := content[loc[2]:loc[3]]
 	oldVerInFile := content[loc[4]:loc[5]]
 	if oldVerInFile != c.OldVer {
@@ -98,17 +102,13 @@ func rewriteComponentYAML(path string, c Change, newVerByID map[string]string, d
 	}
 	suffix := content[loc[6]:loc[7]]
 
-	indent := strings.Index(versionLine, "#")
-	if indent < 0 {
-		indent = 38
-	}
-	newChangelogLine := fmt.Sprintf("%s# v%s：%s", strings.Repeat(" ", indent), c.NewVer, c.Reason)
+	content = content[:loc[0]] + prefix + c.NewVer + suffix + content[loc[1]:]
 
-	newVersionLine := prefix + c.NewVer + suffix
-	content = content[:loc[0]] + newVersionLine + "\n" + newChangelogLine + content[loc[1]:]
-
-	content = imageLineTemplate.ReplaceAllStringFunc(content, func(m string) string {
-		sub := imageLineTemplate.FindStringSubmatch(m)
+	content = imageLineRe.ReplaceAllStringFunc(content, func(m string) string {
+		sub := imageLineRe.FindStringSubmatch(m)
+		if sub[2] != c.OldVer {
+			return m
+		}
 		return sub[1] + c.NewVer + sub[3]
 	})
 

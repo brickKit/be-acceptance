@@ -58,9 +58,12 @@
   `shell/be/<name>/go.mod` 锁定的成员版本 vs 对应组件自己的 `metadata.version`（v2+ 的 require 带 `/vN`
   模块路径后缀）；②外壳自己 `metadata.version` vs `deployment.image` 镜像 tag。原先的组件依赖引用、
   `brickkit.yaml` 顶层 pin、`shell.members` 三类漂移，v1 的 `brickkit up --dry-run` 会拦下并给出可操作提示，
-  不再重复检查——`make gates` 同时跑 `brickkit up --dry-run`。`bump-version` 同样缩减：只传播下游
+  不再重复检查——`make gates` 同时跑 `brickkit up --dry-run`。`bump-version`（v0.4.1 起）同样缩减：只改 `metadata.version` 那一行的版本号、`deployment.image` 与旧版本一致的 tag，并传播下游
   `component.yaml` 的依赖版本、外壳 `shell.members`、外壳 `go.mod`，不再碰 `brickkit.yaml` pin
   （`brickkit upgrade`）、`config:` 主机名字面量（`$var:`）、AGENTS 名册（CLI 维护块）。
+  **`bump-version` 不再往 `component.yaml` 里写任何注释**：计划文件里的 `reason` 字段照常必填、照常解析，
+  但只用于终端打印和 `git tag` 消息，不落进文件——历史在 git 与 tag 的发布说明里，完整理由请写进该组件这次
+  发布的 release notes 文件。`deployment.image` 没写（只有 `deployment.build`）时跳过，不报错。
 
 ## 为什么这条门禁要在档 0 之前就装好
 

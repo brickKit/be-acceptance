@@ -129,7 +129,7 @@ func runBumpVersion(args []string) error {
 }
 
 // firstLine 取一段理由文字的第一行，给 git tag -a 的 -m 用——tag message
-// 只需要一句话概括，完整理由已经写进了 component.yaml 的变更记录里，
+// 只需要一句话概括，完整理由属于 tag 的发布说明（component.yaml 不承载历史），
 // 不用重复整段塞进 tag message。
 func firstLine(s string) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {

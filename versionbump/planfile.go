@@ -17,6 +17,10 @@ import (
 //	reason: 补 XXX 测试，理由可以换行继续写，
 //	  直到下一个 "id:"/"version:"/"---" 为止都算 reason 的一部分。
 //
+// reason 仍然必填、照常解析，但 bump-version 不会把它写进 component.yaml
+// （component.yaml 不承载历史）——它只用于终端打印和 git tag 消息，完整版
+// 应该写进该组件这次发布的 release notes 文件。
+//
 // 只需要写"真的动了什么、为什么"的那些根组件——因为依赖它们而需要
 // 同步版本号的下游组件，由 ComputeCascade 自动算出来，不需要在计划
 // 文件里手写。
