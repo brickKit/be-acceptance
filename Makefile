@@ -81,15 +81,19 @@ tier1:  ## 已删除：平台断言等 06f 按 brickKit v1 重写
 # 的 ../../shells/go 路径；迁完或想对着别处跑时 make tier2 SHELL_PKG_DIR=<dir>。
 SHELL_PKG_DIR ?= ../be-sdk-go/shell
 
+# ⚠️ 这两条断言防"空转变绿"（scripts/require-pass.sh）：go test 退出 0 不够，
+# 还必须真有一条名字匹配的 `--- PASS:`——缺 TEST_PG_DSN 全部 SKIP、-run
+# 没匹配上（"no tests to run"）、目录不存在，都是失败。唯一的跳过方式是
+# 显式 SKIP_SHELL=1（只管外壳包那一步）。
 tier2:  ## 合并态专属断言：SET LOCAL 越权（本仓库）+ 单模块 panic 隔离（外壳包，见 tier2-shell）
-	go test ./tier2/... -run TestTier2 -v -count=1 -timeout 60s
+	@./scripts/require-pass.sh . 'schema|SET LOCAL|越权' 'tier2 SET LOCAL 越权断言' -- ./tier2/... -run TestTier2 -count=1 -timeout 60s
 	@$(MAKE) --no-print-directory tier2-shell
 
-tier2-shell:  ## 单模块 panic 隔离：在外壳包所在 module（SHELL_PKG_DIR）里跑
-	@if [ -d "$(SHELL_PKG_DIR)" ]; then \
-	  cd "$(SHELL_PKG_DIR)" && go test ./... -run 'TestRun_一个模块panic不影响其它真实模块继续服务' -v -count=1 -timeout 60s; \
+tier2-shell:  ## 单模块 panic 隔离：在外壳包所在 module（SHELL_PKG_DIR）里跑；没跑到会失败，SKIP_SHELL=1 显式跳过
+	@if [ "$(SKIP_SHELL)" = "1" ]; then \
+	  echo "tier2-shell：按 SKIP_SHELL=1 的显式要求跳过"; \
 	else \
-	  echo "tier2-shell：$(SHELL_PKG_DIR) 不存在（外壳包尚未迁到 be-sdk-go/shell/），跳过 panic 隔离断言"; \
+	  ./scripts/require-pass.sh "$(SHELL_PKG_DIR)" '[Pp]anic|隔离' 'tier2-shell panic 隔离断言' -- ./... -count=1 -timeout 60s; \
 	fi
 
 ##@ 汇总

@@ -166,7 +166,7 @@ func shellGoModPaths(root string) ([]string, error) {
 	return filepath.Glob(filepath.Join(root, "shell", "be", "*", "go.mod"))
 }
 
-// shellModuleRefs 从一份 shells/<name>/go.mod 里抽取全部顶层组件依赖引用，
+// shellModuleRefs 从一份 shell/be/<name>/go.mod 里抽取全部顶层组件依赖引用，
 // 返回的 depRef.id 已经是 componentId 形式（用 idsByRepoName 把 go.mod
 // 里的仓库名转回 "scope/name"）——查不到对应仓库名的组件（比如
 // be-sdk-go 这类不是业务组件的工具仓库）静默跳过，同本文件其它三类扫描
