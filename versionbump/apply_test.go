@@ -303,3 +303,58 @@ func readFile(t *testing.T, path string) string {
 	}
 	return string(data)
 }
+
+// v1 -> v2：Go 的语义化导入版本规则要求 v2+ 模块路径带 /v2 后缀，
+// 原来没后缀的 require 行要加上。
+func TestApply_v1升到v2时go点mod的require加上v2后缀(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "components/erp/inventory/component.yaml"),
+		strings.NewReplacer("2.0.12", "1.0.12").Replace(inventoryYAML))
+	writeFile(t, filepath.Join(root, "shell/be/go-core/go.mod"),
+		"module x\n\nrequire (\n\tgithub.com/brickKit/erp-inventory v1.0.12\n\tgithub.com/brickKit/erp-inventory/gen/erp/inventory v1.0.3\n)\n")
+	reg, err := LoadRegistry(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes, err := ComputeCascade(reg, []SeedChange{{ID: "erp/inventory", Reason: "大版本", NewVer: "2.0.0"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Apply(root, reg, changes, false); err != nil {
+		t.Fatal(err)
+	}
+	goMod := readFile(t, filepath.Join(root, "shell/be/go-core/go.mod"))
+	if !strings.Contains(goMod, "github.com/brickKit/erp-inventory/v2 v2.0.0\n") {
+		t.Fatalf("v1→v2 应该加上 /v2 后缀，实际：\n%s", goMod)
+	}
+	if !strings.Contains(goMod, "github.com/brickKit/erp-inventory/gen/erp/inventory v1.0.3\n") {
+		t.Fatalf("gen 子模块不该被动，实际：\n%s", goMod)
+	}
+}
+
+// v0.x / v1.x 的 patch bump：模块路径不带 /vN，改版本号后也不能凭空加上。
+func TestApply_v0和v1的补丁升级不加v后缀(t *testing.T) {
+	for _, tc := range []struct{ old, new string }{{"0.3.4", "0.3.5"}, {"1.0.12", "1.0.13"}} {
+		root := t.TempDir()
+		writeFile(t, filepath.Join(root, "components/erp/inventory/component.yaml"),
+			strings.NewReplacer("2.0.12", tc.old).Replace(inventoryYAML))
+		writeFile(t, filepath.Join(root, "shell/be/go-core/go.mod"),
+			"module x\n\nrequire (\n\tgithub.com/brickKit/erp-inventory v"+tc.old+"\n)\n")
+		reg, err := LoadRegistry(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		changes, err := ComputeCascade(reg, []SeedChange{{ID: "erp/inventory", Reason: "x"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Apply(root, reg, changes, false); err != nil {
+			t.Fatal(err)
+		}
+		goMod := readFile(t, filepath.Join(root, "shell/be/go-core/go.mod"))
+		want := "github.com/brickKit/erp-inventory v" + tc.new + "\n"
+		if !strings.Contains(goMod, want) || strings.Contains(goMod, "/v0") || strings.Contains(goMod, "/v1 ") {
+			t.Fatalf("%s→%s 应该只改版本号、不带后缀，实际：\n%s", tc.old, tc.new, goMod)
+		}
+	}
+}

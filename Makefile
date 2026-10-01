@@ -1,7 +1,7 @@
 # be-acceptance 不是 brickKit 组件，但仍按总纲 §I 的 9 个门禁目标写。
 .DEFAULT_GOAL := help
 .PHONY: help check-version test image migrate-idempotent dag-check contract-check \
-        import-scan smoke module-check gates tier0 tier1 tier2 all
+        import-scan smoke module-check gates tier0 tier1 tier2 tier2-shell all
 
 help:  ## 列出所有目标
 	@awk 'BEGIN{FS=":.*##"; printf "\n用法: make <目标>\n\n"} \
@@ -71,12 +71,26 @@ tier1:  ## 已删除：平台断言等 06f 按 brickKit v1 重写
 # 其余模块"（用例 24）物理上做不到放进本仓库：它要真的调用 shells/go 的
 # internal/shell.Run，那是另一个 Go module 自己的 internal 包，跨 module
 # 天然不可见（Go 编译器层面的限制，不是铁律六 import-scan 门禁的问题）
-# ——所以这条目标额外 cd 进 ../../shells/go 跑那条测试，两边都需要真实
-# 可达的 TEST_PG_DSN/TEST_NATS_URL（同 shells/go 自己 real_modules_test.go
-# 的既有前提，未设置就跳过，不是放宽断言）。
-tier2:  ## 合并态专属断言：SET LOCAL 越权（本仓库）+ 单模块 panic 隔离（shells/go）
+# ——所以放进单独的 tier2-shell 目标，在外壳包所在的 Go module 里跑，
+# 两边都需要真实可达的 TEST_PG_DSN/TEST_NATS_URL（同外壳包自己
+# real_modules_test.go 的既有前提，未设置就跳过，不是放宽断言）。
+#
+# ⚠️ v1 布局下外壳包（internal/shell）要迁到 be-sdk-go 的 shell/ 目录，
+# 迁移落地之前这个目录不存在——SHELL_PKG_DIR 默认指向 be-sdk-go 的
+# shell/，目录不在时 tier2-shell 明确提示并跳过，不去碰一条已经不存在
+# 的 ../../shells/go 路径；迁完或想对着别处跑时 make tier2 SHELL_PKG_DIR=<dir>。
+SHELL_PKG_DIR ?= ../be-sdk-go/shell
+
+tier2:  ## 合并态专属断言：SET LOCAL 越权（本仓库）+ 单模块 panic 隔离（外壳包，见 tier2-shell）
 	go test ./tier2/... -run TestTier2 -v -count=1 -timeout 60s
-	cd ../../shells/go && go test ./internal/shell/... -run 'TestRun_一个模块panic不影响其它真实模块继续服务' -v -count=1 -timeout 60s
+	@$(MAKE) --no-print-directory tier2-shell
+
+tier2-shell:  ## 单模块 panic 隔离：在外壳包所在 module（SHELL_PKG_DIR）里跑
+	@if [ -d "$(SHELL_PKG_DIR)" ]; then \
+	  cd "$(SHELL_PKG_DIR)" && go test ./... -run 'TestRun_一个模块panic不影响其它真实模块继续服务' -v -count=1 -timeout 60s; \
+	else \
+	  echo "tier2-shell：$(SHELL_PKG_DIR) 不存在（外壳包尚未迁到 be-sdk-go/shell/），跳过 panic 隔离断言"; \
+	fi
 
 ##@ 汇总
 all: check-version test image migrate-idempotent dag-check contract-check import-scan smoke module-check  ## 跑完整 9 项（不含 gates/tier0，含上面几条 N/A 直接过）
