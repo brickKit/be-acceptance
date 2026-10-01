@@ -62,8 +62,18 @@
   `component.yaml` 的依赖版本、外壳 `shell.members`、外壳 `go.mod`，不再碰 `brickkit.yaml` pin
   （`brickkit upgrade`）、`config:` 主机名字面量（`$var:`）、AGENTS 名册（CLI 维护块）。
   **`bump-version` 不再往 `component.yaml` 里写任何注释**：计划文件里的 `reason` 字段照常必填、照常解析，
-  但只用于终端打印和 `git tag` 消息，不落进文件——历史在 git 与 tag 的发布说明里，完整理由请写进该组件这次
-  发布的 release notes 文件。`deployment.image` 没写（只有 `deployment.build`）时跳过，不报错。
+  但只在终端原样打印，不落进任何文件、也不进 tag 消息——历史在 git 与 tag 的发布说明里，发布说明手写成一个
+  文件（只写上一个 tag 之后的变更）。`deployment.image` 没写（只有 `deployment.build`）时跳过，不报错。
+- `bump-version --apply` 打印的收尾步骤按 v1 发布规则分三种：组件是提交并推送 → `brickkit release --notes-file`
+  （tag `<ver>`，不带 `v`）→ Go 组件在同一提交上再打 `v<ver>` 并推送 → `brickkit build <id>`；外壳在装配仓库根
+  `brickkit release --path shell/be/<name>`（tag `be-<name>/<ver>`），装配仓库上不打裸 `v` 标签。不打印
+  `make image`、不打印 docker push（镜像全部本地使用）。
+- `service-hostname-scan`（`gates.ServiceHostnameScan`，第 7 个 gate）：扫 `config/*.yaml` 全文与根目录
+  `deploy*.yaml` 的 `vars:` 段（跳过注释），找出版本化服务名（`http://<scope>-<name>-<x>-<y>-<z>`，brickKit
+  `ServiceName` 规则），逐个对照 `brickkit.yaml` 的 `components:`：这个组件已声明、但没有这个版本 → 错误，点名
+  `文件:行`、主机名和应写的服务名；`brickkit.yaml` 里根本没有这个组件 → 只警告（还没装上它时是预期状态）。
+  `$var:` 把字面量集中到了一处，但没有别的东西拿它跟组件当前版本比（lint、`up --dry-run`、`bump-version`
+  都不看配置值）——authz/iam 一发版，`AUTHZ_BUNDLE_URL`/`IAM_JWKS_URL` 就过期，全部受保护路由悄悄 503。
 
 ## 为什么这条门禁要在档 0 之前就装好
 

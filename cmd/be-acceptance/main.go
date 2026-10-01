@@ -46,6 +46,7 @@ func printUsage() {
 	fmt.Println("  gate events-breaking-scan --root <path>   contracts/events/*.json 只增不删不改（§3.10，buf 只管 .proto）")
 	fmt.Println("  gate data-scope-test-scan --root <path>   声明了 data_scopes 维度的组件必须有越权/拒绝形状的测试（总纲 SOP-W-8）")
 	fmt.Println("  gate dependency-version-scan --root <path> 外壳 go.mod 锁定版本、外壳 version 与 image tag 必须跟真实版本一致（brickkit up --dry-run 拦不住的两类；组件依赖引用/顶层 pin/shell.members 交给 brickkit up --dry-run）")
+	fmt.Println("  gate service-hostname-scan --root <path>  config/*.yaml 与部署文件 vars: 里的版本化服务名必须与 brickkit.yaml 声明的版本一致（不一致=错误，未声明=警告）")
 	fmt.Println()
 	fmt.Println("  bump-version --root <path> --plan <计划文件> [--apply]   自动传播一次版本变更（算出所有下游要跟着同步的组件，改好全部文件），计划文件格式见 versionbump 包文档")
 }
@@ -55,7 +56,7 @@ func printUsage() {
 // 见 tools/be-ops 同一个坑（docs/dev/实测踩坑记录.md C3）。
 func runGate(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("用法：be-acceptance gate <import-scan|system-client-scan|bare-route-scan|events-breaking-scan|data-scope-test-scan|dependency-version-scan> --root <path>")
+		return fmt.Errorf("用法：be-acceptance gate <import-scan|system-client-scan|bare-route-scan|events-breaking-scan|data-scope-test-scan|dependency-version-scan|service-hostname-scan> --root <path>")
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet(sub, flag.ExitOnError)
@@ -77,6 +78,8 @@ func runGate(args []string) error {
 		return runDataScopeTestScan(*root)
 	case "dependency-version-scan":
 		return runDependencyVersionScan(*root)
+	case "service-hostname-scan":
+		return runServiceHostnameScan(*root)
 	default:
 		return fmt.Errorf("门禁 %q 未知", sub)
 	}
@@ -180,5 +183,31 @@ func runDependencyVersionScan(root string) error {
 		return fmt.Errorf("dependency-version-scan 发现 %d 条版本号漂移", len(mismatches))
 	}
 	fmt.Println("✓ dependency-version-scan：0 条违规")
+	return nil
+}
+
+// runServiceHostnameScan：已声明组件的版本对不上是错误（非零退出）；brickkit.yaml 里根本没有的
+// 组件只警告——项目还没装上它时这是预期状态。
+func runServiceHostnameScan(root string) error {
+	findings, err := gates.ServiceHostnameScan(root)
+	if err != nil {
+		return err
+	}
+	errCount, warnCount := 0, 0
+	for _, f := range findings {
+		if f.Error {
+			errCount++
+			fmt.Fprintf(os.Stderr, "✗ %s:%d：%s 与 brickkit.yaml 不一致——%s 声明的服务名是 %s。组件发版后地址没跟着改，运行期调用会落空（不报错，只是 503/403）\n",
+				f.File, f.Line, f.Hostname, f.ComponentID, strings.Join(f.Expected, " / "))
+			continue
+		}
+		warnCount++
+		fmt.Fprintf(os.Stderr, "⚠ %s:%d：%s 对应的组件不在 brickkit.yaml 里，无法核对版本（还没装上它时是预期状态）\n",
+			f.File, f.Line, f.Hostname)
+	}
+	if errCount > 0 {
+		return fmt.Errorf("service-hostname-scan 发现 %d 处版本化服务名与 brickkit.yaml 不一致", errCount)
+	}
+	fmt.Printf("✓ service-hostname-scan：0 条错误（%d 条警告）\n", warnCount)
 	return nil
 }

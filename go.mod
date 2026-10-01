@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/brickKit/be-sdk-go v0.2.7
 	github.com/jackc/pgx/v5 v5.11.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -73,5 +74,4 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
