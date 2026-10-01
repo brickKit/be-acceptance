@@ -118,8 +118,8 @@ func topLevelBlock(path, key string) (string, error) {
 	return block.String(), nil
 }
 
-// shellDirs 列出 root/shell/<scope>/<name>（v1 布局：外壳是项目代码，
-// 住在装配仓库的 shell/be/<name>/），目录形状同 components/<scope>/<name>。
+// shellDirs 列出 root/shell/<scope>/<name>（外壳是独立仓库，
+// 以子模块挂在装配仓库的 shell/be/<name>/），目录形状同 components/<scope>/<name>。
 func shellDirs(root string) []string {
 	return componentDirs(filepath.Join(root, "shell"))
 }

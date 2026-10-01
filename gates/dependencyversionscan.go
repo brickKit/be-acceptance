@@ -159,8 +159,8 @@ func repoNameOf(componentID string) string {
 	return strings.ReplaceAll(componentID, "/", "-")
 }
 
-// shellGoModPaths 找出全部 shell/be/<name>/go.mod（v1 布局：外壳是项目代码，
-// 住在装配仓库的 shell/be/<name>/；Python 外壳用的不是 go.mod，天然不会被
+// shellGoModPaths 找出全部 shell/be/<name>/go.mod（外壳是独立仓库，
+// 以子模块挂在装配仓库的 shell/be/<name>/；Python 外壳用的不是 go.mod，天然不会被
 // 这个 glob 命中）。
 func shellGoModPaths(root string) ([]string, error) {
 	return filepath.Glob(filepath.Join(root, "shell", "be", "*", "go.mod"))

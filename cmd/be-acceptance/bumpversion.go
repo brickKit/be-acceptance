@@ -122,9 +122,9 @@ const applyFooter = "文件已落地。按上面打印的顺序逐个组件收�
 // nextSteps 按 v1 发布规则打印一个组件/外壳在 --apply 之后的收尾步骤：
 //   - 组件：提交并推送 → `brickkit release --notes-file`（tag `<ver>`，不带 v，注解 tag，自动推送）
 //     → Go 组件在同一提交上再打 `v<ver>`（Go 模块代理只认 v 前缀）→ `brickkit build <id>`；
-//   - 外壳（住在装配仓库的 shell/<scope>/<name>/）：在装配仓库根提交并推送 →
-//     `brickkit release --path shell/<scope>/<name>`（tag `<scope>-<name>/<ver>`）→ `brickkit build`。
-//     外壳不被任何人 import，装配仓库上绝不打裸 `v` 标签。
+//   - 外壳（独立仓库，以子模块挂在装配仓库的 shell/<scope>/<name>/）：在外壳仓库里提交并推送 →
+//     `brickkit release --notes-file`（tag `<ver>`，不带 v）→ `brickkit build <id>` → 回装配仓库提交子模块指针。
+//     外壳不被任何人 import，不打 `v` 标签；绝不在装配仓库根用 `--path` 发布外壳。
 //
 // 不打印 docker push：现阶段镜像全部本地使用。files 是相对组件目录的、bump-version 改过的文件。
 func nextSteps(absRoot string, comp *versionbump.Component, newVer string, files []string) []string {
@@ -137,21 +137,17 @@ func nextSteps(absRoot string, comp *versionbump.Component, newVer string, files
 	const notesHint = "      # 发布说明手写成一个文件（Markdown，只写上一个 tag 之后的变更），放在组件目录之外"
 
 	if strings.HasPrefix(compRel, "shell/") {
-		var paths []string
-		for _, f := range files {
-			paths = append(paths, compRel+"/"+filepath.ToSlash(f))
-		}
-		tag := strings.Replace(strings.TrimPrefix(compRel, "shell/"), "/", "-", 1) + "/" + newVer
 		return []string{
-			"    接下来（外壳，在装配仓库根目录下）：",
-			"      跑外壳自己的构建/测试，必须全绿才能往下走",
-			fmt.Sprintf("      git add %s <这次真正改动涉及的其它外壳文件>   # 只 add 自己的路径", strings.Join(paths, " ")),
-			fmt.Sprintf("      git commit -F <提交信息文件> -- %s && git log --oneline -1", compRel),
-			"      git push origin main",
+			fmt.Sprintf("    接下来（外壳，在外壳仓库 %s 目录下——外壳是独立仓库，以子模块挂在装配仓库里）：", compRel),
+			"      跑外壳自己的构建（Go：go build -o /dev/null ./...；Python：装包后 import main），必须全绿才能往下走",
+			fmt.Sprintf("      git add %s <这次真正改动涉及的其它外壳文件>", strings.Join(files, " ")),
+			"      git commit -F <提交信息文件> && git log --oneline -1   # 别用内联 -m 夹带长文本/双引号",
+			"      git push origin main   # 发布检查要求被打 tag 的提交已在远端",
 			notesHint,
-			fmt.Sprintf("      brickkit release --path %s --notes-file %s   # tag %s，注解 tag，自动推送", compRel, notes, tag),
-			"      # 外壳不被 import：不要在装配仓库打裸 v 标签",
-			fmt.Sprintf("      brickkit build %s   # 已有镜像会跳过，改了代码加 --force", comp.ID),
+			fmt.Sprintf("      brickkit release --notes-file %s   # tag %s（不带 v），注解 tag，自动推送", notes, newVer),
+			"      # 外壳不被 import：不打 v 标签；绝不在装配仓库根目录发布外壳",
+			fmt.Sprintf("      brickkit build %s   # 在装配仓库根目录跑；已有镜像会跳过，改了代码加 --force", comp.ID),
+			fmt.Sprintf("      回到装配仓库根目录提交子模块指针（与 brickkit upgrade 改出的文件一起）：git commit -F <提交信息文件> -- %s <其它路径>", compRel),
 		}
 	}
 

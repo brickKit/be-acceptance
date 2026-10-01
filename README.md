@@ -65,8 +65,9 @@
   但只在终端原样打印，不落进任何文件、也不进 tag 消息——历史在 git 与 tag 的发布说明里，发布说明手写成一个
   文件（只写上一个 tag 之后的变更）。`deployment.image` 没写（只有 `deployment.build`）时跳过，不报错。
 - `bump-version --apply` 打印的收尾步骤按 v1 发布规则分三种：组件是提交并推送 → `brickkit release --notes-file`
-  （tag `<ver>`，不带 `v`）→ Go 组件在同一提交上再打 `v<ver>` 并推送 → `brickkit build <id>`；外壳在装配仓库根
-  `brickkit release --path shell/be/<name>`（tag `be-<name>/<ver>`），装配仓库上不打裸 `v` 标签。不打印
+  （tag `<ver>`，不带 `v`）→ Go 组件在同一提交上再打 `v<ver>` 并推送 → `brickkit build <id>`；外壳是独立仓库、以子模块
+  挂在 `shell/be/<name>/`，在外壳仓库里提交并推送 → `brickkit release --notes-file`（tag `<ver>`，不带 `v`，不打
+  `v` 标签）→ `brickkit build <id>` → 回装配仓库提交子模块指针。不打印
   `make image`、不打印 docker push（镜像全部本地使用）。
 - `service-hostname-scan`（`gates.ServiceHostnameScan`，第 7 个 gate）：扫 `config/*.yaml` 全文与根目录
   `deploy*.yaml` 的 `vars:` 段（跳过注释），找出版本化服务名（`http://<scope>-<name>-<x>-<y>-<z>`，brickKit

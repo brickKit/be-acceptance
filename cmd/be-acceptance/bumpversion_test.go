@@ -77,19 +77,26 @@ func TestNextSteps_Python或TS组件只打一个tag(t *testing.T) {
 	mustNotContain(t, out, append(v04Leftovers, "git tag -a v", "git push origin v2.0.1")...)
 }
 
-func TestNextSteps_外壳在装配仓库根用path发布且不打裸v标签(t *testing.T) {
+func TestNextSteps_外壳在自己的仓库里发布且只打裸版本tag(t *testing.T) {
 	root := t.TempDir()
 	c := mkComp(t, root, "shell/be/go-core", "be/go-core", true) // 外壳也是 Go，但不打 v tag
 	out := strings.Join(nextSteps(root, c, "1.0.1", []string{"component.yaml", "go.mod"}), "\n")
 	mustContain(t, out,
-		"装配仓库根目录",
-		"git add shell/be/go-core/component.yaml shell/be/go-core/go.mod",
-		"brickkit release --path shell/be/go-core --notes-file <发布说明文件>",
-		"tag be-go-core/1.0.1",
-		"不要在装配仓库打裸 v 标签",
+		"外壳仓库 shell/be/go-core",
+		"git add component.yaml go.mod",
+		"git push origin main",
+		"brickkit release --notes-file <发布说明文件>",
+		"tag 1.0.1（不带 v）",
+		"不打 v 标签",
+		"git commit -F <提交信息文件> -- shell/be/go-core",
 		"brickkit build be/go-core",
 	)
-	mustNotContain(t, out, append(v04Leftovers, "git tag -a v", "git push origin v1.0.1")...)
+	// v1 起外壳是独立仓库：不再在装配仓库根用 --path 发布、不再打 <scope>-<name>/<ver> tag
+	mustNotContain(t, out, append(v04Leftovers, "release --path", "be-go-core/1.0.1", "git tag -a v", "git push origin v1.0.1")...)
+	// 先在外壳仓库发布，再回装配仓库提交指针
+	if strings.Index(out, "brickkit release") > strings.Index(out, "-- shell/be/go-core") {
+		t.Errorf("外壳应先发布、再提交装配仓库的子模块指针：\n%s", out)
+	}
 }
 
 func TestBumpVersionFooter不再指向已退役的总纲(t *testing.T) {
