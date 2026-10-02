@@ -1,8 +1,10 @@
 package gates
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -48,6 +50,30 @@ import "github.com/brickKit/be-sdk-go"
 	}
 	if len(violations) != 0 {
 		t.Fatalf("be-sdk-go 在白名单里，应放行，得到 %v", violations)
+	}
+}
+
+// SDK 的子包（be-sdk-go/migrate、be-sdk-go/shell）与 SDK 本身同属白名单；
+// 但前缀相同的另一个仓库（be-sdk-go-extras）不是 SDK，仍然要红
+func TestImportScan_SDK子包放行_同前缀别的仓库要红(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/erp/sales/go.mod"),
+		"module github.com/brickKit/erp-sales/v2\n\ngo 1.25\n")
+	write(t, filepath.Join(root, "components/erp/sales/svc.go"),
+		`package svc
+
+import (
+	"github.com/brickKit/be-sdk-go/migrate"
+	"github.com/brickKit/be-sdk-go/shell"
+	"github.com/brickKit/be-sdk-go-extras"
+)
+`)
+	violations, err := ImportScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 1 || !strings.Contains(fmt.Sprint(violations[0]), "be-sdk-go-extras") {
+		t.Fatalf("应只报 be-sdk-go-extras 一条，得到 %v", violations)
 	}
 }
 

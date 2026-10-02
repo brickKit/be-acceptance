@@ -37,6 +37,17 @@ var allowedShared = map[string]bool{
 	"github.com/brickKit/be-sdk-ts":     true,
 }
 
+// isAllowedShared：白名单模块本身或它的子包（be-sdk-go/migrate、be-sdk-go/shell）；
+// 只认 "模块路径/" 前缀，同前缀的另一个仓库（be-sdk-go-extras）不算。
+func isAllowedShared(impPath string) bool {
+	for mod := range allowedShared {
+		if impPath == mod || strings.HasPrefix(impPath, mod+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // isGeneratedContractImport 判断一条跨组件 import 是不是第二类白名单：某组件
 // 自己发布的生成物契约包（`gen/<domain>/<name>`，protoc-gen-go/-grpc 直接
 // 生成，只含消息类型与客户端 stub，不含任何业务逻辑）。
@@ -208,7 +219,7 @@ func scanDir(dir, fromID, ownModule string, repoToComponent map[string]string) (
 			if !strings.HasPrefix(impPath, brickKitOrgPrefix) {
 				continue // 标准库、第三方，不归铁律六管
 			}
-			if allowedShared[impPath] {
+			if isAllowedShared(impPath) {
 				continue
 			}
 			if isGeneratedContractImport(impPath) {
