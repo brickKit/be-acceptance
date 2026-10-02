@@ -1,6 +1,7 @@
 package gates
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 )
@@ -192,5 +193,64 @@ func TestConfigKeyScan_1x组件只有naming宽松(t *testing.T) {
 		if want := v.Rule == "naming"; v.Pending != want {
 			t.Errorf("%s [%s]：Pending 应为 %v", v.Key, v.Rule, want)
 		}
+	}
+}
+
+// --only：按 metadata.id 或目录路径认组件；fork 的目录名可以和 metadata.id 不同。
+func TestResolveComponent_按id或目录找到组件(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/mdm/customer/component.yaml"), manifestWithKeys("mdm/customer", "2.0.0"))
+	write(t, filepath.Join(root, "components/erp/sales-fork/component.yaml"), manifestWithKeys("erp/sales", "2.0.0"))
+	write(t, filepath.Join(root, "shell/be/go-core/component.yaml"), manifestWithKeys("be/go-core", "1.0.0"))
+
+	cases := []struct {
+		only, dir, id string
+		shell         bool
+	}{
+		{"mdm/customer", "components/mdm/customer", "mdm/customer", false},
+		{"components/mdm/customer", "components/mdm/customer", "mdm/customer", false},
+		{"components/mdm/customer/", "components/mdm/customer", "mdm/customer", false},
+		{"erp/sales", "components/erp/sales-fork", "erp/sales-fork", false},
+		{"components/erp/sales-fork", "components/erp/sales-fork", "erp/sales-fork", false},
+		{"be/go-core", "shell/be/go-core", "be/go-core", true},
+		{"shell/be/go-core", "shell/be/go-core", "be/go-core", true},
+	}
+	for _, c := range cases {
+		ref, err := ResolveComponent(root, c.only)
+		if err != nil {
+			t.Fatalf("%s：%v", c.only, err)
+		}
+		if ref.Rel != c.dir || ref.ID != c.id || ref.IsShell != c.shell {
+			t.Fatalf("%s：得到 %+v，期望 dir=%s id=%s shell=%v", c.only, ref, c.dir, c.id, c.shell)
+		}
+	}
+	for _, bad := range []string{"mdm/nope", "components/mdm/nope", "nope", "", "../x/y"} {
+		if _, err := ResolveComponent(root, bad); !errors.Is(err, ErrUnknownComponent) {
+			t.Fatalf("%q 应是 ErrUnknownComponent，得到 %v", bad, err)
+		}
+	}
+}
+
+func TestConfigKeyScanComponent_只扫这一个(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/mdm/customer/component.yaml"), manifestWithKeys("mdm/customer", "2.0.0", "PG_HOST"))
+	write(t, filepath.Join(root, "components/erp/sales/component.yaml"), manifestWithKeys("erp/sales", "1.0.26", "pgSchema"))
+	write(t, filepath.Join(root, "shell/be/go-core/component.yaml"), manifestWithKeys("be/go-core", "1.0.0", "PORT"))
+	write(t, filepath.Join(root, "components/bad/yaml/component.yaml"), "metadata: [\n") // 别的组件坏了也不影响
+
+	ref, _ := ResolveComponent(root, "mdm/customer")
+	vs, err := ConfigKeyScanComponent(root, ref)
+	if err != nil || len(vs) != 0 {
+		t.Fatalf("mdm/customer 合规，别的组件的违规 / 坏 YAML 不该算进来：%+v %v", vs, err)
+	}
+	ref, _ = ResolveComponent(root, "erp/sales")
+	vs, err = ConfigKeyScanComponent(root, ref)
+	if err != nil || len(vs) != 1 || vs[0].Key != "pgSchema" || !vs[0].Pending {
+		t.Fatalf("erp/sales 应恰好 1 条 Pending 违规：%+v %v", vs, err)
+	}
+	ref, _ = ResolveComponent(root, "be/go-core")
+	vs, err = ConfigKeyScanComponent(root, ref)
+	if err != nil || len(vs) != 1 || vs[0].File != "shell/be/go-core/component.yaml" || vs[0].Pending {
+		t.Fatalf("外壳应恰好 1 条、不 Pending：%+v %v", vs, err)
 	}
 }

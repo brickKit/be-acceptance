@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -33,8 +34,21 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "✗", err)
-		os.Exit(1)
+		os.Exit(exitCode(err))
 	}
+}
+
+// usageError：参数用错了（如 --only 给了不存在的组件），exit 2，与"门禁判红"的 exit 1 区分开。
+type usageError struct{ error }
+
+func (e usageError) Unwrap() error { return e.error }
+
+func exitCode(err error) int {
+	var u usageError
+	if errors.As(err, &u) {
+		return 2
+	}
+	return 1
 }
 
 func printUsage() {
@@ -47,8 +61,10 @@ func printUsage() {
 	fmt.Println("  gate data-scope-test-scan --root <path>   声明了 data_scopes 维度的组件必须有越权/拒绝形状的测试（总纲 SOP-W-8）")
 	fmt.Println("  gate dependency-version-scan --root <path> 外壳 go.mod 锁定版本、外壳 version 与 image tag 必须跟真实版本一致（brickkit up --dry-run 拦不住的两类；组件依赖引用/顶层 pin/shell.members 交给 brickkit up --dry-run）")
 	fmt.Println("  gate service-hostname-scan --root <path>  config/*.yaml 与部署文件 vars: 里的版本化服务名必须与 brickkit.yaml 声明的版本一致（不一致=错误，未声明=警告）")
-	fmt.Println("  gate config-key-scan     --root <path> [--strict]  组件与外壳 configSchema 的键必须是 ^[A-Z][A-Z0-9_]*$、不以 _ENDPOINT 结尾、不撞平台保留名（1.x 组件的 naming 只警告，--strict 也判红）")
-	fmt.Println("  gate openapi-additive-scan --root <path>  contracts/*.openapi.yaml 相对组件最近一次发布 tag 只增不删不改（决策 0302，buf 只管 .proto）")
+	fmt.Println("  gate config-key-scan     --root <path> [--strict] [--only <id>]  组件与外壳 configSchema 的键必须是 ^[A-Z][A-Z0-9_]*$、不以 _ENDPOINT 结尾、不撞平台保留名（1.x 组件的 naming 只警告，--strict 也判红）")
+	fmt.Println("  gate openapi-additive-scan --root <path> [--only <id>]  contracts/*.openapi.yaml 相对组件最近一次发布 tag 只增不删不改（决策 0302，buf 只管 .proto）")
+	fmt.Println("      --only <id>：只扫这一个组件或外壳（metadata.id，或目录 components/<scope>/<name>、shell/<scope>/<name>）；")
+	fmt.Println("                 --strict 只作用于它；找不到 → exit 2（ship.sh 发布前用 --only <id> --strict）")
 	fmt.Println()
 	fmt.Println("  bump-version --root <path> --plan <计划文件> [--apply]   自动传播一次版本变更（算出所有下游要跟着同步的组件，改好全部文件），计划文件格式见 versionbump 包文档")
 }
@@ -64,8 +80,20 @@ func runGate(args []string) error {
 	fs := flag.NewFlagSet(sub, flag.ExitOnError)
 	root := fs.String("root", ".", "装配仓库根目录")
 	strict := fs.Bool("strict", false, "config-key-scan：还没迁到 2.x 的组件也判红")
+	only := fs.String("only", "", "config-key-scan / openapi-additive-scan：只扫这一个组件或外壳（metadata.id 或目录路径）")
 	if err := fs.Parse(rest); err != nil {
 		return err
+	}
+	var ref *gates.ComponentRef
+	if *only != "" {
+		if sub != "config-key-scan" && sub != "openapi-additive-scan" {
+			return usageError{fmt.Errorf("--only 只支持 config-key-scan 与 openapi-additive-scan，不支持 %s", sub)}
+		}
+		r, err := gates.ResolveComponent(*root, *only)
+		if err != nil {
+			return usageError{err}
+		}
+		ref = &r
 	}
 
 	switch sub {
@@ -84,8 +112,14 @@ func runGate(args []string) error {
 	case "service-hostname-scan":
 		return runServiceHostnameScan(*root)
 	case "config-key-scan":
+		if ref != nil {
+			return runConfigKeyScanOnly(*root, *ref, *strict)
+		}
 		return runConfigKeyScan(*root, *strict)
 	case "openapi-additive-scan":
+		if ref != nil {
+			return runOpenAPIAdditiveScanOnly(*root, *ref)
+		}
 		return runOpenAPIAdditiveScan(*root)
 	default:
 		return fmt.Errorf("门禁 %q 未知", sub)
@@ -234,6 +268,19 @@ func runConfigKeyScan(root string, strict bool) error {
 	if err != nil {
 		return err
 	}
+	return reportConfigKeys(violations, strict, "")
+}
+
+// runConfigKeyScanOnly：--only，只扫这一个组件或外壳；--strict 只作用于它。
+func runConfigKeyScanOnly(root string, ref gates.ComponentRef, strict bool) error {
+	violations, err := gates.ConfigKeyScanComponent(root, ref)
+	if err != nil {
+		return err
+	}
+	return reportConfigKeys(violations, strict, "（只看 "+ref.Rel+"）")
+}
+
+func reportConfigKeys(violations []gates.ConfigKeyViolation, strict bool, scope string) error {
 	errCount, warnCount := 0, 0
 	// 1.x 组件的违规按清单归成一行，免得 make gates 被几十行警告淹没。
 	var pendingFiles []string
@@ -254,13 +301,13 @@ func runConfigKeyScan(root string, strict bool) error {
 		fmt.Fprintf(os.Stderr, "⚠ %s（组件还在 1.x，naming 违规迁移到 2.x 时改名，现在不计入失败）：%s\n", f, strings.Join(pendingKeys[f], " "))
 	}
 	if errCount > 0 {
-		return fmt.Errorf("config-key-scan 发现 %d 条违规", errCount)
+		return fmt.Errorf("config-key-scan%s 发现 %d 条违规", scope, errCount)
 	}
 	if warnCount > 0 {
-		fmt.Printf("✓ config-key-scan：0 条违规（另有 %d 个 1.x 组件的 %d 条 naming 违规只警告，--strict 判红；规则：naming=必须 ^[A-Z][A-Z0-9_]*$，endpoint-suffix=不许以 _ENDPOINT 结尾，reserved=不许撞平台保留名）\n", len(pendingFiles), warnCount)
+		fmt.Printf("✓ config-key-scan%s：0 条违规（另有 %d 个 1.x 组件的 %d 条 naming 违规只警告，--strict 判红；规则：naming=必须 ^[A-Z][A-Z0-9_]*$，endpoint-suffix=不许以 _ENDPOINT 结尾，reserved=不许撞平台保留名）\n", scope, len(pendingFiles), warnCount)
 		return nil
 	}
-	fmt.Println("✓ config-key-scan：0 条违规")
+	fmt.Printf("✓ config-key-scan%s：0 条违规\n", scope)
 	return nil
 }
 
@@ -269,6 +316,20 @@ func runOpenAPIAdditiveScan(root string) error {
 	if err != nil {
 		return err
 	}
+	return reportOpenAPI(violations, notices, "", false)
+}
+
+// runOpenAPIAdditiveScanOnly：--only，只扫这一个组件。只扫一个时 ⚠（本该对比却没能对比）判红：
+// 发布前拿它当判据，"没比"不能算通过。
+func runOpenAPIAdditiveScanOnly(root string, ref gates.ComponentRef) error {
+	violations, notices, err := gates.OpenAPIAdditiveScanComponent(root, ref)
+	if err != nil {
+		return err
+	}
+	return reportOpenAPI(violations, notices, "（只看 "+ref.Rel+"）", true)
+}
+
+func reportOpenAPI(violations []gates.OpenAPIBreakingViolation, notices []gates.OpenAPINotice, scope string, warnFails bool) error {
 	warnCount := 0
 	for _, n := range notices {
 		if n.Warn {
@@ -283,12 +344,15 @@ func runOpenAPIAdditiveScan(root string) error {
 			fmt.Fprintf(os.Stderr, "✗ %s/%s（对比 %s）：%s [%s] %s（决策 0302：契约只增不删不改）\n",
 				v.Component, v.File, v.BaseTag, v.Location, v.Rule, v.Detail)
 		}
-		return fmt.Errorf("openapi-additive-scan 发现 %d 条破坏性变更", len(violations))
+		return fmt.Errorf("openapi-additive-scan%s 发现 %d 条破坏性变更", scope, len(violations))
+	}
+	if warnCount > 0 && warnFails {
+		return fmt.Errorf("openapi-additive-scan%s 没能对比（⚠ 见上），不算通过", scope)
 	}
 	if warnCount > 0 {
 		fmt.Printf("✓ openapi-additive-scan：0 条违规（⚠ %d 个组件没有对比，见上；另有 %d 条正常跳过）\n", warnCount, len(notices)-warnCount)
 		return nil
 	}
-	fmt.Printf("✓ openapi-additive-scan：0 条违规（%d 条跳过提示）\n", len(notices))
+	fmt.Printf("✓ openapi-additive-scan%s：0 条违规（%d 条跳过提示）\n", scope, len(notices))
 	return nil
 }

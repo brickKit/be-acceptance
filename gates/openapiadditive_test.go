@@ -756,3 +756,45 @@ func TestOpenAPIAdditiveScan_不是独立仓库时警告(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenAPIAdditiveScanComponent_只扫这一个(t *testing.T) {
+	needGit(t)
+	root, compDir, specPath := newComponentRepo(t)
+	gitRun(t, compDir, "tag", "1.0.0")
+	write(t, specPath, strings.Replace(openapiBase, "        tax_no: { type: string }\n", "", 1))
+
+	// 另一个组件：破坏了契约、还没初始化的子模块（⚠）——--only mdm/customer 时都不该出现
+	other := filepath.Join(root, "components/erp/sales")
+	write(t, filepath.Join(other, "contracts/sales.openapi.yaml"), openapiBase)
+	gitRun(t, other, "init", "-q", "-b", "main")
+	gitRun(t, other, "add", ".")
+	gitRun(t, other, "commit", "-qm", "base")
+	gitRun(t, other, "tag", "1.0.0")
+	write(t, filepath.Join(other, "contracts/sales.openapi.yaml"), "openapi: 3.0.3\npaths: {}\n")
+	write(t, filepath.Join(root, "components/x/uninit/.keep"), "")
+	write(t, filepath.Join(compDir, "component.yaml"), "metadata:\n  id: mdm/customer\n  version: 2.0.0\n")
+
+	ref, err := ResolveComponent(root, "mdm/customer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vs, notices, err := OpenAPIAdditiveScanComponent(root, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 1 || vs[0].Component != "mdm/customer" || len(notices) != 0 {
+		t.Fatalf("只该有 mdm/customer 的 1 条：%+v %v", vs, notices)
+	}
+	all, _, _ := OpenAPIAdditiveScan(root)
+	if len(all) <= 1 {
+		t.Fatalf("不带 --only 时 erp/sales 的破坏也要报：%+v", all)
+	}
+
+	// 外壳没有 openapi 契约检查：0 违规，一条 ℹ 说明
+	write(t, filepath.Join(root, "shell/be/go-core/component.yaml"), "metadata:\n  id: be/go-core\n  version: 1.0.0\n")
+	ref, _ = ResolveComponent(root, "be/go-core")
+	vs, notices, err = OpenAPIAdditiveScanComponent(root, ref)
+	if err != nil || len(vs) != 0 || len(notices) != 1 || notices[0].Warn {
+		t.Fatalf("外壳：0 违规 + 1 条 ℹ，得到 %+v %v %v", vs, notices, err)
+	}
+}

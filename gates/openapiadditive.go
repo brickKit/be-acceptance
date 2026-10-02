@@ -58,78 +58,105 @@ type OpenAPINotice struct {
 // 组件目录不是独立仓库（子模块没初始化）、浅克隆里找不到 tag → ⚠（本该对比却没能对比）。
 func OpenAPIAdditiveScan(root string) ([]OpenAPIBreakingViolation, []OpenAPINotice, error) {
 	componentsDir := filepath.Join(root, "components")
-	var violations []OpenAPIBreakingViolation
-	var notices []OpenAPINotice
-	info := func(format string, a ...any) {
-		notices = append(notices, OpenAPINotice{Text: fmt.Sprintf(format, a...)})
-	}
-	warn := func(format string, a ...any) {
-		notices = append(notices, OpenAPINotice{Text: fmt.Sprintf(format, a...), Warn: true})
-	}
-
+	sc := &openapiScan{}
 	for _, compDir := range componentDirs(componentsDir) {
-		id := componentID(componentsDir, compDir)
-		specs, err := filepath.Glob(filepath.Join(compDir, "contracts", "*.openapi.yaml"))
-		if err != nil {
+		if err := sc.component(compDir, componentID(componentsDir, compDir)); err != nil {
 			return nil, nil, err
 		}
-		sort.Strings(specs)
+	}
+	return sc.violations, sc.notices, nil
+}
 
-		if !isOwnRepoRoot(compDir) {
-			if entries, _ := os.ReadDir(compDir); len(specs) > 0 || len(entries) == 0 {
-				warn("%s：组件目录不是独立的 git 仓库（子模块没初始化？），没有对比 openapi", id)
-			}
-			continue
-		}
-		tag, ok := latestReleaseTag(compDir)
-		if !ok {
-			switch {
-			case len(specs) == 0:
-			case isShallow(compDir):
-				warn("%s：浅克隆里找不到发布 tag，没有对比 openapi（git fetch --unshallow --tags）", id)
-			default:
-				info("%s：还没有发布 tag（X.Y.Z 或 vX.Y.Z），跳过 openapi 只增检查", id)
-			}
-			continue
-		}
+// OpenAPIAdditiveScanComponent 只扫 ResolveComponent 选中的这一个组件（--only）。外壳没有 openapi 契约，
+// 返回一条 ℹ。
+func OpenAPIAdditiveScanComponent(root string, ref ComponentRef) ([]OpenAPIBreakingViolation, []OpenAPINotice, error) {
+	sc := &openapiScan{}
+	if ref.IsShell {
+		sc.info("%s：外壳没有 openapi 契约，跳过", ref.ID)
+		return nil, sc.notices, nil
+	}
+	if err := sc.component(filepath.Join(root, filepath.FromSlash(ref.Rel)), ref.ID); err != nil {
+		return nil, nil, err
+	}
+	return sc.violations, sc.notices, nil
+}
 
-		// tag 里有、工作区里没有：整份契约被删或改了名。
-		current := map[string]bool{}
-		for _, spec := range specs {
-			current[filepath.Base(spec)] = true
-		}
-		for _, rel := range tagOpenAPIFiles(compDir, tag) {
-			if !current[filepath.Base(rel)] {
-				violations = append(violations, OpenAPIBreakingViolation{Component: id, File: rel, BaseTag: tag,
-					OpenAPIFinding: OpenAPIFinding{Location: rel, Rule: "removed", Detail: "整份契约在工作区里没有了（删了或改了名）"}})
-			}
-		}
+type openapiScan struct {
+	violations []OpenAPIBreakingViolation
+	notices    []OpenAPINotice
+}
 
-		for _, spec := range specs {
-			rel := filepath.ToSlash(filepath.Join("contracts", filepath.Base(spec)))
-			newData, err := os.ReadFile(spec)
-			if err != nil {
-				return nil, nil, fmt.Errorf("读 %s/%s：%w", id, rel, err)
-			}
-			oldData, err := exec.Command("git", "-C", compDir, "show", tag+":"+rel).Output()
-			if err != nil {
-				info("%s/%s：%s 里还没有这份文件（新契约），跳过", id, rel, tag)
-				continue
-			}
-			if _, err := flattenOpenAPI(oldData); err != nil {
-				info("%s/%s：%s 里的旧版本解析不了（%v），跳过", id, rel, tag, err)
-				continue
-			}
-			fs, err := OpenAPIBreaking(oldData, newData)
-			if err != nil {
-				return nil, nil, fmt.Errorf("%s/%s：%w", id, rel, err)
-			}
-			for _, f := range fs {
-				violations = append(violations, OpenAPIBreakingViolation{Component: id, File: rel, BaseTag: tag, OpenAPIFinding: f})
-			}
+func (sc *openapiScan) info(format string, a ...any) {
+	sc.notices = append(sc.notices, OpenAPINotice{Text: fmt.Sprintf(format, a...)})
+}
+
+func (sc *openapiScan) warn(format string, a ...any) {
+	sc.notices = append(sc.notices, OpenAPINotice{Text: fmt.Sprintf(format, a...), Warn: true})
+}
+
+// component 对比一个组件目录下的全部 contracts/*.openapi.yaml。
+func (sc *openapiScan) component(compDir, id string) error {
+	info, warn := sc.info, sc.warn
+	specs, err := filepath.Glob(filepath.Join(compDir, "contracts", "*.openapi.yaml"))
+	if err != nil {
+		return err
+	}
+	sort.Strings(specs)
+
+	if !isOwnRepoRoot(compDir) {
+		if entries, _ := os.ReadDir(compDir); len(specs) > 0 || len(entries) == 0 {
+			warn("%s：组件目录不是独立的 git 仓库（子模块没初始化？），没有对比 openapi", id)
+		}
+		return nil
+	}
+	tag, ok := latestReleaseTag(compDir)
+	if !ok {
+		switch {
+		case len(specs) == 0:
+		case isShallow(compDir):
+			warn("%s：浅克隆里找不到发布 tag，没有对比 openapi（git fetch --unshallow --tags）", id)
+		default:
+			info("%s：还没有发布 tag（X.Y.Z 或 vX.Y.Z），跳过 openapi 只增检查", id)
+		}
+		return nil
+	}
+
+	// tag 里有、工作区里没有：整份契约被删或改了名。
+	current := map[string]bool{}
+	for _, spec := range specs {
+		current[filepath.Base(spec)] = true
+	}
+	for _, rel := range tagOpenAPIFiles(compDir, tag) {
+		if !current[filepath.Base(rel)] {
+			sc.violations = append(sc.violations, OpenAPIBreakingViolation{Component: id, File: rel, BaseTag: tag,
+				OpenAPIFinding: OpenAPIFinding{Location: rel, Rule: "removed", Detail: "整份契约在工作区里没有了（删了或改了名）"}})
 		}
 	}
-	return violations, notices, nil
+
+	for _, spec := range specs {
+		rel := filepath.ToSlash(filepath.Join("contracts", filepath.Base(spec)))
+		newData, err := os.ReadFile(spec)
+		if err != nil {
+			return fmt.Errorf("读 %s/%s：%w", id, rel, err)
+		}
+		oldData, err := exec.Command("git", "-C", compDir, "show", tag+":"+rel).Output()
+		if err != nil {
+			info("%s/%s：%s 里还没有这份文件（新契约），跳过", id, rel, tag)
+			continue
+		}
+		if _, err := flattenOpenAPI(oldData); err != nil {
+			info("%s/%s：%s 里的旧版本解析不了（%v），跳过", id, rel, tag, err)
+			continue
+		}
+		fs, err := OpenAPIBreaking(oldData, newData)
+		if err != nil {
+			return fmt.Errorf("%s/%s：%w", id, rel, err)
+		}
+		for _, f := range fs {
+			sc.violations = append(sc.violations, OpenAPIBreakingViolation{Component: id, File: rel, BaseTag: tag, OpenAPIFinding: f})
+		}
+	}
+	return nil
 }
 
 // tagOpenAPIFiles 列出 tag 里的 contracts/*.openapi.yaml（相对组件仓库根）。

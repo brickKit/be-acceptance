@@ -79,6 +79,12 @@ func ConfigKeyScan(root string) ([]ConfigKeyViolation, error) {
 	return out, nil
 }
 
+// ConfigKeyScanComponent 只扫 ResolveComponent 选中的这一个组件或外壳（--only）：别的组件的违规、
+// 别的组件写坏的清单都不影响结果。
+func ConfigKeyScanComponent(root string, ref ComponentRef) ([]ConfigKeyViolation, error) {
+	return configKeyViolations(root, filepath.Join(root, filepath.FromSlash(ref.Rel), "component.yaml"), ref.IsShell)
+}
+
 // manifestRef 是一份要扫的清单；外壳与组件的过渡期判据不同。
 type manifestRef struct {
 	path    string
