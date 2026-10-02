@@ -76,6 +76,24 @@
   `$var:` 把字面量集中到了一处，但没有别的东西拿它跟组件当前版本比（lint、`up --dry-run`、`bump-version`
   都不看配置值）——authz/iam 一发版，`AUTHZ_BUNDLE_URL`/`IAM_JWKS_URL` 就过期，全部受保护路由悄悄 503。
 
+## 现状（06b：第 8、9 个 gate）
+
+- `config-key-scan`（`gates.ConfigKeyScan`）：`components/*/*/component.yaml` 与 `shell/*/*/component.yaml` 的
+  `configSchema.properties` 键必须满足 `^[A-Z][A-Z0-9_]*$`、不以 `_ENDPOINT` 结尾、不等于平台保留名
+  （`COMPONENT_ID`、`COMPONENT_VERSION`、`PORT`、`BRICKKIT_SERVED_MEMBERS`、`BRICKKIT_SERVED_MEMBERS_CONFIG`，
+  见 `brickkit docs 06-architecture/03-env-injection-contract`）。brickKit 把键名原样当环境变量注入，驼峰键
+  `lint` 与 `up` 都静默接受。报告到 `文件:行`、键、规则（`naming` / `endpoint-suffix` / `reserved`）。
+  过渡期：`metadata.version` 主版本号小于 2 的**组件**（06b 还没迁移的）违规照报，按清单归成一行警告，不计入失败；
+  2.x 组件与全部外壳（外壳本来就在 1.x）违规即判红。全部组件到 2.x 后宽松名单自然为空；`--strict` 现在就全部判红。
+- `openapi-additive-scan`（`gates.OpenAPIAdditiveScan`）：`components/*/*/contracts/*.openapi.yaml` 的工作区版本
+  与组件仓库最近一次发布 tag（语义版本最高的 `X.Y.Z` 或 `vX.Y.Z`，同号取裸 tag；`gen/*` 与预发布不算）里的同一
+  路径比较，只许新增（决策 0302）。判红：删路径 / 方法 / 参数 / 响应码 / 媒体类型 / schema / 属性（参数改 `in` 或改名
+  算删）、改 `type`、`$ref` 换了 schema（组件 schema 按名字比较、各自单独拍平）、删枚举值、参数 / 请求体 / 请求一侧
+  属性由可选变必填、已有操作或已有请求 schema 上新增必填输入。路径级参数并入每个方法，`allOf` / `oneOf` / `anyOf`
+  成员并入同一位置；整个删掉的位置只报它自己。基线是发布 tag 而不是 `main`：已提交未发布的破坏同样拦。
+  没有发布 tag、tag 里还没有这份文件、tag 里的旧版本解析不了 → 跳过并打印一条 `ℹ` 提示。只用 `yaml.v3`，
+  不依赖 oasdiff。
+
 ## 为什么这条门禁要在档 0 之前就装好
 
 设计书决策 91：前五条铁律破了当场起不来，一小时能修；**铁律六破了没有任何症状**，系统跑得更快了，直到某天要上 K8s 全拆才发现拆不动，那时的代价是重写。装晚一天，就多一天没人看着。
