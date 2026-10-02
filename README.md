@@ -101,6 +101,11 @@
   跳过时打提示：新契约、旧版本解析不了、还没发布过 → `ℹ`；组件目录不是独立仓库（子模块没初始化）、浅克隆里找不到
   tag → `⚠`，汇总行写明有几个组件没有对比（不判红）。只用 `yaml.v3`，不依赖 oasdiff。
 
+  **`--only <id>`**（两个 gate 都支持）：只扫一个组件或外壳，`<id>` 是 `metadata.id`（`mdm/customer`）或目录
+  `components/<scope>/<name>`、`shell/<scope>/<name>`。别的组件的违规和写坏的清单不影响结果，`--strict` 只作用于它；
+  openapi 下本组件的 `⚠`（没能对比）判红，外壳只打一条 `ℹ`。找不到组件 → exit 2。装配仓库的 `ship.sh` 发布前跑
+  `--only <id> --strict`，退出码就是判据。
+
   **已知不查**：请求一侧收紧 `maxLength` / `pattern` / `minimum` 等数值与长度约束、新加 `additionalProperties: false`、
   新加 `readOnly` / `writeOnly`；响应 header；`oneOf` / `anyOf` 删掉某个成员（成员按并集合并）。偏保守的误报：
   路径变量改名（`{id}` → `{xid}`）、内联 schema 与等价 `$ref` 互换。
