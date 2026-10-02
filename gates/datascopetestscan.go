@@ -37,8 +37,9 @@ var dimensionRe = regexp.MustCompile(`dimension:\s*([a-z_]+)`)
 //     惯用的大白话补上限定词，比强迫所有组件的测试名都塞术语词更自然。
 var (
 	strongSignals   = []string{"forbidden"}
-	scopeQualifiers = []string{"授权", "范围", "越权", "scope", "owner", "warehouse", "legal", "org", "dept", "别人", "他人"}
-	denialWords     = []string{"拒绝", "看不到", "查不到", "没有"}
+	scopeQualifiers = []string{"授权", "范围", "越权", "scope", "owner", "warehouse", "legal", "org", "dept", "别人", "他人", "无部门", "nodept"}
+	// R62：范围外的单条读取答 404（与不存在无法区分），所以 notfound / 404 也是拒绝词——只在跟限定词成对时算数
+	denialWords = []string{"拒绝", "看不到", "查不到", "没有", "notfound", "404"}
 )
 
 // DataScopeTestScan 检查每个声明了真实 `data_scopes` 维度的组件，测试文件

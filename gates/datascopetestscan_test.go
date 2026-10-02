@@ -156,3 +156,24 @@ func TestDataScopeTestScan_data_scopes为none的组件跳过(t *testing.T) {
 		t.Fatalf("data_scopes: none 的组件不该被扫到，得到 %+v", gaps)
 	}
 }
+
+// R62（06b）：范围外的单条读取改答 404（与不存在无法区分），测试名里出现的是
+// NotFound / 404 而不是 Forbidden——跟范围限定词成对时也要算数；"无部门" 是
+// R60 之后 org 维的典型越权场景。
+func TestHasDataScopeSignal_范围外404或NotFound成对算数(t *testing.T) {
+	for _, n := range []string{
+		"TestGetTask_范围外404与不存在无法区分",
+		"TestGetOpportunity_别人的商机答NotFound",
+		"TestListOrders_无部门的人dept视图看不到任何订单",
+	} {
+		if !hasDataScopeSignal(n) {
+			t.Errorf("%s 应该算数", n)
+		}
+	}
+}
+
+func TestHasDataScopeSignal_孤立的404不算数(t *testing.T) {
+	if hasDataScopeSignal("TestGetCustomer_不存在的id答404") {
+		t.Fatal("单纯的 404（id 不存在）不该被当成数据权限边界测试")
+	}
+}
