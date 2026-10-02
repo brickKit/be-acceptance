@@ -422,8 +422,10 @@ func Test档0_4_迁移可重跑(t *testing.T) {
 	if err != nil {
 		t.Fatalf("docker logs %s 失败：%v", migContainer, err)
 	}
-	if !strings.Contains(string(out), "迁移完成") {
-		t.Fatalf("期望迁移日志包含「迁移完成」，实际：%s", out)
+	// be-sdk-go v0.4.0 起迁移入口统一是 migrate.Main，结束时记一条
+	// msg=迁移结束、outcome=ok/aborted/failed 的结构化日志
+	if !strings.Contains(string(out), "迁移结束") || !strings.Contains(string(out), `"outcome":"ok"`) {
+		t.Fatalf("期望迁移日志包含「迁移结束」且 outcome=ok，实际：%s", out)
 	}
 
 	if status := dockerHealth(t, mdmContainer(t)); status != "healthy" {
