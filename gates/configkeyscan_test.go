@@ -174,3 +174,23 @@ func TestConfigKeyScan_清单不是合法YAML报错(t *testing.T) {
 		t.Fatal("坏 YAML 应该报错，而不是静默通过")
 	}
 }
+
+// 审查 Minor 4：撞保留名 / _ENDPOINT 后缀与版本无关，现在就是线上 bug（平台的值获胜），
+// 1.x 组件也不宽松；过渡期只放宽 naming 一条。
+func TestConfigKeyScan_1x组件只有naming宽松(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "components/erp/sales/component.yaml"),
+		manifestWithKeys("erp/sales", "1.0.26", "pgSchema", "PORT", "UPSTREAM_ENDPOINT"))
+	vs, err := ConfigKeyScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 3 {
+		t.Fatalf("期望 3 条，得到 %+v", vs)
+	}
+	for _, v := range vs {
+		if want := v.Rule == "naming"; v.Pending != want {
+			t.Errorf("%s [%s]：Pending 应为 %v", v.Key, v.Rule, want)
+		}
+	}
+}

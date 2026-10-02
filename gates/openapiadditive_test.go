@@ -1,6 +1,7 @@
 package gates
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -511,7 +512,7 @@ func TestOpenAPIAdditiveScan_没有tag或新文件时跳过并提示(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(vs) != 0 || len(notices) != 1 || !strings.Contains(notices[0], "mdm/customer") {
+	if len(vs) != 0 || len(notices) != 1 || !strings.Contains(notices[0].Text, "mdm/customer") || notices[0].Warn {
 		t.Fatalf("没有 tag：应 0 违规 + 1 条提示，得到 %+v %v", vs, notices)
 	}
 
@@ -521,7 +522,7 @@ func TestOpenAPIAdditiveScan_没有tag或新文件时跳过并提示(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(vs) != 0 || len(notices) != 1 || !strings.Contains(notices[0], "extra.openapi.yaml") {
+	if len(vs) != 0 || len(notices) != 1 || !strings.Contains(notices[0].Text, "extra.openapi.yaml") || notices[0].Warn {
 		t.Fatalf("tag 里没有的新契约：应 0 违规 + 1 条提示，得到 %+v %v", vs, notices)
 	}
 }
@@ -578,4 +579,180 @@ paths:
 		t.Fatal(err)
 	}
 	expectOne(t, fs, "removed", "GET /a › response 404")
+}
+
+// ---- 修复轮（06b T8 B1 审查）----
+
+// I1：tag 里有、工作区里没有的整份契约（删了或改了名）必须报出来。
+func TestOpenAPIAdditiveScan_整份契约删掉或改名要报(t *testing.T) {
+	needGit(t)
+	root, compDir, specPath := newComponentRepo(t)
+	gitRun(t, compDir, "tag", "2.0.0")
+
+	// 改名：customer.openapi.yaml → api.openapi.yaml
+	gitRun(t, compDir, "mv", "contracts/customer.openapi.yaml", "contracts/api.openapi.yaml")
+	vs, notices, err := OpenAPIAdditiveScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 1 || vs[0].File != "contracts/customer.openapi.yaml" || vs[0].Rule != "removed" || vs[0].BaseTag != "2.0.0" {
+		t.Fatalf("改名后旧文件必须报 removed，得到 %+v", vs)
+	}
+	if len(notices) != 1 || !strings.Contains(notices[0].Text, "api.openapi.yaml") {
+		t.Fatalf("新名字照旧按新契约提示，得到 %+v", notices)
+	}
+
+	// 整份删掉：工作区一份契约都不剩
+	if err := os.Remove(filepath.Join(compDir, "contracts/api.openapi.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	_ = specPath
+	vs, _, err = OpenAPIAdditiveScan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 1 || vs[0].File != "contracts/customer.openapi.yaml" || vs[0].Rule != "removed" {
+		t.Fatalf("契约全删了也必须报，得到 %+v", vs)
+	}
+}
+
+// I3：响应一侧不再保证返回。
+func TestOpenAPIBreaking_响应属性不再必填(t *testing.T) {
+	data := mutate(t, func(d map[string]any) { at(t, d, "components", "schemas", "Customer")["required"] = []any{} })
+	expectOne(t, findings(t, data), "no-longer-required", "schema Customer › .id")
+}
+
+func TestOpenAPIBreaking_内联响应属性不再必填(t *testing.T) {
+	old := `openapi: 3.0.3
+paths:
+  /a:
+    get:
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [n], properties: { n: { type: string } } }
+`
+	fs, err := OpenAPIBreaking([]byte(old), []byte(strings.Replace(old, "required: [n], ", "", 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectOne(t, fs, "no-longer-required", "GET /a › response 200 › application/json › .n")
+}
+
+// I3：响应一侧变可空（3.0 的 nullable 与 3.1 的 type 带 null 两种写法）。
+func TestOpenAPIBreaking_响应属性变可空(t *testing.T) {
+	data := mutate(t, func(d map[string]any) {
+		at(t, d, "components", "schemas", "Customer", "properties", "name")["nullable"] = true
+	})
+	expectOne(t, findings(t, data), "became-nullable", "schema Customer › .name")
+
+	data = mutate(t, func(d map[string]any) {
+		at(t, d, "components", "schemas", "Customer", "properties", "name")["type"] = []any{"string", "null"}
+	})
+	expectOne(t, findings(t, data), "became-nullable", "schema Customer › .name")
+}
+
+// 请求一侧放宽成可空、去掉必填都不是破坏。
+func TestOpenAPIBreaking_请求属性变可空不算破坏(t *testing.T) {
+	data := mutate(t, func(d map[string]any) {
+		at(t, d, "components", "schemas", "CreateRequest", "properties", "tax_no")["nullable"] = true
+		at(t, d, "components", "schemas", "CreateRequest", "properties", "name")["type"] = []any{"string", "null"}
+	})
+	if fs := findings(t, data); len(fs) != 0 {
+		t.Fatalf("请求一侧变可空是放宽：%+v", fs)
+	}
+}
+
+// 请求与响应共用的 schema 按保守处理：响应一侧的规则照样适用。
+func TestOpenAPIBreaking_共用schema不再必填也报(t *testing.T) {
+	old := `openapi: 3.0.3
+paths:
+  /a:
+    post:
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/Line" } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Line" } } } }
+components:
+  schemas:
+    Line: { type: object, required: [qty], properties: { qty: { type: string } } }
+`
+	fs, err := OpenAPIBreaking([]byte(old), []byte(strings.Replace(old, "required: [qty], ", "", 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectOne(t, fs, "no-longer-required", "schema Line › .qty")
+}
+
+// Minor 1：format 变了；请求一侧给已有字段新加 enum（收窄）。
+func TestOpenAPIBreaking_format变了(t *testing.T) {
+	old := `openapi: 3.0.3
+paths: {}
+components:
+  schemas:
+    T: { type: object, properties: { at: { type: string, format: date-time }, n: { type: integer, format: int32 } } }
+`
+	neu := strings.Replace(strings.Replace(old, "format: date-time", "format: date", 1), "format: int32", "format: int64", 1)
+	fs, err := OpenAPIBreaking([]byte(old), []byte(neu))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 2 || fs[0].Rule != "format-changed" || fs[1].Rule != "format-changed" ||
+		fs[0].Location != "schema T › .at" || fs[1].Location != "schema T › .n" {
+		t.Fatalf("两处 format 变化都要报，得到 %+v", fs)
+	}
+}
+
+func TestOpenAPIBreaking_请求一侧新加enum(t *testing.T) {
+	data := mutate(t, func(d map[string]any) {
+		at(t, d, "components", "schemas", "CreateRequest", "properties", "tax_no")["enum"] = []any{"A", "B"}
+		// 响应一侧加 enum 只是多了保证，不报
+		at(t, d, "components", "schemas", "Customer", "properties", "name")["enum"] = []any{"X"}
+	})
+	expectOne(t, findings(t, data), "enum-added", "schema CreateRequest › .tax_no")
+}
+
+// Minor 2：基线只取 HEAD 的祖先上的 tag。
+func TestLatestReleaseTag_只认HEAD祖先上的tag(t *testing.T) {
+	needGit(t)
+	_, compDir, specPath := newComponentRepo(t)
+	gitRun(t, compDir, "tag", "2.0.0")
+	gitRun(t, compDir, "checkout", "-q", "-b", "side")
+	write(t, specPath, openapiBase+"# side\n")
+	gitRun(t, compDir, "commit", "-qam", "side")
+	gitRun(t, compDir, "tag", "2.1.0") // 旁支（或比检出的指针更新）的 tag
+	gitRun(t, compDir, "checkout", "-q", "main")
+
+	tag, ok := latestReleaseTag(compDir)
+	if !ok || tag != "2.0.0" {
+		t.Fatalf("HEAD 的祖先上最高是 2.0.0，得到 %q ok=%v", tag, ok)
+	}
+}
+
+// Minor 3：组件目录不是独立仓库（子模块没初始化 / 只是外层仓库的子目录）时，是 ⚠ 不是 ℹ。
+func TestOpenAPIAdditiveScan_不是独立仓库时警告(t *testing.T) {
+	needGit(t)
+	outer := t.TempDir()
+	write(t, filepath.Join(outer, "components/mdm/customer/contracts/customer.openapi.yaml"), openapiBase)
+	gitRun(t, outer, "init", "-q", "-b", "main")
+	gitRun(t, outer, "add", ".")
+	gitRun(t, outer, "commit", "-qm", "outer")
+	gitRun(t, outer, "tag", "1.0.0")
+	if err := os.MkdirAll(filepath.Join(outer, "components/mdm/empty"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	vs, notices, err := OpenAPIAdditiveScan(outer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vs) != 0 || len(notices) != 2 {
+		t.Fatalf("两个目录各一条警告，得到 %+v %+v", vs, notices)
+	}
+	for _, n := range notices {
+		if !n.Warn {
+			t.Errorf("没有对比到的组件要标成警告：%+v", n)
+		}
+	}
 }

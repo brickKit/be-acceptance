@@ -47,7 +47,7 @@ func printUsage() {
 	fmt.Println("  gate data-scope-test-scan --root <path>   声明了 data_scopes 维度的组件必须有越权/拒绝形状的测试（总纲 SOP-W-8）")
 	fmt.Println("  gate dependency-version-scan --root <path> 外壳 go.mod 锁定版本、外壳 version 与 image tag 必须跟真实版本一致（brickkit up --dry-run 拦不住的两类；组件依赖引用/顶层 pin/shell.members 交给 brickkit up --dry-run）")
 	fmt.Println("  gate service-hostname-scan --root <path>  config/*.yaml 与部署文件 vars: 里的版本化服务名必须与 brickkit.yaml 声明的版本一致（不一致=错误，未声明=警告）")
-	fmt.Println("  gate config-key-scan     --root <path> [--strict]  组件与外壳 configSchema 的键必须是 ^[A-Z][A-Z0-9_]*$、不以 _ENDPOINT 结尾、不撞平台保留名（1.x 组件只警告，--strict 也判红）")
+	fmt.Println("  gate config-key-scan     --root <path> [--strict]  组件与外壳 configSchema 的键必须是 ^[A-Z][A-Z0-9_]*$、不以 _ENDPOINT 结尾、不撞平台保留名（1.x 组件的 naming 只警告，--strict 也判红）")
 	fmt.Println("  gate openapi-additive-scan --root <path>  contracts/*.openapi.yaml 相对组件最近一次发布 tag 只增不删不改（决策 0302，buf 只管 .proto）")
 	fmt.Println()
 	fmt.Println("  bump-version --root <path> --plan <计划文件> [--apply]   自动传播一次版本变更（算出所有下游要跟着同步的组件，改好全部文件），计划文件格式见 versionbump 包文档")
@@ -227,7 +227,7 @@ var configKeyRuleText = map[string]string{
 }
 
 // runConfigKeyScan：2.x 组件与全部外壳违规即判红；还在 1.x 的组件（06b 迁移中）
-// 违规照样逐条打印，但只算警告——全部组件到 2.x 之后宽松名单自然为空，门禁就是严格的。
+// 的 naming 违规照样打印，但只算警告（endpoint-suffix / reserved 与版本无关，照样判红）——全部组件到 2.x 之后宽松名单自然为空，门禁就是严格的。
 // --strict 现在就把 1.x 组件也算进失败。
 func runConfigKeyScan(root string, strict bool) error {
 	violations, err := gates.ConfigKeyScan(root)
@@ -251,13 +251,13 @@ func runConfigKeyScan(root string, strict bool) error {
 		fmt.Fprintf(os.Stderr, "✗ %s:%d：%s [%s] %s\n", v.File, v.Line, v.Key, v.Rule, configKeyRuleText[v.Rule])
 	}
 	for _, f := range pendingFiles {
-		fmt.Fprintf(os.Stderr, "⚠ %s（组件还在 1.x，迁移到 2.x 时改名，现在不计入失败）：%s\n", f, strings.Join(pendingKeys[f], " "))
+		fmt.Fprintf(os.Stderr, "⚠ %s（组件还在 1.x，naming 违规迁移到 2.x 时改名，现在不计入失败）：%s\n", f, strings.Join(pendingKeys[f], " "))
 	}
 	if errCount > 0 {
 		return fmt.Errorf("config-key-scan 发现 %d 条违规", errCount)
 	}
 	if warnCount > 0 {
-		fmt.Printf("✓ config-key-scan：0 条违规（另有 %d 个 1.x 组件的 %d 条违规只警告，--strict 判红；规则：naming=必须 ^[A-Z][A-Z0-9_]*$，endpoint-suffix=不许以 _ENDPOINT 结尾，reserved=不许撞平台保留名）\n", len(pendingFiles), warnCount)
+		fmt.Printf("✓ config-key-scan：0 条违规（另有 %d 个 1.x 组件的 %d 条 naming 违规只警告，--strict 判红；规则：naming=必须 ^[A-Z][A-Z0-9_]*$，endpoint-suffix=不许以 _ENDPOINT 结尾，reserved=不许撞平台保留名）\n", len(pendingFiles), warnCount)
 		return nil
 	}
 	fmt.Println("✓ config-key-scan：0 条违规")
@@ -269,8 +269,14 @@ func runOpenAPIAdditiveScan(root string) error {
 	if err != nil {
 		return err
 	}
+	warnCount := 0
 	for _, n := range notices {
-		fmt.Fprintf(os.Stderr, "ℹ %s\n", n)
+		if n.Warn {
+			warnCount++
+			fmt.Fprintf(os.Stderr, "⚠ %s\n", n.Text)
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "ℹ %s\n", n.Text)
 	}
 	if len(violations) > 0 {
 		for _, v := range violations {
@@ -278,6 +284,10 @@ func runOpenAPIAdditiveScan(root string) error {
 				v.Component, v.File, v.BaseTag, v.Location, v.Rule, v.Detail)
 		}
 		return fmt.Errorf("openapi-additive-scan 发现 %d 条破坏性变更", len(violations))
+	}
+	if warnCount > 0 {
+		fmt.Printf("✓ openapi-additive-scan：0 条违规（⚠ %d 个组件没有对比，见上；另有 %d 条正常跳过）\n", warnCount, len(notices)-warnCount)
+		return nil
 	}
 	fmt.Printf("✓ openapi-additive-scan：0 条违规（%d 条跳过提示）\n", len(notices))
 	return nil

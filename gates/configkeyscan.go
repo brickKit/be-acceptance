@@ -22,9 +22,10 @@ type ConfigKeyViolation struct {
 	//   endpoint-suffix —— 以 _ENDPOINT 结尾（平台保留后缀，平台的值会覆盖它）
 	//   reserved        —— 撞了平台保留名
 	Rule string
-	// Pending：组件（不含外壳）的 metadata.version 主版本号小于 2，即 06b 里
-	// 还没迁移到 2.x 的组件。违规照样报出来（那是事实），由调用方决定计不计入失败。
-	// 外壳本来就在 1.x，永远是 false。
+	// Pending：组件（不含外壳）的 metadata.version 主版本号小于 2（06b 里还没迁移到
+	// 2.x 的组件），且违反的是 naming。违规照样报出来（那是事实），由调用方决定计不计入失败。
+	// endpoint-suffix / reserved 与版本无关、现在就是线上 bug（平台的值获胜），永远是 false；
+	// 外壳本来就在 1.x，也永远是 false。
 	Pending bool
 }
 
@@ -120,7 +121,7 @@ func configKeyViolations(root, path string, isShell bool) ([]ConfigKeyViolation,
 	for i := 0; i+1 < len(props.Content); i += 2 {
 		k := props.Content[i]
 		for _, rule := range configKeyRules(k.Value) {
-			out = append(out, ConfigKeyViolation{File: rel, Line: k.Line, Key: k.Value, Rule: rule, Pending: pending})
+			out = append(out, ConfigKeyViolation{File: rel, Line: k.Line, Key: k.Value, Rule: rule, Pending: pending && rule == "naming"})
 		}
 	}
 	return out, nil
