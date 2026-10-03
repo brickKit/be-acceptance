@@ -204,7 +204,8 @@ func (r *Run) checkAccessLines(id string, lines []fakes.LogLine, n *int) {
 
 func (r *Run) checkSubPerm(id string, x *exchange, l fakes.LogLine, n *int) {
 	auth := x.ReqHeader.Get("Authorization")
-	if !strings.HasPrefix(auth, "Bearer ") || !x.authorized() || x.Status >= 500 {
+	// 413 is exempt: whether the body limit is checked before the guard is not specified.
+	if !strings.HasPrefix(auth, "Bearer ") || !x.authorized() || x.Status >= 500 || x.Status == 413 {
 		return
 	}
 	for _, op := range r.comp.Operations {

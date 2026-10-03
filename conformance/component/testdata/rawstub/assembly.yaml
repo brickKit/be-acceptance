@@ -1,0 +1,26 @@
+# Project keys of conformance/rawstub (protocol keys: be-protocol schemas/assembly-protocol.schema.json).
+id: conformance/rawstub
+
+protocol: "1.0"
+language: go                   # not built on an official SDK (P20.2)
+
+conformance:
+  fixtures: conformance/fixtures.yaml
+  skip: []
+
+domain: conformance
+tier: backend
+
+edge_routes:
+  - { path: /conformance/rawstub/kinds/**, auth: none }
+  - { path: /conformance/rawstub/**, auth: required }
+
+data:
+  schema: conformance_rawstub  # the suite replaces it with a random schema on every run
+  role: conformance_rawstub_rw
+
+data_scopes: none
+
+permissions:
+  - { key: conformance.rawstub.view,   title: 查看便签, type: page }
+  - { key: conformance.rawstub.create, title: 新建便签, type: action }

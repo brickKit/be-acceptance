@@ -1,0 +1,8 @@
+# Lifecycle declaration of conformance/rawstub (be-protocol P16; schemas/lifecycle.schema.json).
+lifecycle: v1
+tenant_key: none
+tables:
+  notes:
+    class: master
+  rawstub_migrations:
+    class: platform        # the stub's own migration-state table (not an official SDK, P11.11)

@@ -91,6 +91,15 @@ func withBody(b []byte) reqOpt {
 
 var httpClient = &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{DisableKeepAlives: true}}
 
+// expectClient sends Expect: 100-continue bodies, so a server that refuses a body by its
+// Content-Length can answer before the body is written.
+var expectClient = &http.Client{Timeout: 30 * time.Second,
+	Transport: &http.Transport{DisableKeepAlives: true, ExpectContinueTimeout: 2 * time.Second}}
+
+func withExpectContinue() reqOpt {
+	return func(r *http.Request, _ *[]byte) { r.Header.Set("Expect", "100-continue") }
+}
+
 // send makes one request to base+target (target may carry a query) and records it.
 func send(ctx context.Context, rec *recorder, base, method, target string, opts ...reqOpt) *exchange {
 	req, err := http.NewRequestWithContext(ctx, method, base+target, nil)
@@ -109,7 +118,11 @@ func send(ctx context.Context, rec *recorder, base, method, target string, opts 
 	}
 	x.ReqHeader = req.Header.Clone()
 	start := time.Now()
-	resp, err := httpClient.Do(req)
+	client := httpClient
+	if req.Header.Get("Expect") != "" {
+		client = expectClient
+	}
+	resp, err := client.Do(req)
 	x.Took = time.Since(start)
 	if err != nil {
 		x.Err = err

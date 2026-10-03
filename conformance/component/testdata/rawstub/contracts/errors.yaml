@@ -1,0 +1,19 @@
+# Reason catalogue of conformance/rawstub (be-protocol P4.4). Append-only.
+domain: conformance/rawstub
+reasons:
+  - reason: NOTE_TITLE_REQUIRED
+    code: INVALID_ARGUMENT
+    http: 400
+    params: []
+    title:   { en: "Title required", zh: "缺少标题" }
+    message: { en: "A note needs a non-empty title", zh: "便签必须有非空的标题" }
+    since: 1.0.0
+    deprecated: false
+  - reason: NOTE_ID_INVALID
+    code: INVALID_ARGUMENT
+    http: 400
+    params: [id]
+    title:   { en: "Invalid note ID", zh: "便签 ID 不合法" }
+    message: { en: "{id} is not a UUID", zh: "{id} 不是 UUID" }
+    since: 1.0.0
+    deprecated: false

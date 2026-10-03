@@ -1,0 +1,54 @@
+# Conformance fixtures of conformance/rawstub (format: be-protocol schemas/fixtures.schema.json).
+users:
+  alice:  { roles: [rawstub_editor], dept_path: /1/3/ }
+  nobody: { roles: [],               dept_path: /1/3/ }
+
+grants:
+  rawstub_editor:
+    keys: [conformance.rawstub.view, conformance.rawstub.create]
+    default_level: all
+
+resources:
+  notes:
+    create:
+      method: POST
+      path: /conformance/rawstub/notes
+      as: alice
+      key: conformance.rawstub.create
+      body_file: samples/note-create.json
+      id: $.id
+      expect: { status: 201 }
+    get:
+      method: GET
+      path: /conformance/rawstub/notes/{id}
+      key: conformance.rawstub.view
+    list:
+      method: GET
+      path: /conformance/rawstub/notes
+      key: conformance.rawstub.view
+    get_over_grpc:
+      grpc: conformance.rawstub.v1.NoteService/GetNote
+      body: { id: "{id}" }
+  kinds:
+    list:
+      method: GET
+      path: /conformance/rawstub/kinds
+      expect: { status: 200 }
+  owners:
+    put_me:
+      method: PUT
+      path: /conformance/rawstub/owners/me
+      as: alice
+      body_file: samples/owner-me.json
+      expect: { status: 200 }
+
+pii_log:
+  via: resources.owners.put_me
+  msg: owner_profile_updated
+  fields: [phone, email]
+
+slow:
+  method: POST
+  path: /conformance/rawstub/slow
+  key: conformance.rawstub.view
+  query: { ms: "{ms}" }

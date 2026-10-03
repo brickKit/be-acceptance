@@ -1,0 +1,126 @@
+openapi: 3.1.0
+info:
+  title: conformance/rawstub, user plane
+  version: "1.0.0"
+  description: |
+    The user-plane REST surface of the protocol stub. Every operation declares its guard in
+    `x-be-permission`: a permission key, `authenticated` or `public` (be-protocol P6.2).
+    Operations endpoints (`/healthz`, `/readyz`, `/metrics`, `/_be/info`) are not listed here.
+  license: { name: Apache-2.0, identifier: Apache-2.0 }
+servers:
+  - url: /conformance/rawstub
+security:
+  - bearer: []
+paths:
+  /kinds:
+    get:
+      operationId: listKinds
+      summary: Static reference rows; no token, no database, works before the bundle loads
+      security: []
+      x-be-permission: public
+      responses:
+        "200":
+          description: the kinds
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { type: object } }
+  /owners/me:
+    put:
+      operationId: putMyOwnerProfile
+      summary: Accepts the caller's profile; logs msg=owner_profile_updated with display_name, phone, email
+      x-be-permission: authenticated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [display_name]
+              properties:
+                display_name: { type: string }
+                phone: { type: string }
+                email: { type: string }
+      responses:
+        "200":
+          description: the profile as stored
+          content:
+            application/json:
+              schema: { type: object }
+  /notes:
+    get:
+      operationId: listNotes
+      summary: The newest notes (at most 50)
+      x-be-permission: conformance.rawstub.view
+      responses:
+        "200":
+          description: a page of notes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Note" } }
+                  next_cursor: { type: string }
+    post:
+      operationId: createNote
+      summary: Creates a note owned by the caller
+      x-be-permission: conformance.rawstub.create
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string }
+      responses:
+        "201":
+          description: the created note
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Note" }
+  /notes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getNote
+      summary: One note; 404 NOT_FOUND when absent
+      x-be-permission: conformance.rawstub.view
+      responses:
+        "200":
+          description: the note
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Note" }
+  /slow:
+    post:
+      operationId: slow
+      summary: Waits ms milliseconds, then answers 200 (deadline and shutdown cases)
+      x-be-permission: conformance.rawstub.view
+      x-be-deadline-seconds: 5
+      parameters:
+        - { name: ms, in: query, required: true, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: waited
+          content:
+            application/json:
+              schema: { type: object }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    Note:
+      type: object
+      required: [id, title, owner_id, created_at]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        owner_id: { type: string }
+        created_at: { type: string, format: date-time }

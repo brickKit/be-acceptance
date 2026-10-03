@@ -1,0 +1,22 @@
+// System plane of conformance/rawstub.
+syntax = "proto3";
+
+package conformance.rawstub.v1;
+
+service NoteService {
+  // One note by ID. A system read without data scopes.
+  rpc GetNote(GetNoteRequest) returns (Note) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message GetNoteRequest {
+  string id = 1;
+}
+
+message Note {
+  string id = 1;
+  string title = 2;
+  string owner_id = 3;
+  string created_at = 4; // RFC 3339 UTC
+}

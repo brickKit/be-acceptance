@@ -1,0 +1,30 @@
+# Deliberately broken builds of conformance/rawstub (build argument BROKEN=<name>). Each breaks
+# exactly one rule; the suite's self-test asserts that each fails the cases in must_fail and
+# passes every other MUST case of core, obs, err and auth. BROKEN unset or empty = the correct
+# stub; an unknown name exits 78 at start.
+variants:
+  - name: accept-refresh
+    breaks: P5.3
+    behaviour: the token check accepts typ=refresh as an access token
+    must_fail: [CP-AUTH-03]
+  - name: healthz-db
+    breaks: P1.3
+    behaviour: /healthz runs SELECT 1 on PostgreSQL and answers 503 when it fails
+    must_fail: [CP-CORE-04]
+    also_fails: [CP-CORE-03]
+  - name: leak-internal
+    breaks: P4.3
+    behaviour: an INTERNAL error's body carries the raw error text (the PostgreSQL error and SQLSTATE) in detail
+    must_fail: [CP-ERR-03]
+  - name: ipv4-only
+    breaks: P1.13
+    behaviour: every port listens on 0.0.0.0 only; ::1 is refused
+    must_fail: [CP-CORE-13]
+  - name: readyz-live-db
+    breaks: P1.4
+    behaviour: /readyz runs SELECT 1 on every call once ready and answers 503 while PostgreSQL is down
+    must_fail: [CP-CORE-05]
+  - name: no-redact
+    breaks: P18.2
+    behaviour: log records are written without the personal-data redaction
+    must_fail: [CP-OBS-04]

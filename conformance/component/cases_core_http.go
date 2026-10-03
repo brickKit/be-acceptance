@@ -177,7 +177,12 @@ func caseCore09(ctx context.Context, r *Run) {
 		limit = 1 << 20
 	}
 	body := []byte(`{"pad":"` + strings.Repeat("a", limit) + `"}`)
-	x := r.call(ctx, op.Method, r.target(op), withToken(r.token(r.personaFor(op))), withBody(body))
+	tok := r.token(r.personaFor(op))
+	x := r.call(ctx, op.Method, r.target(op), withToken(tok), withBody(body))
+	if x.Err != nil { // the server answered and closed while the body was still being written
+		r.ev.pass(id, "retried with Expect: 100-continue after: "+x.Err.Error())
+		x = r.call(ctx, op.Method, r.target(op), withToken(tok), withBody(body), withExpectContinue())
+	}
 	r.ev.check(id, x.Status == 413 && x.reason() == "BODY_TOO_LARGE",
 		"%s %s with %d bytes (limit %d) = %d %s, want 413 BODY_TOO_LARGE", op.Method, op.Path, len(body), limit, x.Status, x.reason())
 }

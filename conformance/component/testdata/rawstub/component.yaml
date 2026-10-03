@@ -1,0 +1,82 @@
+# conformance/rawstub: the "fourth language" proof of be-protocol 1.0. A component in plain Go
+# with no be-sdk import, written from the protocol text alone, that implements just enough to
+# pass the core, obs, err and auth profiles of the component conformance suite. Not a project
+# component: never added to a brickkit.yaml, no registry rows. Build argument BROKEN=<variant>
+# (broken-variants.yaml) breaks exactly one rule.
+apiVersion: brickkit/v1
+kind: Component
+
+metadata:
+  id: conformance/rawstub
+  name: Raw stub (conformance suite self-test)
+  version: 1.0.0
+  description: Protocol stub in plain Go without an official SDK; proves be-protocol is implementable from its text.
+  repository: https://github.com/brickKit/be-acceptance
+  license: Apache-2.0
+  vendor: brickKit
+
+tags: [conformance, fixture]
+
+artifacts:
+  - type: api-contract
+    format: protobuf
+    files: [contracts/conformance/rawstub/v1/rawstub.proto]
+  - type: api-contract
+    format: openapi
+    files: [contracts/rawstub.openapi.yaml]
+  - type: metadata
+    files: [assembly.yaml, contracts/errors.yaml, migrations/lifecycle.yaml, conformance/fixtures.yaml]
+
+configSchema:
+  type: object
+  properties:
+    # db profile (secrets as files: mount: file, named _FILE, P2.7, P2.12)
+    PG_HOST: {type: string}
+    PG_PORT: {type: integer, default: 5432}
+    PG_DATABASE: {type: string}
+    PG_USER: {type: string}
+    PG_PASSWORD_FILE: {type: string, secret: true, mount: file}
+    PG_OWNER_USER: {type: string}
+    PG_OWNER_PASSWORD_FILE: {type: string, secret: true, mount: file}
+    PG_SCHEMA: {type: string}
+    PG_POOL_MAX: {type: integer, default: 10}
+    PG_POOL_MIN_IDLE: {type: integer, default: 2}
+    PG_POOL_ACQUIRE_TIMEOUT: {type: string, default: 5s}
+    PG_CONN_MAX_LIFETIME: {type: string, default: 30m}
+    PG_CONN_MAX_IDLE_TIME: {type: string, default: 5m}
+    PG_MIGRATION_HOST: {type: string}
+    PG_MIGRATION_PORT: {type: integer}
+    # auth
+    AUTHZ_URL: {type: string}
+    IAM_URL: {type: string}
+    IAM_ISSUER: {type: string}
+    TENANT_ID: {type: string}
+    # core / obs / err / grpc
+    OTEL_BASE_URL: {type: string, default: ""}
+    DEFAULT_LOCALE: {type: string, default: zh-CN}
+    LOG_LEVEL: {type: string, default: info}
+    HTTP_DEFAULT_TIMEOUT: {type: string, default: 10s}
+    GRPC_MAX_CONNECTION_AGE: {type: string, default: 5m}
+    SHUTDOWN_GRACE: {type: string, default: 25s}
+  required: [PG_HOST, PG_DATABASE, PG_USER, PG_PASSWORD_FILE, PG_OWNER_USER, PG_OWNER_PASSWORD_FILE, PG_SCHEMA,
+             AUTHZ_URL, IAM_URL, IAM_ISSUER, TENANT_ID]
+
+deployment:
+  type: container
+  build: {context: ., dockerfile: Dockerfile}
+  port: 8080
+  protocol: http
+  extraPorts:
+    - {name: grpc, port: 9090, protocol: grpc}
+  stopGracePeriodSeconds: 30
+
+migration:
+  command: [/app/rawstub, migrate, up]
+
+healthCheck:
+  type: http
+  path: /healthz
+
+readinessCheck:
+  type: http
+  path: /readyz
