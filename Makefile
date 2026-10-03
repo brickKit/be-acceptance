@@ -106,5 +106,7 @@ compconf-unit:  ## compconf 的单测（不需要 docker）
 compconf-infra:  ## 一次性 PG16 / NATS / 容器操作的真机测试（需要 docker）
 	go test -tags compconf_docker -count=1 -run TestEnv ./conformance/component/infra/
 
-compconf-selftest:  ## 先见红再信绿：rawstub 全绿，每个坏变体恰好在自己的用例上判红（需要 docker，约 10–15 分钟）
-	go test -tags compconf_docker -count=1 -timeout 60m -v -run 'TestSelftest' ./conformance/component/ 2>&1 | tail -120
+compconf-selftest:  ## 先见红再信绿：rawstub 全绿，每个坏变体恰好在自己的用例上判红（需要 docker；17 轮串行，约 60–90 分钟）
+	@mkdir -p build
+	@# 不接管道：管道会把 go test 的退出码换成 tail 的，测试失败时这个目标照样返回成功。全量日志在 build/compconf-selftest.log。
+	go test -tags compconf_docker -count=1 -timeout 180m -v -run 'TestSelftest' ./conformance/component/ > build/compconf-selftest.log 2>&1; rc=$$?; tail -120 build/compconf-selftest.log; exit $$rc

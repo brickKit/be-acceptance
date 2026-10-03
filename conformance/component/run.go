@@ -30,6 +30,7 @@ type Options struct {
 	DepContracts map[string]string // dependency ID -> directory with its .proto files
 	FakeHost     string            // how containers reach the fakes; default host.docker.internal
 	Keep         bool              // keep containers and the run directory for debugging
+	MaxHeapMB    int               // ceiling on the suite's own heap in MiB; 0 = COMPCONF_MAX_HEAP_MB or DefaultMaxHeapMB, negative = none
 	Progress     io.Writer
 }
 
@@ -81,6 +82,7 @@ type Run struct {
 	replica    *instance // the second serving instance of the jobs profile
 	scope      *scopeWorld
 	bus        busRecorder
+	mem        memGuard
 	oldSecrets []string // secret values replaced during the run (CP-DB-06), still never logged
 }
 
@@ -119,15 +121,27 @@ func Execute(ctx context.Context, o Options) (*Report, error) {
 	}
 	started := time.Now()
 	r.logf("compconf %s %s: profiles %v, running %v", comp.ID(), comp.Version(), r.selected, r.ran)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	defer r.teardown()
+	// Deferred last, so it stops first: the guard must not force a second teardown while the
+	// regular one is removing the containers.
+	defer r.startMemGuard(cancel, maxHeapBytes(o))()
 	if err := r.setup(ctx); err != nil {
 		return nil, fmt.Errorf("setup: %w", err)
 	}
 	for _, s := range scenario() {
+		if ctx.Err() != nil {
+			break
+		}
 		if s.Case != "" && !contains(r.ran, r.profileOf(s.Case)) {
 			continue
 		}
 		r.runStep(ctx, s)
+	}
+	if r.mem.tripped.Load() {
+		return nil, fmt.Errorf("memory guard: the suite's heap reached %d MiB, over the ceiling of %d MiB; the log says what grew and compconf-heap.pprof has the allocation sites; no report is written",
+			r.mem.heap.Load()>>20, r.mem.limit>>20)
 	}
 	rep := buildReport(cat, r.ev, r.selected, r.ran, comp.Assembly.Conformance.Skip, reportMeta{
 		Component: comp.ID(), Version: comp.Version(), ImageRef: o.Image, ImageDigest: digest,
