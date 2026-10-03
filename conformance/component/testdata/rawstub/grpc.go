@@ -142,6 +142,7 @@ func newGRPCServer(a *App) *grpc.Server {
 		grpc.UnaryInterceptor(a.grpcInterceptor),
 	)
 	s.RegisterService(&desc, a)
+	registerLifecycle(s, a)
 	return s
 }
 

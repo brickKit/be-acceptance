@@ -1,6 +1,6 @@
 # conformance/rawstub: the "fourth language" proof of be-protocol 1.0. A component in plain Go
-# with no be-sdk import, written from the protocol text alone, that implements just enough to
-# pass the core, obs, err and auth profiles of the component conformance suite. Not a project
+# with no be-sdk import, written from the protocol text alone, that passes the core, obs, err,
+# auth, grpc, db, jobs and lifecycle profiles of the component conformance suite. Not a project
 # component: never added to a brickkit.yaml, no registry rows. Build argument BROKEN=<variant>
 # (broken-variants.yaml) breaks exactly one rule.
 apiVersion: brickkit/v1

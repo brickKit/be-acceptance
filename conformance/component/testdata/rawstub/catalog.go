@@ -47,6 +47,8 @@ var beReasons = map[string]reasonEntry{
 		"A service this request needs ({dependency}) cannot be reached right now. Try again shortly.", "这个请求依赖的服务（{dependency}）暂时连不上，请稍后再试。"},
 	"REQUEST_CANCELLED": {"CANCELLED", 499, "Request cancelled", "请求已取消",
 		"The request was cancelled by the caller before it finished.", "请求在完成之前被调用方取消了。"},
+	"CAPABILITY_UNAVAILABLE": {"UNIMPLEMENTED", 501, "Not available in this installation", "本系统未提供此功能",
+		"The installed provider does not offer {capability}.", "当前安装的提供方不支持 {capability}。"},
 	"BATCH_TOO_LARGE": {"INVALID_ARGUMENT", 400, "Batch too large", "批量过大",
 		"{field} has {got} items; at most {max} are allowed.", "{field} 有 {got} 项，最多允许 {max} 项。"},
 	"DB_TOO_MANY_CONNECTIONS": {"UNAVAILABLE", 503, "Service busy", "服务繁忙",

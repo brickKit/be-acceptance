@@ -40,3 +40,7 @@ variants:
     breaks: P2.9
     behaviour: PG_PASSWORD_FILE is read once at start; a replaced file is never read again
     must_fail: [CP-DB-06]
+  - name: cron-no-claim
+    breaks: P14.2
+    behaviour: every replica runs each cron slot whether or not its INSERT claimed it
+    must_fail: [CP-JOBS-01]

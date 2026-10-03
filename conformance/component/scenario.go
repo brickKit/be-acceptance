@@ -3,7 +3,7 @@ package compconf
 import "context"
 
 // ImplementedProfiles are the profiles this suite version runs.
-var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc", "db"}
+var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc", "db", "jobs", "lifecycle"}
 
 // step is one ordered action of the scenario, attributed to the case it exercises; Case ""
 // marks a setup step several cases depend on, which always runs.
@@ -22,6 +22,7 @@ func scenario() []step {
 		{"CP-CORE-01", "migrate twice; unknown argument", caseCore01},
 		{"CP-CORE-02", "configuration errors exit 78", caseCore02},
 		{"", "migrate (when CP-CORE-01 did not run)", stepMigrate},
+		{"CP-LIFE-01", "partitions right after the migration", stepLife01Migrated},
 		{"", "start with PostgreSQL, the bus and authz down", stepStartWithDepsDown},
 		{"CP-CORE-04", "/healthz with PostgreSQL stopped", caseCore04},
 		{"", "PostgreSQL back", stepDatabaseBack},
@@ -31,6 +32,7 @@ func scenario() []step {
 		{"CP-CORE-05", "readiness latch", caseCore05Latch},
 		{"CP-AUTH-13", "decisions with authz stopped", caseAuth13},
 		{"", "authz back", stepAuthzBack},
+		{"CP-LIFE-01", "first write", caseLife01Write},
 		{"CP-CORE-07", "/bin/sh and wget", caseCore07},
 		{"CP-CORE-10", "request ID", caseCore10},
 		{"CP-CORE-11", "/_be/info", caseCore11},
@@ -64,6 +66,17 @@ func scenario() []step {
 		{"CP-DB-03", "pool limit under load", caseDB03},
 		{"CP-DB-05", "no owner session; partition upkeep", caseDB05},
 		{"CP-DB-06", "password rotation", caseDB06},
+		{"", "second replica", stepSecondReplica},
+		{"CP-JOBS-01", "cron slots across two replicas", caseJobs01},
+		{"CP-JOBS-02", "singleton takeover", caseJobs02},
+		{"CP-JOBS-05", "terminated sessions", caseJobs05},
+		{"CP-JOBS-03", "queued job runs once", caseJobs03},
+		{"", "second replica stops", stepStopReplica},
+		{"CP-JOBS-04", "rolled-back enqueue", caseJobs04},
+		{"CP-JOBS-06", "job run", caseJobs06},
+		{"CP-LIFE-02", "time ranges", caseLife02},
+		{"CP-LIFE-03", "lifecycle contract mounted", caseLife03},
+		{"CP-LIFE-04", "lifecycle.yaml", caseLife04},
 		{"CP-AUTH-08", "stale token", caseAuth08},
 		{"CP-OBS-03", "metrics", caseObs03},
 		{"CP-CORE-06", "SIGTERM", caseCore06},

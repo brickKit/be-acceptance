@@ -108,7 +108,7 @@ func (s *Scheduler) cronLoop(ctx context.Context, j job) {
 			continue // the slot is tried again on the next tick
 		}
 		tried = slot
-		if !won {
+		if !won && broken != "cron-no-claim" {
 			continue
 		}
 		result := s.runOnce(ctx, j)

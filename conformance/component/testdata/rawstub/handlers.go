@@ -116,8 +116,8 @@ func (a *App) info(rc *reqCtx) error {
 		"protocol":          "1.0",
 		"sdk":               nil,
 		"language":          map[string]string{"name": "go", "version": strings.TrimPrefix(runtime.Version(), "go")},
-		// The profiles the manifests select (grpc port, PG_SCHEMA): P20.4 compares this list
-		// with the suite's selection. The stub only passes core, obs, err and auth.
+		// The profiles the manifests select (grpc port, PG_SCHEMA): P20.4 requires this list to
+		// equal the suite's selection.
 		"profiles":   []string{"core", "obs", "err", "auth", "grpc", "db", "jobs", "lifecycle"},
 		"ports":      map[string]int{"http": 8080, "grpc": 9090},
 		"migrations": map[string]any{"component": comp, "platform": a.platformInfo()},

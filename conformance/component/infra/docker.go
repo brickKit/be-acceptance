@@ -241,3 +241,15 @@ func (c *Container) Remove(ctx context.Context) error {
 	_, err := docker(ctx, "rm", "-f", "-v", c.Name)
 	return err
 }
+
+// Pause freezes every process of the container (a holder that stops renewing, without dying).
+func (c *Container) Pause(ctx context.Context) error {
+	_, err := docker(ctx, "pause", c.Name)
+	return err
+}
+
+// Unpause resumes a paused container.
+func (c *Container) Unpause(ctx context.Context) error {
+	_, err := docker(ctx, "unpause", c.Name)
+	return err
+}

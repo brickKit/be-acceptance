@@ -42,6 +42,7 @@ func routes() []*route {
 		{method: "POST", pattern: userPrefix + "/notes/{id}/archive", guard: "conformance.rawstub.archive", handle: (*App).archiveNote},
 		{method: "POST", pattern: userPrefix + "/slow", guard: "conformance.rawstub.view", deadline: 5 * time.Second, handle: (*App).slow},
 	}
+	rs = append(rs, lifecycleRoutes()...)
 	for _, r := range rs {
 		r.segs = strings.Split(strings.TrimPrefix(r.pattern, "/"), "/")
 	}
@@ -62,11 +63,12 @@ func (a *App) match(method, path string) (*route, map[string]string) {
 		ok := true
 		for i, s := range r.segs {
 			if strings.HasPrefix(s, "{") {
-				if segs[i] == "" {
+				name, suffix, _ := strings.Cut(strings.TrimPrefix(s, "{"), "}") // {unit}:thaw
+				if segs[i] == "" || !strings.HasSuffix(segs[i], suffix) || len(segs[i]) == len(suffix) {
 					ok = false
 					break
 				}
-				params[strings.Trim(s, "{}")] = segs[i]
+				params[name] = strings.TrimSuffix(segs[i], suffix)
 			} else if s != segs[i] {
 				ok = false
 				break

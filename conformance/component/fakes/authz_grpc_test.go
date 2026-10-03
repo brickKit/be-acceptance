@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	authzv2 "github.com/brickKit/contract-infra-authz/v2/gen/go/infra/authz/v2"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -33,8 +32,7 @@ func dialAuthz(t *testing.T, f *Authz) authzv2.AuthzProviderClient {
 }
 
 func asCaller(id string) context.Context {
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second) //nolint:govet // test
-	return metadata.AppendToOutgoingContext(ctx, "be-caller", id)
+	return metadata.AppendToOutgoingContext(context.Background(), "be-caller", id)
 }
 
 func reasonOf(err error) (codes.Code, string, map[string]string) {

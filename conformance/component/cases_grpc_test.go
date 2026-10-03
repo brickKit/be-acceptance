@@ -31,3 +31,14 @@ func TestMaxItemsReadsTheLimitsOption(t *testing.T) {
 		t.Fatalf("default = %d", got)
 	}
 }
+
+func TestLifecycleServiceCompiles(t *testing.T) {
+	root, _ := fs.Sub(beprotocol.FS, "proto")
+	ms, err := fakes.CompileProtos(root, fakes.ProtoImports(root)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := ms["be.lifecycle.v1.Lifecycle/ListUnits"]; !ok || len(ms) != 12 {
+		t.Fatalf("methods = %d", len(ms))
+	}
+}

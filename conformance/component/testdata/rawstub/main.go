@@ -1,5 +1,5 @@
 // Command rawstub is conformance/rawstub: a be-protocol 1.0 component in plain Go with no
-// official SDK, written from the protocol text (profiles core, obs, err, auth).
+// official SDK, written from the protocol text (profiles core, obs, err, auth, grpc, db, jobs, lifecycle).
 package main
 
 import (
@@ -29,7 +29,7 @@ var broken = ""
 
 var brokenVariants = map[string]bool{"": true, "accept-refresh": true, "healthz-db": true, "leak-internal": true, "ipv4-only": true,
 	"readyz-live-db": true, "no-redact": true, "no-goaway": true,
-	"unbounded-pool": true, "secret-read-once": true}
+	"unbounded-pool": true, "secret-read-once": true, "cron-no-claim": true}
 
 // App holds the running component.
 type App struct {

@@ -7,19 +7,21 @@
 | 目录 | 装什么 | 什么时候 |
 |---|---|---|
 | `closedloop/` | 业务闭环测试：跨组件事件握手、Saga 补偿等端到端场景 | 有第一条跨组件业务流程时 |
-| `conformance/component/` | 组件一致性黑盒套件 compconf（be-protocol 1.0）：对着运行中的容器判定任何语言的组件 | 06b 阶段 B 起（A1–A2：core / obs / err / auth） |
+| `conformance/component/` | 组件一致性黑盒套件 compconf（be-protocol 1.0）：对着运行中的容器判定任何语言的组件 | 06b 阶段 B 起（A1–A2：core / obs / err / auth；A3–A4 波次 2：grpc / db / jobs / lifecycle） |
 | `gates/` | 跨仓库才看得出来的门禁：**铁律六**（组件互不 import）、**拆回门禁**（合并态能不能拆回去） | 铁律六见 Task 9；拆回门禁见阶段四 |
 
 ⚠️ **`module-check`（铁律七）不在这里**：那是逐仓库的 grep 检查，落在各组件自己的 `Makefile`（总纲 §I 门禁 9）。`be-acceptance` 只管跨仓库才看得出来的那些。
 
-## 组件一致性套件 compconf（06b 阶段 B，A1–A2）
+## 组件一致性套件 compconf（06b 阶段 B，A1–A4 部分）
 
-`be-acceptance conformance component --dir <组件根目录> --image <镜像> [--out <目录>] [--profiles core,obs,err,auth] [--dep-contracts <依赖ID>=<proto 目录>] [--keep]`
+`be-acceptance conformance component --dir <组件根目录> --image <镜像> [--out <目录>] [--profiles core,obs,err,auth,grpc,db,jobs,lifecycle] [--dep-contracts <依赖ID>=<proto 目录>] [--keep]`
 
-- **钉住的协议**：`github.com/brickKit/be-protocol v1.0.0-rc.1`（用例目录 `schemas/conformance-cases.yaml`、全部 schema、widget/peer 夹具都从它的 `go:embed` 读），族契约 `contract-infra-authz/v2 v2.0.0-rc.1`、`contract-infra-iam v1.0.0-rc.1`（只读 schema）。三个都是纯数据模块，`make import-scan` 白名单放行。
-- **profile 自动选**：按 conformance-cases.yaml 的 when 规则读 `component.yaml`、`assembly.yaml`、OpenAPI 的 `x-be-permission`。本版本实现 core / obs / err / auth；其它被选中的 profile 在报告里记为 skipped（"本套件版本尚未实现"），`compconf-record-scan` 将来不会放过它们。
+- **钉住的协议**：`github.com/brickKit/be-protocol v1.0.0-rc.2`（用例目录 `schemas/conformance-cases.yaml`、全部 schema、widget/peer 夹具都从它的 `go:embed` 读），族契约 `contract-infra-authz/v2 v2.0.0-rc.2`（schema、决策向量、生成的 gRPC 代码）、`contract-infra-iam v1.0.0-rc.2`（只读 schema）。三个都是纯数据模块，`make import-scan` 白名单放行。
+- **profile 自动选**：按 conformance-cases.yaml 的 when 规则读 `component.yaml`、`assembly.yaml`、OpenAPI 的 `x-be-permission`。本版本实现 core / obs / err / auth / grpc / db / jobs / lifecycle；scope、outbound、events-pub、events-sub、idempotency、blob、shell 被选中时记为 skipped（"本套件版本尚未实现"），`compconf-record-scan` 将来不会放过它们。条件不成立的用例（catalogue 的 `applies_when`、缺对应夹具）记 `not_applicable`（rc.2），既不算过也不算挂。
 - **一次性基础设施**：前缀 `sdkb-acc-<随机>` 的 docker 网络、PostgreSQL 16、NATS 2.12（`-js`），跑完全部删除；从不碰 be-* 基础资源和 brickkit_db / brickkit_test_db。每次现建随机库、属主角色与运行角色（运行角色只有 USAGE + DML）。
-- **四个假服务**（进程内，容器经 `host.docker.internal` 访问）：fake-iam（JWKS + 发现元数据 + 签发合法与故意出错的令牌 + 轮换）、fake-authz（bundle 带 ETag、空 changefeed、可停可起）、fake-peer（按依赖 proto 动态应答 gRPC 并答用户面 HTTP，可失败/挂起/变慢，记录元数据、截止时间、连接数、请求头）、observer（OTLP/HTTP 接收 + 日志捕获）。
+- **四个假服务**（进程内，容器经 `host.docker.internal` 访问）：fake-iam（JWKS + 发现元数据 + 签发合法与故意出错的令牌 + 轮换）、fake-authz（REST：bundle 带 ETag、元组 changefeed、tuples；gRPC：`infra.authz.v2.AuthzProvider` 接在 `AUTHZ_GRPC_URL`，必须带 be-caller，可选能力未开答 `CAPABILITY_UNAVAILABLE`；两个面一起可停可起）、fake-peer（按依赖 proto 动态应答 gRPC 并答用户面 HTTP，可失败/挂起/变慢，记录元数据、截止时间、连接数、请求头）、observer（OTLP/HTTP 接收 + 日志捕获）。
+- **调速键**：`EVENTS_BACKOFF`、`EVENTS_MAX_DELIVER`、`GRPC_MAX_CONNECTION_AGE=10s`，以及 `JOBS_OVERRIDES`（`be.cleanup` @every 2s、`be.lifecycle` 3s、fixtures `jobs.cron` 的覆盖）——只调运维本来就能调的键。
+- **authzeval/**：套件自己的 authz/2 参考求值器（E1–E11），过契约全部决策向量；scope profile 将用它算期望可见性。
 - **密钥**像 brickKit 一样以只读目录挂到 `/run/brickkit/secrets/<版本化服务名>/<KEY>`，环境变量里只有路径。
 - **报告**：`compconf-report.json`（按 `compconf-report.schema.json` 校验后才写）+ `compconf-report.md`；每条用例的 message 以它测的需求 ID 开头（如 `[P5.3 P5.9]`）。任一 MUST 失败 → exit 1。
 - **自检**：`testdata/rawstub/` 是不用任何 SDK、只按规范文本写的 Go 桩组件（"第四门语言"证明），外加几个故意写坏的变体（`broken-variants.yaml`）。`make compconf-selftest` 断言桩全绿、每个坏变体恰好在自己的用例上判红；`make compconf-unit` 跑不需要 docker 的单测，`make compconf-infra` 真机测一次性基础设施。
