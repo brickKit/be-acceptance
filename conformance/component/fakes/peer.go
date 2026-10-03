@@ -91,6 +91,13 @@ func (p *Peer) SetAnswer(method string, a PeerAnswer) {
 	p.mu.Unlock()
 }
 
+// Answer returns the current answer of a method or route.
+func (p *Peer) Answer(method string) PeerAnswer {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.answers[method]
+}
+
 // SetHTTPAnswer sets the answer of an HTTP operation "<METHOD> <path>" ({param} placeholders).
 func (p *Peer) SetHTTPAnswer(route string, a PeerAnswer) { p.SetAnswer(route, a) }
 

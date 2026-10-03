@@ -190,6 +190,10 @@ func classifyDB(ctx context.Context, err error) error {
 			return beErrCause("STATEMENT_TIMEOUT", err)
 		case "53300":
 			return beErrCause("DB_TOO_MANY_CONNECTIONS", err)
+		case "57P01", "57P02", "57P03", "28P01", "08006", "08001": // the connection was closed or could not be made
+			e := beErrCause("DEPENDENCY_UNAVAILABLE", err)
+			e.Metadata = map[string]string{"dependency": "db"}
+			return e
 		}
 		return internalErr(err)
 	}

@@ -17,6 +17,8 @@ resources:
       key: conformance.rawstub.create
       body_file: samples/note-create.json
       id: $.id
+      idempotent: true
+      fingerprint: [title, kind]
       expect: { status: 201 }
     get:
       method: GET
@@ -30,6 +32,8 @@ resources:
       method: POST
       path: /conformance/rawstub/notes/{id}/archive
       key: conformance.rawstub.archive
+      idempotent: true
+      fingerprint: []
       expect: { status: 200 }
     get_over_grpc:
       grpc: conformance.rawstub.v1.NoteService/GetNote

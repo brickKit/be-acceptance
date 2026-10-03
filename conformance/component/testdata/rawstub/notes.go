@@ -90,18 +90,34 @@ func (a *App) createNote(rc *reqCtx) error {
 	if !kindRe.MatchString(in.Kind) {
 		return ownErr("NOTE_TITLE_REQUIRED", nil)
 	}
-	now := time.Now().UTC().Truncate(time.Millisecond)
-	n := note{ID: newUUIDv7(now), Title: *in.Title, OwnerID: rc.claims.Sub, DeptPath: rc.claims.DeptPath, Kind: in.Kind,
-		CreatedAt: now.Format(tsLayout), Version: 1}
-	err = a.db.Tx(rc.ctx, func(tx pgx.Tx) error {
-		_, err := tx.Exec(rc.ctx, a.db.Q(`INSERT INTO notes (id, title, owner_id, dept_path, kind, created_at, version)
-			VALUES ($1, $2, $3, $4, $5, $6, 1)`), n.ID, n.Title, n.OwnerID, n.DeptPath, n.Kind, now)
-		return err
-	})
+	key, err := idemKey(rc, b)
 	if err != nil {
 		return err
 	}
-	return writeJSON(rc, http.StatusCreated, n)
+	insert := func(tx pgx.Tx) (int, any, error) {
+		now := time.Now().UTC().Truncate(time.Millisecond)
+		n := note{ID: newUUIDv7(now), Title: *in.Title, OwnerID: rc.claims.Sub, DeptPath: rc.claims.DeptPath, Kind: in.Kind,
+			CreatedAt: now.Format(tsLayout), Version: 1}
+		_, err := tx.Exec(rc.ctx, a.db.Q(`INSERT INTO notes (id, title, owner_id, dept_path, kind, created_at, version)
+			VALUES ($1, $2, $3, $4, $5, $6, 1)`), n.ID, n.Title, n.OwnerID, n.DeptPath, n.Kind, now)
+		return http.StatusCreated, n, err
+	}
+	if key == "" {
+		var st int
+		var n any
+		err := a.db.Tx(rc.ctx, func(tx pgx.Tx) error { var e error; st, n, e = insert(tx); return e })
+		if err != nil {
+			return err
+		}
+		return writeJSON(rc, st, n)
+	}
+	call := idemCall{caller: "user:" + rc.claims.Sub, key: key, command: rc.route.guard,
+		hash: fingerprint(map[string]string{"title": *in.Title, "kind": in.Kind})}
+	st, body, err := a.runIdempotent(rc.ctx, call, insert)
+	if err != nil {
+		return err
+	}
+	return writeStored(rc, st, body)
 }
 
 var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -139,39 +155,51 @@ func (a *App) getNote(rc *reqCtx) error {
 	return writeJSON(rc, http.StatusOK, n)
 }
 
-// archiveNote is a one-step command: it locks the row (a held lock answers 409 LOCK_TIMEOUT
-// after lock_timeout, P10.3), sets archived_at once and bumps the version.
+// archiveNote is a one-step idempotent command (fingerprint: no field): it locks the row (a held
+// lock answers 409 LOCK_TIMEOUT after lock_timeout, P10.3), sets archived_at once and bumps
+// the version. The order is P13.5: arguments, the target, then the key.
 func (a *App) archiveNote(rc *reqCtx) error {
-	id := rc.params["id"]
+	id := strings.ToLower(rc.params["id"])
 	if !uuidRe.MatchString(id) {
 		return ownErr("NOTE_ID_INVALID", map[string]string{"id": id})
 	}
-	var n note
-	found := false
-	err := a.db.Tx(rc.ctx, func(tx pgx.Tx) error {
-		var err error
-		n, err = scanNote(tx.QueryRow(rc.ctx, a.db.Q(`SELECT `+noteCols+` FROM notes WHERE id = $1 FOR UPDATE`), strings.ToLower(id)))
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		found = true
-		if n.ArchivedAt != nil {
-			return nil
-		}
-		n, err = scanNote(tx.QueryRow(rc.ctx, a.db.Q(`UPDATE notes SET archived_at = now(), version = version + 1
-			WHERE id = $1 RETURNING `+noteCols), n.ID))
-		return err
-	})
+	b, err := readBody(rc)
 	if err != nil {
 		return err
 	}
-	if !found {
-		return beErr("NOT_FOUND", nil)
+	key, err := idemKey(rc, b)
+	if err != nil {
+		return err
 	}
-	return writeJSON(rc, http.StatusOK, n)
+	if _, err := a.getNoteByID(rc.ctx, id); err != nil {
+		return err
+	}
+	archive := func(tx pgx.Tx) (int, any, error) {
+		n, err := scanNote(tx.QueryRow(rc.ctx, a.db.Q(`SELECT `+noteCols+` FROM notes WHERE id = $1 FOR UPDATE`), id))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil, beErr("NOT_FOUND", nil)
+		}
+		if err != nil || n.ArchivedAt != nil {
+			return http.StatusOK, n, err
+		}
+		n, err = scanNote(tx.QueryRow(rc.ctx, a.db.Q(`UPDATE notes SET archived_at = now(), version = version + 1
+			WHERE id = $1 RETURNING `+noteCols), id))
+		return http.StatusOK, n, err
+	}
+	if key == "" {
+		var st int
+		var n any
+		if err := a.db.Tx(rc.ctx, func(tx pgx.Tx) error { var e error; st, n, e = archive(tx); return e }); err != nil {
+			return err
+		}
+		return writeJSON(rc, st, n)
+	}
+	call := idemCall{caller: "user:" + rc.claims.Sub, key: key, command: rc.route.guard, target: id, hash: fingerprint(nil)}
+	st, body, err := a.runIdempotent(rc.ctx, call, archive)
+	if err != nil {
+		return err
+	}
+	return writeStored(rc, st, body)
 }
 
 // slow waits ms milliseconds within the route deadline (5 s): by sleeping, by pg_sleep inside

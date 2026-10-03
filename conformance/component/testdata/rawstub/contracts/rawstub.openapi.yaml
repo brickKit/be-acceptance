@@ -68,8 +68,10 @@ paths:
                   next_cursor: { type: string }
     post:
       operationId: createNote
-      summary: Creates a note owned by the caller
+      summary: Creates a note owned by the caller; idempotent (fingerprint title, kind; 30 days)
       x-be-permission: conformance.rawstub.create
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -79,6 +81,8 @@ paths:
               required: [title]
               properties:
                 title: { type: string }
+                kind: { type: string, pattern: "^[a-z][a-z0-9_-]{0,31}$" }
+                idempotency_key: { type: string }
       responses:
         "201":
           description: the created note
@@ -103,8 +107,10 @@ paths:
       - { name: id, in: path, required: true, schema: { type: string } }
     post:
       operationId: archiveNote
-      summary: Archives a note (once; the row is locked for the change); 404 NOT_FOUND when absent
+      summary: Archives a note (once; the row is locked for the change); idempotent (30 days); 404 NOT_FOUND when absent
       x-be-permission: conformance.rawstub.archive
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       responses:
         "200":
           description: the note
@@ -127,6 +133,9 @@ paths:
             application/json:
               schema: { type: object }
 components:
+  parameters:
+    IdempotencyKey:
+      { name: Idempotency-Key, in: header, required: false, description: "equivalent to the body field idempotency_key (P3.7)", schema: { type: string } }
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
   schemas:

@@ -392,12 +392,23 @@ func caseDB06(ctx context.Context, r *Run) {
 		}
 		time.Sleep(2 * time.Second)
 	}
+	// Force new connections: the suite closes the open ones (they would otherwise live until
+	// PG_CONN_MAX_LIFETIME). A request that happened to hold a killed connection may fail; the
+	// rule is that new connections authenticate with the new password.
+	killed := time.Now()
 	_ = r.superExec(ctx, r.db.Database, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename = $1`, r.db.Runtime)
-	time.Sleep(500 * time.Millisecond)
-	for i := 0; i < 5; i++ {
-		st := probe()
-		r.ev.check(id, st > 0 && st < 500, "after the old connections were closed a request answered %d: new connections do not use the new password (P2.9)", st)
+	ok, last := 0, 0
+	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline) && ok < 3; time.Sleep(300 * time.Millisecond) {
+		if last = probe(); last > 0 && last < 500 {
+			ok++
+		} else {
+			ok = 0
+		}
 	}
+	r.ev.check(id, ok >= 3, "15 s after the old connections were closed requests still fail (last %d): new connections do not use the new password (P2.9)", last)
+	var fresh int
+	_ = r.pgCount(ctx, &fresh, `SELECT count(*) FROM pg_stat_activity WHERE usename = $1 AND backend_start > $2`, r.db.Runtime, killed)
+	r.ev.check(id, fresh > 0, "no new session of the runtime role after the old ones were closed (P2.9)")
 	lines := r.logs.Find(func(l fakes.LogLine) bool {
 		return l.At.After(changed) && l.Str("level") == "info" && strings.Contains(l.Raw, "PG_PASSWORD_FILE")
 	})
@@ -423,4 +434,14 @@ func (r *Run) dbProbe(ctx context.Context) func() int {
 		}
 	}
 	return nil
+}
+
+// pgCount scans one integer as the superuser.
+func (r *Run) pgCount(ctx context.Context, n *int, sql string, args ...any) error {
+	conn, err := pgx.Connect(ctx, r.pg.HostDSN(r.db.Database))
+	if err != nil {
+		return err
+	}
+	defer conn.Close(ctx)
+	return conn.QueryRow(ctx, sql, args...).Scan(n)
 }

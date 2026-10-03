@@ -3,7 +3,7 @@ package compconf
 import "context"
 
 // ImplementedProfiles are the profiles this suite version runs.
-var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc", "db", "jobs", "lifecycle"}
+var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc", "db", "idempotency", "jobs", "lifecycle"}
 
 // step is one ordered action of the scenario, attributed to the case it exercises; Case ""
 // marks a setup step several cases depend on, which always runs.
@@ -66,6 +66,14 @@ func scenario() []step {
 		{"CP-DB-03", "pool limit under load", caseDB03},
 		{"CP-DB-05", "no owner session; partition upkeep", caseDB05},
 		{"CP-DB-06", "password rotation", caseDB06},
+		{"CP-IDEM-01", "replay", caseIdem01},
+		{"CP-IDEM-02", "another fingerprint", caseIdem02},
+		{"CP-IDEM-03", "another target", caseIdem03},
+		{"CP-IDEM-04", "another command", caseIdem04},
+		{"CP-IDEM-06", "two callers, one key", caseIdem06},
+		{"CP-IDEM-07", "concurrent same key", caseIdem07},
+		{"CP-IDEM-08", "header and body key", caseIdem08},
+		{"CP-IDEM-05", "two-step in progress", caseIdem05},
 		{"", "second replica", stepSecondReplica},
 		{"CP-JOBS-01", "cron slots across two replicas", caseJobs01},
 		{"CP-JOBS-02", "singleton takeover", caseJobs02},

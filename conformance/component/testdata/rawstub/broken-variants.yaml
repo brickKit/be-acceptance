@@ -44,3 +44,7 @@ variants:
     breaks: P14.2
     behaviour: every replica runs each cron slot whether or not its INSERT claimed it
     must_fail: [CP-JOBS-01]
+  - name: idem-select-claim
+    breaks: P10.9, P13.6
+    behaviour: an idempotency key is claimed with a plain SELECT and then an INSERT, not atomically
+    must_fail: [CP-IDEM-07]

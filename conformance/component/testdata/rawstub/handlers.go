@@ -118,7 +118,7 @@ func (a *App) info(rc *reqCtx) error {
 		"language":          map[string]string{"name": "go", "version": strings.TrimPrefix(runtime.Version(), "go")},
 		// The profiles the manifests select (grpc port, PG_SCHEMA): P20.4 requires this list to
 		// equal the suite's selection.
-		"profiles":   []string{"core", "obs", "err", "auth", "grpc", "db", "jobs", "lifecycle"},
+		"profiles":   []string{"core", "obs", "err", "auth", "grpc", "idempotency", "db", "jobs", "lifecycle"},
 		"ports":      map[string]int{"http": 8080, "grpc": 9090},
 		"migrations": map[string]any{"component": comp, "platform": a.platformInfo()},
 		"members":    nil,

@@ -19,6 +19,8 @@ const (
 	pStale = "compconf_stale" // like pAll; its sub is made stale by CP-AUTH-08
 	// pStaleDeleg is like pAll; CP-AUTH-12 makes its sub stale and sends it a delegated token.
 	pStaleDeleg = "compconf_stale_deleg"
+	// pAllTwin holds the same roles as pAll under another sub (two callers, CP-IDEM-06).
+	pAllTwin = "compconf_all_twin"
 )
 
 type persona struct {
@@ -41,6 +43,7 @@ func (r *Run) setupPersonas() {
 	r.personas[pNone] = persona{Sub: uuidv7(), Dept: &dept}
 	r.personas[pStale] = persona{Sub: uuidv7(), Roles: []string{pAll}, Dept: &dept}
 	r.personas[pStaleDeleg] = persona{Sub: uuidv7(), Roles: []string{pAll}, Dept: &dept}
+	r.personas[pAllTwin] = persona{Sub: uuidv7(), Roles: []string{pAll}, Dept: &dept}
 	for code, g := range r.comp.Fixtures.Grants {
 		r.authz.SetRole(code, g.Keys, toRoleGrant(g))
 	}
