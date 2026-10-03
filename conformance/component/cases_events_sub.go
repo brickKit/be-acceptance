@@ -155,12 +155,13 @@ func caseEVS03(ctx context.Context, r *Run) {
 			continue
 		}
 		orders := [][]int{{1, 2, 3}, {3, 2, 1}, {2, 3, 1, 3}, {3, 1, 1, 2}}
-		var want string
+		aggs := make([]string, len(orders))
 		for i, order := range orders {
 			s, err := r.newSample(c, false)
 			if !r.ev.require(id, err == nil, "%v", err) {
 				return
 			}
+			aggs[i] = s.aggID
 			field := s.variedField()
 			for _, v := range order {
 				if _, err := r.publishAs(ctx, s, v, s.at(v, field), nil); err != nil {
@@ -168,17 +169,22 @@ func caseEVS03(ctx context.Context, r *Run) {
 					return
 				}
 			}
-			if i == 0 {
-				want = normalise(r.waitObserve(ctx, c.Observe.SQL, s.aggID, "", applyWait), s.aggID)
-				r.ev.check(id, want != "", "%s in order was not applied", c.Subject)
-				continue
-			}
-			got := ""
-			for end := time.Now().Add(applyWait); time.Now().Before(end) && got != want; time.Sleep(300 * time.Millisecond) {
-				o, _ := r.observe(ctx, c.Observe.SQL, s.aggID)
-				got = normalise(o, s.aggID)
-			}
-			r.ev.check(id, got == want, "versions in order %v end in %q, in order 1,2,3 in %q (P12.6)", order, got, want)
+		}
+		// The states are read once every message has been handled, which the durable itself
+		// says. Reading the in-order aggregate as soon as it shows any state took version 2 as
+		// the reference in slower runs, and every other order then "differed" from it.
+		if !r.ev.require(id, r.waitDrained(ctx, c.Subject, applyWait),
+			"the durable of %s still has undelivered or unacknowledged messages after %v", c.Subject, applyWait) {
+			return
+		}
+		states := make([]string, len(orders))
+		for i, agg := range aggs {
+			o, _ := r.observe(ctx, c.Observe.SQL, agg)
+			states[i] = normalise(o, agg)
+		}
+		r.ev.check(id, states[0] != "", "%s in order was not applied", c.Subject)
+		for i := 1; i < len(orders); i++ {
+			r.ev.check(id, states[i] == states[0], "versions in order %v end in %q, in order 1,2,3 in %q (P12.6)", orders[i], states[i], states[0])
 		}
 		return
 	}
@@ -285,6 +291,26 @@ func (r *Run) soloInstance(ctx context.Context, name string, set map[string]stri
 // wait; with 15 s the reference sequence of CP-EVS-03 stopped at version 2 in a full run. The
 // waits return as soon as the effect is seen, so a healthy run is not slower.
 const applyWait = 45 * time.Second
+
+// waitDrained waits until the component's durable for subject has nothing left to deliver and
+// nothing unacknowledged, or limit passes; it reports whether the durable drained. A message
+// negatively acknowledged with a delay counts as unacknowledged until it is handled.
+func (r *Run) waitDrained(ctx context.Context, subject string, limit time.Duration) bool {
+	js, err := r.js()
+	if err != nil {
+		return false
+	}
+	for end := time.Now().Add(limit); ; time.Sleep(200 * time.Millisecond) {
+		if c, err := js.Consumer(ctx, streamOf(subject), durableName(r.comp.ID(), subject)); err == nil {
+			if info, err := c.Info(ctx); err == nil && info.NumPending == 0 && info.NumAckPending == 0 {
+				return true
+			}
+		}
+		if time.Now().After(end) || ctx.Err() != nil {
+			return false
+		}
+	}
+}
 
 // waitPullsGone waits until no pull request is waiting on the component's durables, or limit
 // passes. The last pull request of an instance that stopped stays registered at the server
