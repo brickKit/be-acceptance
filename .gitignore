@@ -1,3 +1,5 @@
 /build/
 # 本地 go build 产物（go build ./cmd/be-acceptance 默认输出到仓库根）
 /be-acceptance
+# 在 rawstub 目录里直接 go build 的产物（镜像由 Dockerfile 从源码编译，不用这个文件）
+/conformance/component/testdata/rawstub/rawstub
