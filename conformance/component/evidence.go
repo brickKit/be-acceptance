@@ -65,6 +65,15 @@ func (e *evidence) check(id string, ok bool, format string, args ...any) bool {
 	return ok
 }
 
+// require records a failure when ok is false and, unlike check, does not mark the case
+// exercised when it holds (a precondition, not an observation).
+func (e *evidence) require(id string, ok bool, format string, args ...any) bool {
+	if !ok {
+		e.fail(id, format, args...)
+	}
+	return ok
+}
+
 // notApplicable marks a case that cannot apply to this component, with the reason.
 func (e *evidence) notApplicable(id, reason string) {
 	e.mu.Lock()

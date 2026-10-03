@@ -27,7 +27,7 @@ const (
 var broken = ""
 
 var brokenVariants = map[string]bool{"": true, "accept-refresh": true, "healthz-db": true, "leak-internal": true, "ipv4-only": true,
-	"readyz-live-db": true, "no-redact": true}
+	"readyz-live-db": true, "no-redact": true, "no-goaway": true}
 
 // App holds the running component.
 type App struct {

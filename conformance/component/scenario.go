@@ -3,7 +3,7 @@ package compconf
 import "context"
 
 // ImplementedProfiles are the profiles this suite version runs.
-var ImplementedProfiles = []string{"core", "obs", "err", "auth"}
+var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc"}
 
 // step is one ordered action of the scenario, attributed to the case it exercises; Case ""
 // marks a setup step several cases depend on, which always runs.
@@ -50,6 +50,12 @@ func scenario() []step {
 		{"CP-OBS-04", "personal data redacted", caseObs04PII},
 		{"CP-OBS-01", "trace parent", caseObs01},
 		{"CP-ERR-02", "gRPC errors", caseErr02},
+		{"CP-RPC-01", "no be-caller", caseRPC01},
+		{"CP-RPC-02", "caller in the gRPC log", caseRPC02},
+		{"CP-RPC-03", "user-facing rpc over gRPC", caseRPC03},
+		{"CP-RPC-04", "receive limit", caseRPC04},
+		{"CP-RPC-06", "batch limit", caseRPC06},
+		{"CP-RPC-05", "GOAWAY after MaxConnectionAge", caseRPC05},
 		{"CP-ERR-03", "revoked grant answers generic INTERNAL", caseErr03},
 		{"CP-AUTH-08", "stale token", caseAuth08},
 		{"CP-OBS-03", "metrics", caseObs03},

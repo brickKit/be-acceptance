@@ -1,6 +1,6 @@
 # Deliberately broken builds of conformance/rawstub (build argument BROKEN=<name>). Each breaks
 # exactly one rule; the suite's self-test asserts that each fails the cases in must_fail and
-# passes every other MUST case of core, obs, err and auth. BROKEN unset or empty = the correct
+# passes every other MUST case of the profiles the suite implements. BROKEN unset or empty = the correct
 # stub; an unknown name exits 78 at start.
 variants:
   - name: accept-refresh
@@ -28,3 +28,7 @@ variants:
     breaks: P18.2
     behaviour: log records are written without the personal-data redaction
     must_fail: [CP-OBS-04]
+  - name: no-goaway
+    breaks: P7.5
+    behaviour: the gRPC server sets no MaxConnectionAge; a connection lives for ever
+    must_fail: [CP-RPC-05]

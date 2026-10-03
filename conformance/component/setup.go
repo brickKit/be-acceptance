@@ -59,7 +59,7 @@ func (r *Run) setup(ctx context.Context) error {
 	if r.comp.GRPCPort() != 0 {
 		contracts, _ := fs.Sub(r.comp.FS, "contracts")
 		protoRoot, _ := fs.Sub(beprotocol.FS, "proto")
-		if r.methods, err = fakes.CompileProtos(contracts, protoRoot); err != nil {
+		if r.methods, err = fakes.CompileProtos(contracts, fakes.ProtoImports(protoRoot)...); err != nil {
 			return fmt.Errorf("compiling the component's protos: %w", err)
 		}
 	}
@@ -112,7 +112,7 @@ func (r *Run) newPeer(id string) (*fakes.Peer, error) {
 	default:
 		return nil, fmt.Errorf("no contracts for dependency %s: pass --dep-contracts %s=<dir>", id, id)
 	}
-	p, err := fakes.NewPeer(id, contracts, protoRoot)
+	p, err := fakes.NewPeer(id, contracts, fakes.ProtoImports(protoRoot)...)
 	if err != nil {
 		return nil, err
 	}

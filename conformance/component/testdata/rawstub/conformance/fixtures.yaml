@@ -29,6 +29,13 @@ resources:
     get_over_grpc:
       grpc: conformance.rawstub.v1.NoteService/GetNote
       body: { id: "{id}" }
+    batch_get:
+      grpc: conformance.rawstub.v1.NoteService/BatchGetNotes
+      body: { ids: ["{id}"] }
+    archive_over_grpc:
+      grpc: conformance.rawstub.v1.NoteService/ArchiveNote
+      body: { id: "{id}" }
+      user_facing: true
   kinds:
     list:
       method: GET

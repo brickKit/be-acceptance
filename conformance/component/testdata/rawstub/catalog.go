@@ -43,6 +43,8 @@ var beReasons = map[string]reasonEntry{
 		"Not enough time was left to finish the operation.", "剩余时间不足以完成这次操作。"},
 	"BODY_TOO_LARGE": {"INVALID_ARGUMENT", 413, "Request too large", "请求过大",
 		"The request body is larger than the {limit} bytes allowed.", "请求体超过允许的 {limit} 字节。"},
+	"BATCH_TOO_LARGE": {"INVALID_ARGUMENT", 400, "Batch too large", "批量过大",
+		"{field} has {got} items; at most {max} are allowed.", "{field} 有 {got} 项，最多允许 {max} 项。"},
 	"DB_TOO_MANY_CONNECTIONS": {"UNAVAILABLE", 503, "Service busy", "服务繁忙",
 		"The database is not accepting more connections right now. Try again shortly.", "数据库暂时不接受更多连接，请稍后再试。"},
 }

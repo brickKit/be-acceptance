@@ -2,6 +2,7 @@ package fakes
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"io"
 	"io/fs"
@@ -51,4 +52,17 @@ func CompileProtos(contracts fs.FS, imports ...fs.FS) (map[string]protoreflect.M
 		}
 	}
 	return methods, nil
+}
+
+// thirdParty holds google/type/date.proto, which be-protocol v1.0.0-rc.1 keeps in third_party/
+// but does not embed (a gap reported for rc.2).
+//
+//go:embed third_party
+var thirdParty embed.FS
+
+// ProtoImports are the import roots of every compile: be-protocol proto/, then the third-party
+// protos.
+func ProtoImports(beProto fs.FS) []fs.FS {
+	tp, _ := fs.Sub(thirdParty, "third_party")
+	return []fs.FS{beProto, tp}
 }

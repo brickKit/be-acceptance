@@ -3,15 +3,42 @@ syntax = "proto3";
 
 package conformance.rawstub.v1;
 
+import "be/v1/limits.proto";
+
 service NoteService {
   // One note by ID. A system read without data scopes.
   rpc GetNote(GetNoteRequest) returns (Note) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+
+  // Notes by ID, at most 100 (BATCH_TOO_LARGE above, P7.10). Unknown IDs are left out.
+  rpc BatchGetNotes(BatchGetNotesRequest) returns (BatchGetNotesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // USER-FACING: archiving is a user action served over REST only
+  // (POST /conformance/rawstub/notes/{id}/archive). Over gRPC the runtime always answers
+  // UNAUTHENTICATED (P7.3, CP-RPC-03).
+  rpc ArchiveNote(ArchiveNoteRequest) returns (Note) {
+    option idempotency_level = IDEMPOTENT;
+  }
 }
 
 message GetNoteRequest {
   string id = 1;
+}
+
+message BatchGetNotesRequest {
+  repeated string ids = 1 [(be.v1.max_items) = 100];
+}
+
+message BatchGetNotesResponse {
+  repeated Note notes = 1;
+}
+
+message ArchiveNoteRequest {
+  string id = 1;
+  string idempotency_key = 2;
 }
 
 message Note {
