@@ -233,28 +233,95 @@ func (r *Run) revoke(ctx context.Context) (func(), error) {
 	return func() { _ = r.superExec(context.Background(), r.db.Database, grant) }, nil
 }
 
-// soloInstance pauses the main instance and starts another with set overriding the
-// environment; the returned function removes it and resumes main.
+// soloInstance stops the main instance and starts another with set overriding the environment;
+// the returned function removes it and starts a fresh main instance.
+//
+// Main is stopped, not paused. A paused pull consumer leaves its last pull request alive at the
+// server, so a message published right after goes to the frozen process and waits out the ack
+// wait (30 s) there: CP-EVS-05 and CP-EVS-08 then saw nothing within their 15 s. A component
+// that stops closes its connection, and the server drops its pull requests at once.
 func (r *Run) soloInstance(ctx context.Context, name string, set map[string]string) (*instance, func(), error) {
-	if err := r.main.Pause(ctx); err != nil {
+	if err := r.main.Stop(ctx, r.comp.Manifest.Deployment.StopGracePeriodSeconds); err != nil {
 		return nil, nil, err
 	}
+	_ = r.main.Remove(ctx)
+	if r.stopLogs != nil {
+		r.stopLogs()
+	}
+	r.mainUp = false
+	r.waitPullsGone(ctx, 35*time.Second)
 	in, err := r.startInstance(ctx, name, envWith(r.compEnv, set), fakes.NewLogs())
 	if err == nil {
 		_, err = waitStatus(ctx, in.base+"/readyz", 200, 60*time.Second)
 	}
 	done := func() {
+		bg := context.Background()
 		if in != nil {
-			_ = in.c.Remove(context.Background())
+			_ = in.c.Remove(bg)
 			in.stop()
+			r.waitPullsGone(bg, 35*time.Second)
 		}
-		_ = r.main.Unpause(context.Background())
+		if err := r.startMain(bg); err != nil {
+			r.logf("restarting the main instance after %s: %v", name, err)
+			return
+		}
+		if _, err := waitStatus(bg, r.base+"/readyz", 200, 60*time.Second); err != nil {
+			r.logf("the main instance restarted after %s is not ready: %v", name, err)
+			return
+		}
+		r.mainUp = true
 	}
 	if err != nil {
 		done()
 		return nil, nil, err
 	}
 	return in, done, nil
+}
+
+// waitPullsGone waits until no pull request is waiting on the component's durables, or limit
+// passes. The last pull request of an instance that stopped stays registered at the server
+// until it expires (how long is the component's choice); a message published before that is
+// handed to the request nobody reads and then waits out the ack wait. The suite therefore asks
+// the server instead of guessing a delay.
+func (r *Run) waitPullsGone(ctx context.Context, limit time.Duration) {
+	js, err := r.js()
+	if err != nil {
+		return
+	}
+	end := time.Now().Add(limit)
+	for _, subject := range r.comp.Manifest.Events.Subscribes {
+		if strings.HasSuffix(subject, "*") {
+			continue
+		}
+		for time.Now().Before(end) && ctx.Err() == nil {
+			c, err := js.Consumer(ctx, streamOf(subject), durableName(r.comp.ID(), subject))
+			if err != nil {
+				break
+			}
+			info, err := c.Info(ctx)
+			if err != nil || info.NumWaiting == 0 {
+				break
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+}
+
+// tailLogs writes the last n lines an instance logged to the progress output, so that a failed
+// case shows what the component said; the instance is removed when the case ends.
+func (r *Run) tailLogs(id string, in *instance, n int) {
+	if in == nil || in.logs == nil {
+		return
+	}
+	lines := in.logs.Lines()
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	var b strings.Builder
+	for _, l := range lines {
+		b.WriteString("\n    " + l.Raw)
+	}
+	r.logf("%s failed; the last %d log lines of its instance:%s", id, len(lines), b.String())
 }
 
 // CP-EVS-05: a handler failing for a while (the suite revokes the table grants) is negatively
@@ -273,7 +340,7 @@ func caseEVS05(ctx context.Context, r *Run) {
 		r.ev.notApplicable(id, "every consumed subject needs a setup operation")
 		return
 	}
-	_, done, err := r.soloInstance(ctx, "evs05", map[string]string{"EVENTS_MAX_DELIVER": "20", "EVENTS_BACKOFF": "1s"})
+	in, done, err := r.soloInstance(ctx, "evs05", map[string]string{"EVENTS_MAX_DELIVER": "20", "EVENTS_BACKOFF": "1s"})
 	if !r.ev.require(id, err == nil, "a dedicated instance: %v", err) {
 		return
 	}
@@ -293,6 +360,9 @@ func caseEVS05(ctx context.Context, r *Run) {
 		return
 	}
 	got := r.waitObserve(ctx, c.Observe.SQL, s.aggID, "", 15*time.Second)
+	if got == "" {
+		r.tailLogs(id, in, 25)
+	}
 	r.ev.check(id, got != "", "%s not applied within 15 s after the table grants came back (P12.7: nak with delay, redeliver)", c.Subject)
 	r.ev.check(id, len(r.dlqOf(durableName(r.comp.ID(), c.Subject), ceid, time.Second)) == 0, "a temporary failure was dead-lettered (P12.7)")
 }
@@ -370,7 +440,7 @@ func caseEVS08(ctx context.Context, r *Run) {
 	cfg.MaxAckPending = 100
 	_, err = js.UpdateConsumer(ctx, streamOf(c.Subject), cfg)
 	r.ev.require(id, err == nil, "changing the durable: %v", err)
-	_, done, err := r.soloInstance(ctx, "evs08", map[string]string{"EVENTS_MAX_DELIVER": "2", "EVENTS_BACKOFF": "200ms"})
+	in, done, err := r.soloInstance(ctx, "evs08", map[string]string{"EVENTS_MAX_DELIVER": "2", "EVENTS_BACKOFF": "200ms"})
 	if !r.ev.require(id, err == nil, "a dedicated instance: %v", err) {
 		return
 	}
@@ -391,6 +461,9 @@ func caseEVS08(ctx context.Context, r *Run) {
 	})
 	regrant()
 	r.ev.require(id, err == nil, "publishing: %v", err)
+	if len(got) != 1 {
+		r.tailLogs(id, in, 25)
+	}
 	if r.ev.check(id, len(got) == 1, "a message failing with EVENTS_MAX_DELIVER=2: %d dead letters, want exactly 1 (P12.7)", len(got)) {
 		r.ev.check(id, got[0].Header.Get("be-dlq-delivery") == "3", "be-dlq-delivery %q, want 3: dead-lettered on the receipt after the second failed delivery (P12.7)", got[0].Header.Get("be-dlq-delivery"))
 		r.ev.check(id, regexpDLQ.MatchString(got[0].Header.Get("Nats-Msg-Id")), "dead letter ID %q, want dlq:<durable>:<stream seq>", got[0].Header.Get("Nats-Msg-Id"))
