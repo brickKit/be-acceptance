@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"math/rand/v2"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -56,7 +56,7 @@ func openDB(cfg *Config, log *Logger, m *Metrics) (*DB, error) {
 	pc.ConnConfig.ConnectTimeout = 3 * time.Second
 	pc.ConnConfig.RuntimeParams["TimeZone"] = "UTC"
 	pc.ConnConfig.RuntimeParams["application_name"] = cfg.ComponentID + "@" + cfg.ComponentVersion // P10.2
-	pc.MinConns = max(pc.MinConns, 1)                                                               // P10.5: never close the last one
+	pc.MinConns = max(pc.MinConns, 1)                                                              // P10.5: never close the last one
 	pc.BeforeConnect = func(_ context.Context, cc *pgx.ConnConfig) error {
 		cc.Password = sf.Value()
 		return nil

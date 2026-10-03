@@ -14,7 +14,9 @@ type TupleRec struct {
 	ExpiresAt                   *time.Time
 }
 
-func (t TupleRec) key() string { return t.Type + "\x00" + t.ID + "\x00" + t.Relation + "\x00" + t.Subject }
+func (t TupleRec) key() string {
+	return t.Type + "\x00" + t.ID + "\x00" + t.Relation + "\x00" + t.Subject
+}
 
 func (t TupleRec) wire() map[string]any {
 	m := map[string]any{"object": map[string]string{"type": t.Type, "id": t.ID}, "relation": t.Relation, "subject": t.Subject}

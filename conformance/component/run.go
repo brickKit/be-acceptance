@@ -76,7 +76,7 @@ type Run struct {
 	notRunNote string
 	lastInfo   map[string]any // the last /_be/info body
 	ready      bool
-	slowID     string   // the record a slow path with {id} uses
+	slowID     string // the record a slow path with {id} uses
 	migrated   bool
 	replica    *instance // the second serving instance of the jobs profile
 	scope      *scopeWorld

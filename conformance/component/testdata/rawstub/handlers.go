@@ -170,4 +170,3 @@ func (a *App) putOwner(rc *reqCtx) error {
 		"display_name": in.DisplayName, "phone": in.Phone, "email": in.Email,
 	})
 }
-

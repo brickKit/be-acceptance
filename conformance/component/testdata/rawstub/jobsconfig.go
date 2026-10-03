@@ -20,7 +20,9 @@ func parseJobsOverrides(v parsed) (map[string]jobOverride, []configProblem) {
 	if !v.set {
 		return out, nil
 	}
-	bad := func(d string) []configProblem { return []configProblem{{Key: "JOBS_OVERRIDES", Class: "CONFIG_INVALID", Detail: d}} }
+	bad := func(d string) []configProblem {
+		return []configProblem{{Key: "JOBS_OVERRIDES", Class: "CONFIG_INVALID", Detail: d}}
+	}
 	m, ok := v.json.(map[string]any)
 	if !ok {
 		return nil, bad("not a JSON object")
@@ -73,7 +75,9 @@ func parseDataLifecycle(v parsed) (string, []configProblem) {
 	if !v.set {
 		return "on", nil
 	}
-	bad := func(d string) []configProblem { return []configProblem{{Key: "DATA_LIFECYCLE", Class: "CONFIG_INVALID", Detail: d}} }
+	bad := func(d string) []configProblem {
+		return []configProblem{{Key: "DATA_LIFECYCLE", Class: "CONFIG_INVALID", Detail: d}}
+	}
 	m, ok := v.json.(map[string]any)
 	if !ok {
 		return "", bad("not a JSON object")

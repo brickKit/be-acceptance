@@ -2,8 +2,8 @@ package main
 
 import (
 	"regexp"
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )

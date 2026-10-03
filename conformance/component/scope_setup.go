@@ -116,7 +116,9 @@ func (w *scopeWorld) resourceDims() []string {
 	return out
 }
 
-func (r *Run) addScopeRole(code string, keys []string, g fakes.RoleGrant) { r.authz.SetRole(code, keys, g) }
+func (r *Run) addScopeRole(code string, keys []string, g fakes.RoleGrant) {
+	r.authz.SetRole(code, keys, g)
+}
 
 func (r *Run) addScopePersona(name, dept string, roles ...string) {
 	d := dept
