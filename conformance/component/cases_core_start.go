@@ -19,7 +19,7 @@ func stepStartWithDepsDown(ctx context.Context, r *Run) {
 	if r.nats != nil {
 		_ = r.nats.C.Stop(ctx, 1)
 	}
-	r.authzSrv.Stop()
+	r.stopAuthz()
 	if err := r.startMain(ctx); err != nil {
 		r.ev.fail("CP-CORE-03", "starting the component: %v", err)
 		return
@@ -158,7 +158,7 @@ func stepProvidersBack(ctx context.Context, r *Run) {
 	if r.nats != nil {
 		_ = r.nats.C.Start(ctx)
 	}
-	if err := r.authzSrv.Restart(); err != nil {
+	if err := r.restartAuthz(); err != nil {
 		r.ev.fail("CP-CORE-03", "restarting fake-authz: %v", err)
 	}
 	if !r.mainUp {
@@ -176,7 +176,7 @@ func caseCore05Latch(ctx context.Context, r *Run) {
 	const id = "CP-CORE-05"
 	if !r.needMain(id) || !r.ready {
 		r.ev.fail(id, "the component never became ready, the latch cannot be checked")
-		r.authzSrv.Stop()
+		r.stopAuthz()
 		return
 	}
 	stable := func(what string) {
@@ -196,7 +196,7 @@ func caseCore05Latch(ctx context.Context, r *Run) {
 			r.ev.fail(id, "restarting PostgreSQL: %v", err)
 		}
 	}
-	r.authzSrv.Stop()
+	r.stopAuthz()
 	stable("authz")
 }
 
@@ -224,7 +224,7 @@ func caseAuth13(ctx context.Context, r *Run) {
 // stepAuthzBack is a setup step: authz runs again for the rest of the scenario.
 func stepAuthzBack(_ context.Context, r *Run) {
 	if !r.authzSrv.Running() {
-		if err := r.authzSrv.Restart(); err != nil {
+		if err := r.restartAuthz(); err != nil {
 			r.ev.fail("CP-AUTH-13", "restarting fake-authz: %v", err)
 		}
 	}
@@ -237,4 +237,18 @@ func (r *Run) needMain(id string) bool {
 	}
 	r.ev.fail(id, "%s", fmt.Sprintf("the component is not running (see CP-CORE-03)"))
 	return false
+}
+
+// stopAuthz stops both planes of fake-authz (REST and gRPC): the provider is gone.
+func (r *Run) stopAuthz() {
+	r.authzSrv.Stop()
+	r.authz.StopGRPC()
+}
+
+// restartAuthz brings both planes back on their ports.
+func (r *Run) restartAuthz() error {
+	if err := r.authzSrv.Restart(); err != nil {
+		return err
+	}
+	return r.authz.RestartGRPC()
 }

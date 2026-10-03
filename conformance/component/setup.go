@@ -81,6 +81,9 @@ func (r *Run) startFakes() error {
 			return err
 		}
 	}
+	if err := r.authz.StartGRPC("0.0.0.0:0"); err != nil {
+		return err
+	}
 	r.iam.SetBaseURL(r.iamSrv.URL(r.opt.FakeHost))
 	for _, d := range r.comp.Dependencies() {
 		if d.Optional { // the suite never installs optional dependencies (P2.5)
@@ -189,7 +192,7 @@ func (r *Run) superQuery(ctx context.Context, db, sql string, args ...any) (stri
 
 // buildEnv computes the environment and writes the secret files, mounted like brickKit does.
 func (r *Run) buildEnv() error {
-	v := suiteValues{FakeHost: r.opt.FakeHost, AuthzPort: r.authzSrv.Port(), IAMPort: r.iamSrv.Port(),
+	v := suiteValues{FakeHost: r.opt.FakeHost, AuthzPort: r.authzSrv.Port(), AuthzGRPCPort: r.authz.GRPCPort(), IAMPort: r.iamSrv.Port(),
 		ObserverPort: r.obsSrv.Port(), PeerHTTP: map[string]int{}, PeerGRPC: map[string]int{},
 		DB: r.db, Issuer: issuer, Tenant: tenantID, HasNATS: r.nats != nil}
 	for id, p := range r.peers {
@@ -237,6 +240,9 @@ func (r *Run) teardown() {
 	}
 	for _, p := range r.peers {
 		p.Stop()
+	}
+	if r.authz != nil {
+		r.authz.StopGRPC()
 	}
 	if r.opt.Keep {
 		r.logf("kept containers with prefix %s and %s", r.opt.Prefix, r.runDir)

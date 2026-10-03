@@ -13,17 +13,18 @@ const SecretsRoot = "/run/brickkit/secrets"
 
 // suiteValues are the addresses and identities the suite gives the component.
 type suiteValues struct {
-	FakeHost     string // how the container reaches the suite's fakes
-	AuthzPort    int
-	IAMPort      int
-	ObserverPort int
-	PeerHTTP     map[string]int // dependency ID -> fake-peer HTTP port
-	PeerGRPC     map[string]int
-	DB           dbIdentity
-	Issuer       string
-	Tenant       string
-	HasNATS      bool
-	Extra        map[string]string // overrides, also for secret keys (the value goes into the file)
+	FakeHost      string // how the container reaches the suite's fakes
+	AuthzPort     int
+	AuthzGRPCPort int // fake-authz's infra.authz.v2.AuthzProvider (AUTHZ_GRPC_URL, P2.10)
+	IAMPort       int
+	ObserverPort  int
+	PeerHTTP      map[string]int // dependency ID -> fake-peer HTTP port
+	PeerGRPC      map[string]int
+	DB            dbIdentity
+	Issuer        string
+	Tenant        string
+	HasNATS       bool
+	Extra         map[string]string // overrides, also for secret keys (the value goes into the file)
 }
 
 // dbIdentity is the run's random database identity (sdk-redesign §4.2, F27).
@@ -112,7 +113,10 @@ func suiteProvided(v suiteValues) map[string]string {
 		m["PG_SCHEMA"] = v.DB.Schema
 	}
 	if v.AuthzPort != 0 {
-		m["AUTHZ_URL"], m["AUTHZ_GRPC_URL"] = url(v.AuthzPort), url(v.AuthzPort)
+		m["AUTHZ_URL"] = url(v.AuthzPort)
+	}
+	if v.AuthzGRPCPort != 0 {
+		m["AUTHZ_GRPC_URL"] = url(v.AuthzGRPCPort)
 	}
 	if v.IAMPort != 0 {
 		m["IAM_URL"] = url(v.IAMPort)

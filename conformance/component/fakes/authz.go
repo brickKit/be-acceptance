@@ -10,8 +10,9 @@ import (
 )
 
 // Authz is fake-authz: an authorization provider speaking contract-infra-authz authz/2.0 on the
-// provider plane: GET /authz/v2/bundle (ETag), /authz/v2/changes and /authz/v2/tuples (an
-// empty, gap-free changefeed: the fake holds no tuples in this suite version).
+// provider plane: REST GET /authz/v2/bundle (ETag), /authz/v2/changes and /authz/v2/tuples (a
+// gap-free changefeed of the tuples the suite or WriteTuples put in), and the gRPC service
+// infra.authz.v2.AuthzProvider at AUTHZ_GRPC_URL (authz_grpc.go).
 type Authz struct {
 	mu       sync.Mutex
 	roles    map[string][]string
@@ -20,6 +21,11 @@ type Authz struct {
 	caps     map[string]any
 	revision int64
 	fetches  atomic.Int64
+	tuples   map[string]TupleRec
+	changes  []changeRec
+	// changesReads counts GET /authz/v2/changes (the projection pull, P6.12).
+	changesReads atomic.Int64
+	grpc         *authzGRPC
 	// OnChange, when set, is called after every change (the run publishes the poke).
 	OnChange func()
 }
@@ -35,7 +41,7 @@ type RoleGrant struct {
 // NewAuthz makes a provider offering only the core capability.
 func NewAuthz() *Authz {
 	return &Authz{
-		roles: map[string][]string{}, grants: map[string]RoleGrant{}, stale: map[string]int64{},
+		roles: map[string][]string{}, grants: map[string]RoleGrant{}, stale: map[string]int64{}, tuples: map[string]TupleRec{},
 		caps: map[string]any{
 			"core": true, "admin_write": false, "sharing": false, "relation_sync": false, "check": false,
 			"graph": false, "list_objects": false, "delegation": false, "agents": false,
@@ -122,17 +128,7 @@ func (f *Authz) Handler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, b)
 	})
-	mux.HandleFunc("GET /authz/v2/changes", func(w http.ResponseWriter, r *http.Request) {
-		rev := strconv.FormatInt(f.Revision(), 10)
-		after := r.URL.Query().Get("after")
-		if after == "" {
-			after = "0"
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"changes": []any{}, "next": rev, "watermark": rev})
-	})
-	mux.HandleFunc("GET /authz/v2/tuples", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"tuples": []any{}, "next_cursor": "",
-			"revision": strconv.FormatInt(f.Revision(), 10)})
-	})
+	mux.HandleFunc("GET /authz/v2/changes", f.serveChanges)
+	mux.HandleFunc("GET /authz/v2/tuples", f.serveTuples)
 	return mux
 }

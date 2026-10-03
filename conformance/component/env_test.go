@@ -7,7 +7,7 @@ import (
 
 func TestComponentEnvWidget(t *testing.T) {
 	c := widget(t)
-	v := suiteValues{FakeHost: "host.docker.internal", AuthzPort: 1001, IAMPort: 1002, ObserverPort: 1003,
+	v := suiteValues{FakeHost: "host.docker.internal", AuthzPort: 1001, AuthzGRPCPort: 1006, IAMPort: 1002, ObserverPort: 1003,
 		PeerHTTP: map[string]int{"conformance/peer": 1004}, PeerGRPC: map[string]int{"conformance/peer": 1005},
 		DB:     dbIdentity{Database: "compconf", Owner: "o1", OwnerPassword: "opw", Runtime: "r1", RuntimePassword: "rpw", Schema: "s1"},
 		Issuer: "urn:be:compconf:iam", Tenant: "compconf", Extra: map[string]string{"S3_URL": "http://s3", "S3_BUCKET": "b",
@@ -26,6 +26,7 @@ func TestComponentEnvWidget(t *testing.T) {
 		"PG_HOST": "pg", "PG_PORT": "5432", "PG_USER": "r1", "PG_OWNER_USER": "o1", "PG_SCHEMA": "s1",
 		"PG_PASSWORD_FILE":               "/run/brickkit/secrets/conformance-widget-1-0-0/PG_PASSWORD_FILE",
 		"AUTHZ_URL":                      "http://host.docker.internal:1001",
+		"AUTHZ_GRPC_URL":                 "http://host.docker.internal:1006",
 		"IAM_URL":                        "http://host.docker.internal:1002",
 		"OTEL_BASE_URL":                  "http://host.docker.internal:1003",
 		"CONFORMANCE_PEER_ENDPOINT":      "http://host.docker.internal:1004",
