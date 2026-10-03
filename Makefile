@@ -1,6 +1,6 @@
 # be-acceptance 不是 brickKit 组件，但仍按总纲 §I 的 9 个门禁目标写。
 .DEFAULT_GOAL := help
-.PHONY: help check-version test image migrate-idempotent dag-check contract-check \
+.PHONY: compconf-unit compconf-infra compconf-selftest help check-version test image migrate-idempotent dag-check contract-check \
         import-scan smoke module-check gates tier0 tier1 tier2 tier2-shell all
 
 help:  ## 列出所有目标
@@ -40,8 +40,8 @@ test:  ## 跑除 closedloop/、tier2/ 外的全部单测（-race）
 dag-check:  ## 包依赖图无环（Go 编译器本身就不允许循环 import，这条恒过）
 	@go list ./... >/dev/null && echo "✓ 包依赖图无环（Go 编译器本身就不允许循环 import）"
 
-import-scan:  ## 铁律六：be-acceptance 不许依赖任何组件仓库（be-sdk-go 白名单例外）
-	@bad="$$(go list -deps ./... 2>/dev/null | grep '^github.com/brickKit/' | grep -vE '^github.com/brickKit/be-acceptance($$|/)' | grep -vE '^github.com/brickKit/be-sdk-go($$|/)')"; \
+import-scan:  ## 铁律六：be-acceptance 不许依赖任何组件仓库（be-sdk-go 与纯数据的 be-protocol、两个族契约模块白名单例外）
+	@bad="$$(go list -deps ./... 2>/dev/null | grep '^github.com/brickKit/' | grep -vE '^github.com/brickKit/be-acceptance($$|/)' | grep -vE '^github.com/brickKit/be-sdk-go($$|/)' | grep -vE '^github.com/brickKit/(be-protocol|contract-infra-authz/v2|contract-infra-iam)($$|/)')"; \
 	if [ -n "$$bad" ]; then \
 		echo "✗ be-acceptance 不许依赖任何组件仓库：$$bad"; exit 1; \
 	fi; \
@@ -98,3 +98,13 @@ tier2-shell:  ## 单模块 panic 隔离：在外壳包所在 module（SHELL_PKG_
 
 ##@ 汇总
 all: check-version test image migrate-idempotent dag-check contract-check import-scan smoke module-check  ## 跑完整 9 项（不含 gates/tier0，含上面几条 N/A 直接过）
+
+##@ 组件一致性套件 compconf（conformance/component）
+compconf-unit:  ## compconf 的单测（不需要 docker）
+	go test -race ./conformance/component/...
+
+compconf-infra:  ## 一次性 PG16 / NATS / 容器操作的真机测试（需要 docker）
+	go test -tags compconf_docker -count=1 -run TestEnv ./conformance/component/infra/
+
+compconf-selftest:  ## 先见红再信绿：rawstub 全绿，每个坏变体恰好在自己的用例上判红（需要 docker，约 10–15 分钟）
+	go test -tags compconf_docker -count=1 -timeout 60m -v -run 'TestSelftest' ./conformance/component/ 2>&1 | tail -120
