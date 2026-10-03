@@ -114,8 +114,8 @@ func caseEVS02(ctx context.Context, r *Run) {
 		if !r.ev.require(id, err == nil, "publishing: %v", err) {
 			return
 		}
-		first := r.waitObserve(ctx, c.Observe.SQL, s.aggID, "", 15*time.Second)
-		if !r.ev.check(id, first != "", "%s not applied within 15 s", c.Subject) {
+		first := r.waitObserve(ctx, c.Observe.SQL, s.aggID, "", applyWait)
+		if !r.ev.check(id, first != "", "%s not applied within 45 s", c.Subject) {
 			return
 		}
 		_, err = r.publishAs(ctx, s, 2, s.at(2, s.variedField()), map[string]string{"Nats-Msg-Id": "redelivery-" + ceid, "ce-id": ceid})
@@ -169,12 +169,12 @@ func caseEVS03(ctx context.Context, r *Run) {
 				}
 			}
 			if i == 0 {
-				want = normalise(r.waitObserve(ctx, c.Observe.SQL, s.aggID, "", 15*time.Second), s.aggID)
+				want = normalise(r.waitObserve(ctx, c.Observe.SQL, s.aggID, "", applyWait), s.aggID)
 				r.ev.check(id, want != "", "%s in order was not applied", c.Subject)
 				continue
 			}
 			got := ""
-			for end := time.Now().Add(15 * time.Second); time.Now().Before(end) && got != want; time.Sleep(300 * time.Millisecond) {
+			for end := time.Now().Add(applyWait); time.Now().Before(end) && got != want; time.Sleep(300 * time.Millisecond) {
 				o, _ := r.observe(ctx, c.Observe.SQL, s.aggID)
 				got = normalise(o, s.aggID)
 			}
@@ -202,13 +202,13 @@ func caseEVS04(ctx context.Context, r *Run) {
 		r.ev.require(id, err == nil, "publishing: %v", err)
 		got := r.bus.waitFor(func(m busMsg) bool {
 			return strings.HasPrefix(m.Subject, "dlq."+durable+".") && m.Header.Get("ce-subject") == s.aggID
-		}, 1, 15*time.Second)
-		r.ev.check(id, len(got) == 1, "a %s without ce-id: %d dead letters within 15 s, want 1 (P12.14) [%s]", c.Subject, len(got), noID)
+		}, 1, applyWait)
+		r.ev.check(id, len(got) == 1, "a %s without ce-id: %d dead letters within 45 s, want 1 (P12.14) [%s]", c.Subject, len(got), noID)
 		r.checkDLQHeaders(id, got, durable, c.Subject)
 		bad, err := r.publishAs(ctx, s, 1, []byte("not json {"), nil)
 		r.ev.require(id, err == nil, "publishing: %v", err)
-		got = r.dlqOf(durable, bad, 15*time.Second)
-		r.ev.check(id, len(got) == 1, "a %s with an unparsable payload: %d dead letters within 15 s, want 1 (P12.7)", c.Subject, len(got))
+		got = r.dlqOf(durable, bad, applyWait)
+		r.ev.check(id, len(got) == 1, "a %s with an unparsable payload: %d dead letters within 45 s, want 1 (P12.7)", c.Subject, len(got))
 		r.checkDLQHeaders(id, got, durable, c.Subject)
 	}
 }
@@ -277,6 +277,14 @@ func (r *Run) soloInstance(ctx context.Context, name string, set map[string]stri
 	}
 	return in, done, nil
 }
+
+// applyWait bounds how long a case waits for a published message to be handled (applied, dead
+// lettered, or answered by an event of the handler). It is the durable's ack wait (30 s, P12.5)
+// plus a margin. Whenever an instance of the component has just stopped or was paused, one
+// message may be handed to a pull request nobody reads and is redelivered only after the ack
+// wait; with 15 s the reference sequence of CP-EVS-03 stopped at version 2 in a full run. The
+// waits return as soon as the effect is seen, so a healthy run is not slower.
+const applyWait = 45 * time.Second
 
 // waitPullsGone waits until no pull request is waiting on the component's durables, or limit
 // passes. The last pull request of an instance that stopped stays registered at the server
@@ -359,11 +367,11 @@ func caseEVS05(ctx context.Context, r *Run) {
 	if !r.ev.require(id, err == nil, "publishing: %v", err) {
 		return
 	}
-	got := r.waitObserve(ctx, c.Observe.SQL, s.aggID, "", 15*time.Second)
+	got := r.waitObserve(ctx, c.Observe.SQL, s.aggID, "", applyWait)
 	if got == "" {
 		r.tailLogs(id, in, 25)
 	}
-	r.ev.check(id, got != "", "%s not applied within 15 s after the table grants came back (P12.7: nak with delay, redeliver)", c.Subject)
+	r.ev.check(id, got != "", "%s not applied within 45 s after the table grants came back (P12.7: nak with delay, redeliver)", c.Subject)
 	r.ev.check(id, len(r.dlqOf(durableName(r.comp.ID(), c.Subject), ceid, time.Second)) == 0, "a temporary failure was dead-lettered (P12.7)")
 }
 
@@ -380,15 +388,15 @@ func caseEVS06(ctx context.Context, r *Run) {
 		}
 		hot, err := r.publishAs(ctx, s, 50, s.at(50, ""), map[string]string{"ce-hopcount": "11"})
 		r.ev.require(id, err == nil, "publishing: %v", err)
-		r.ev.check(id, len(r.dlqOf(durable, hot, 15*time.Second)) == 1, "a %s with ce-hopcount 11 was not dead-lettered within 15 s (P12.8)", c.Subject)
+		r.ev.check(id, len(r.dlqOf(durable, hot, applyWait)) == 1, "a %s with ce-hopcount 11 was not dead-lettered within 45 s (P12.8)", c.Subject)
 		if c.Produces == "" {
 			continue
 		}
 		n++
 		ceid, err := r.publishAs(ctx, s, 60, s.at(60, ""), map[string]string{"ce-hopcount": "3"})
 		r.ev.require(id, err == nil, "publishing: %v", err)
-		got := r.bus.waitFor(func(m busMsg) bool { return m.Subject == c.Produces && m.Header.Get("ce-causationid") == ceid }, 1, 15*time.Second)
-		if r.ev.check(id, len(got) == 1, "handling %s did not publish %s with ce-causationid %s within 15 s (P12.8)", c.Subject, c.Produces, ceid) {
+		got := r.bus.waitFor(func(m busMsg) bool { return m.Subject == c.Produces && m.Header.Get("ce-causationid") == ceid }, 1, applyWait)
+		if r.ev.check(id, len(got) == 1, "handling %s did not publish %s with ce-causationid %s within 45 s (P12.8)", c.Subject, c.Produces, ceid) {
 			r.ev.check(id, got[0].Header.Get("ce-hopcount") == "4", "%s caused by hop count 3 has ce-hopcount %q, want 4 (P12.8)", c.Produces, got[0].Header.Get("ce-hopcount"))
 		}
 	}
@@ -411,8 +419,8 @@ func caseEVS07(ctx context.Context, r *Run) {
 		delete(s.payload, "legal_entity_id")
 		ceid, err := r.publishAs(ctx, s, 1, s.at(1, ""), map[string]string{"ce-legalentity": ""})
 		r.ev.require(id, err == nil, "publishing: %v", err)
-		r.ev.check(id, len(r.dlqOf(durableName(r.comp.ID(), c.Subject), ceid, 15*time.Second)) == 1,
-			"a %s (transaction document) without legal entity was not dead-lettered within 15 s (P11.8)", c.Subject)
+		r.ev.check(id, len(r.dlqOf(durableName(r.comp.ID(), c.Subject), ceid, applyWait)) == 1,
+			"a %s (transaction document) without legal entity was not dead-lettered within 45 s (P11.8)", c.Subject)
 	}
 	if n == 0 {
 		r.ev.notApplicable(id, "no consumed subject is a transaction document in its producer's contract")
@@ -454,7 +462,7 @@ func caseEVS08(ctx context.Context, r *Run) {
 		return
 	}
 	ceid, err := r.publishAs(ctx, s, 70, s.at(70, ""), nil)
-	r.dlqOf(durable, ceid, 15*time.Second)
+	r.dlqOf(durable, ceid, applyWait)
 	time.Sleep(3 * time.Second)
 	got := r.bus.find(func(m busMsg) bool {
 		return strings.HasPrefix(m.Subject, "dlq."+durable+".") && m.Header.Get("ce-id") == ceid
