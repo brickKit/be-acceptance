@@ -86,12 +86,56 @@ type Assembly struct {
 		Fixtures string     `yaml:"fixtures"`
 		Skip     []SkipItem `yaml:"skip"`
 	} `yaml:"conformance"`
-	DataScopes  yaml.Node `yaml:"data_scopes"`
-	Resources   []any     `yaml:"resources"`
+	DataScopes  yaml.Node  `yaml:"data_scopes"`
+	Resources   []Resource `yaml:"resources"`
 	Permissions []struct {
 		Key  string `yaml:"key"`
 		Type string `yaml:"type"`
 	} `yaml:"permissions"`
+}
+
+// Resource is one assembly.yaml resources entry (assembly-protocol.schema.json resource).
+type Resource struct {
+	Type       string   `yaml:"type"`
+	Table      string   `yaml:"table"`
+	ViewKey    string   `yaml:"view_key"`
+	Keys       []string `yaml:"keys"`
+	Dimensions []string `yaml:"dimensions"`
+	Relations  map[string]struct {
+		Grants   []string `yaml:"grants"`
+		Includes []string `yaml:"includes"`
+		OwnedBy  string   `yaml:"owned_by"`
+	} `yaml:"relations"`
+	Share *struct {
+		Key       string   `yaml:"key"`
+		Relations []string `yaml:"relations"`
+		Subjects  []string `yaml:"subjects"`
+	} `yaml:"share"`
+	Fields []struct {
+		Set     string   `yaml:"set"`
+		Columns []string `yaml:"columns"`
+		Read    string   `yaml:"read"`
+		Edit    string   `yaml:"edit"`
+	} `yaml:"fields"`
+	Derivation string `yaml:"derivation"`
+}
+
+// DataScope is one assembly.yaml data_scopes entry (a project key: dimension, column, mode,
+// tables).
+type DataScope struct {
+	Dimension string   `yaml:"dimension"`
+	Column    string   `yaml:"column"`
+	Mode      string   `yaml:"mode"`
+	Tables    []string `yaml:"tables"`
+}
+
+// DataScopes lists data_scopes; none when it is the word none.
+func (c *Component) DataScopes() []DataScope {
+	var ds []DataScope
+	if c.Assembly.DataScopes.Kind == yaml.SequenceNode {
+		_ = c.Assembly.DataScopes.Decode(&ds)
+	}
+	return ds
 }
 
 // SkipItem is one assembly.yaml conformance.skip entry.
