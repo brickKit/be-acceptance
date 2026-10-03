@@ -96,19 +96,50 @@ type busMsg struct {
 	At      time.Time
 }
 
-// busRecorder keeps every message published while the suite is connected.
+// busRecorder keeps every message published while the suite is connected. A JetStream delivery
+// to a consumer also reaches a ">" subscription, under the message's original subject and with
+// a $JS.ACK reply. That is a delivery, not a publish: it is counted per consumer and not kept.
+// Kept as publishes, the redeliveries of one consumer filled the suite's memory (2026-10-03)
+// and made "published once" checks count deliveries.
 type busRecorder struct {
-	mu   sync.Mutex
-	msgs []busMsg
+	mu         sync.Mutex
+	msgs       []busMsg
+	deliveries map[string]int // "<stream>/<consumer>" -> messages delivered to it
 }
 
 func (b *busRecorder) add(m *nats.Msg) {
 	if strings.HasPrefix(m.Subject, "$") || strings.HasPrefix(m.Subject, "_INBOX") {
 		return
 	}
+	if c, ok := ackConsumer(m.Reply); ok {
+		b.mu.Lock()
+		if b.deliveries == nil {
+			b.deliveries = map[string]int{}
+		}
+		b.deliveries[c]++
+		b.mu.Unlock()
+		return
+	}
 	b.mu.Lock()
 	b.msgs = append(b.msgs, busMsg{Subject: m.Subject, Header: m.Header, Data: append([]byte(nil), m.Data...), At: time.Now()})
 	b.mu.Unlock()
+}
+
+// ackConsumer names the consumer a JetStream ack subject belongs to. The subject is
+// $JS.ACK.<stream>.<consumer>.<5 counters> or, with a domain,
+// $JS.ACK.<domain>.<account hash>.<stream>.<consumer>.<5 counters>[.<token>].
+func ackConsumer(reply string) (string, bool) {
+	if !strings.HasPrefix(reply, "$JS.ACK.") {
+		return "", false
+	}
+	p := strings.Split(reply, ".")
+	switch {
+	case len(p) >= 11:
+		return p[4] + "/" + p[5], true
+	case len(p) >= 4:
+		return p[2] + "/" + p[3], true
+	}
+	return "unknown", true
 }
 
 // find returns the messages matching pred.

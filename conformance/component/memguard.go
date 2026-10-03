@@ -105,15 +105,28 @@ func (r *Run) memoryReport() string {
 		size += len(m.Data)
 		per[m.Subject]++
 	}
+	delivered := map[string]int{}
+	for c, k := range r.bus.deliveries {
+		delivered[c] = k
+	}
 	r.bus.mu.Unlock()
 	fmt.Fprintf(&b, "  bus: %d messages, %d bytes", n, size)
-	subjects := sortedKeys(per)
-	sort.SliceStable(subjects, func(i, j int) bool { return per[subjects[i]] > per[subjects[j]] })
-	for i, s := range subjects {
-		if i == 5 {
-			break
+	top := func(m map[string]int) []string {
+		keys := sortedKeys(m)
+		sort.SliceStable(keys, func(i, j int) bool { return m[keys[i]] > m[keys[j]] })
+		if len(keys) > 5 {
+			keys = keys[:5]
 		}
+		return keys
+	}
+	for _, s := range top(per) {
 		fmt.Fprintf(&b, "\n    %s ×%d", s, per[s])
+	}
+	if len(delivered) > 0 {
+		b.WriteString("\n  deliveries to consumers (counted, not kept):")
+		for _, c := range top(delivered) {
+			fmt.Fprintf(&b, "\n    %s ×%d", c, delivered[c])
+		}
 	}
 	if r.rec != nil {
 		r.rec.mu.Lock()

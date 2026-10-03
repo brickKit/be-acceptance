@@ -143,6 +143,7 @@ func Execute(ctx context.Context, o Options) (*Report, error) {
 		return nil, fmt.Errorf("memory guard: the suite's heap reached %d MiB, over the ceiling of %d MiB; the log says what grew and compconf-heap.pprof has the allocation sites; no report is written",
 			r.mem.heap.Load()>>20, r.mem.limit>>20)
 	}
+	r.logf("recorders at the end of the run:\n%s", r.memoryReport())
 	rep := buildReport(cat, r.ev, r.selected, r.ran, comp.Assembly.Conformance.Skip, reportMeta{
 		Component: comp.ID(), Version: comp.Version(), ImageRef: o.Image, ImageDigest: digest,
 		SDK: r.sdkOfInfo(ctx), Env: r.infraVersions(ctx), Started: started, NotRunReason: r.notRunNote})

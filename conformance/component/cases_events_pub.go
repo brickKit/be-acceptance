@@ -3,6 +3,7 @@ package compconf
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"sort"
@@ -119,32 +120,41 @@ func caseEVP02(ctx context.Context, r *Run) {
 	r.ev.check(id, err == nil && n == 1, "the stream holds %d %s events about %s (%v), want exactly 1", n, p.Subject, agg, err)
 }
 
-// streamCount counts the stream's messages of a subject about one aggregate.
+// streamCountLimit bounds how many messages of one subject streamCount reads, so that a
+// component that floods a stream fails its case instead of holding the suite.
+const streamCountLimit = 10000
+
+// streamCount counts the stream's messages of a subject about one aggregate. It reads the
+// stream by sequence and creates no consumer. The earlier version fetched through an ordered
+// consumer in a loop that ended on an empty batch; on 2026-10-03 that loop never ended (it held
+// CP-EVP-02 for 13 minutes), and every message it was delivered reached the suite's ">"
+// subscription, which kept them all as publishes until the host ran out of memory.
 func (r *Run) streamCount(ctx context.Context, subject, agg string) (int, error) {
 	js, err := r.js()
 	if err != nil {
 		return 0, err
 	}
-	c, err := js.OrderedConsumer(ctx, streamOf(subject), jetstream.OrderedConsumerConfig{FilterSubjects: []string{subject}})
+	s, err := js.Stream(ctx, streamOf(subject))
 	if err != nil {
 		return 0, err
 	}
 	n := 0
-	for {
-		batch, err := c.FetchNoWait(500)
+	for seq, read := uint64(1), 0; ; read++ {
+		if read == streamCountLimit {
+			return n, fmt.Errorf("the stream holds more than %d %s messages", streamCountLimit, subject)
+		}
+		// The first message of the subject at or after seq.
+		m, err := s.GetMsg(ctx, seq, jetstream.WithGetMsgSubject(subject))
+		if errors.Is(err, jetstream.ErrMsgNotFound) {
+			return n, nil
+		}
 		if err != nil {
 			return n, err
 		}
-		got := 0
-		for m := range batch.Messages() {
-			got++
-			if m.Headers().Get("ce-subject") == agg {
-				n++
-			}
+		if m.Header.Get("ce-subject") == agg {
+			n++
 		}
-		if got == 0 {
-			return n, nil
-		}
+		seq = m.Sequence + 1
 	}
 }
 
