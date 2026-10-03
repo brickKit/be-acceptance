@@ -95,7 +95,10 @@ func (a *App) claim(ctx context.Context) ([]outRow, error) {
 		return rows.Err()
 	})
 	if broken == "select-claim" && len(out) > 0 {
-		time.Sleep(100 * time.Millisecond) // widens the window two replicas both read the same rows
+		// Longer than the pump's idle interval (2 s), so the other replica is certain to read the
+		// same rows before these are marked. With 100 ms the two replicas overlapped in roughly
+		// one run out of ten, and the variant passed CP-EVP-03 it must fail.
+		time.Sleep(2500 * time.Millisecond)
 	}
 	return out, err
 }
