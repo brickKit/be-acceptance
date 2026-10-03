@@ -7,9 +7,10 @@ grants:
   rawstub_editor:
     keys: [conformance.rawstub.view, conformance.rawstub.create, conformance.rawstub.archive]
     default_level: all
+    values: { kind: ["*"] }
 
 resources:
-  notes:
+  conformance.rawstub.note:
     create:
       method: POST
       path: /conformance/rawstub/notes
@@ -28,6 +29,7 @@ resources:
       method: GET
       path: /conformance/rawstub/notes
       key: conformance.rawstub.view
+      filters: { kind: { dimension: kind } }
     owner:
       method: GET
       path: /conformance/rawstub/notes/{id}/owner
@@ -86,4 +88,4 @@ slow:
 
 lock:
   sql: "SELECT 1 FROM notes WHERE id = $1 FOR UPDATE"
-  while: resources.notes.archive          # answers 409 LOCK_TIMEOUT within lock_timeout
+  while: resources.conformance.rawstub.note.archive          # answers 409 LOCK_TIMEOUT within lock_timeout

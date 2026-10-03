@@ -3,6 +3,7 @@ package fakes
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"sync"
@@ -131,4 +132,11 @@ func (f *Authz) Handler() http.Handler {
 	mux.HandleFunc("GET /authz/v2/changes", f.serveChanges)
 	mux.HandleFunc("GET /authz/v2/tuples", f.serveTuples)
 	return mux
+}
+
+// BundleJSON is the current bundle as GET /authz/v2/bundle serves it.
+func (f *Authz) BundleJSON() []byte {
+	b, _ := f.bundle()
+	raw, _ := json.Marshal(b)
+	return raw
 }

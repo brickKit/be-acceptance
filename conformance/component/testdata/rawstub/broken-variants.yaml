@@ -53,3 +53,13 @@ variants:
     behaviour: no route deadline and no outbound deadline; calls wait for the peer for ever
     must_fail: [CP-OUT-07]
     also_fails: [CP-OUT-02, CP-OUT-05, CP-CORE-08]
+  - name: empty-dept-root
+    breaks: P6.4
+    behaviour: an empty dept_path is read as the root of the department tree
+    must_fail: [CP-SCOPE-06]
+    also_fails: [CP-SCOPE-10]
+  - name: invisible-403
+    breaks: P6.6
+    behaviour: a read of a record the caller cannot see answers 403 OUT_OF_SCOPE instead of 404
+    must_fail: [CP-SCOPE-07]
+    also_fails: [CP-SCOPE-10, CP-ERR-02]

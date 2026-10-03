@@ -79,6 +79,7 @@ type Run struct {
 	slowID     string   // the record a slow path with {id} uses
 	migrated   bool
 	replica    *instance // the second serving instance of the jobs profile
+	scope      *scopeWorld
 	oldSecrets []string // secret values replaced during the run (CP-DB-06), still never logged
 }
 

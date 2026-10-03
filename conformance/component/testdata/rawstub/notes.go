@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -44,13 +45,30 @@ func scanNote(row pgx.Row) (note, error) {
 	return n, err
 }
 
+// listNotes is a cursor-paged list (P3.8) filtered by the caller's scope for the view key
+// (P6.5); ?kind= narrows within the caller's kinds, and outside them answers 403
+// OUT_OF_SCOPE (P6.6).
 func (a *App) listNotes(rc *reqCtx) error {
-	if rc.r.URL.Query().Get("cursor") != "" {
+	q := rc.r.URL.Query()
+	size := 50
+	if v, err := strconv.Atoi(q.Get("page_size")); err == nil && v > 0 {
+		size = min(v, 500)
+	}
+	acc := a.accessOf(rc, viewKey)
+	kind := q.Get("kind")
+	if kind != "" && !acc.kindAll && !contains(acc.kinds, kind) {
+		return beErr("OUT_OF_SCOPE", nil)
+	}
+	after, ok := decodeCursor(q.Get("cursor"), kind)
+	if !ok {
 		return beErr("CURSOR_INVALID", nil)
 	}
+	args := append(acc.args(), kind, after.at, after.id, size+1)
 	items := []note{}
 	err := a.db.Tx(rc.ctx, func(tx pgx.Tx) error {
-		rows, err := tx.Query(rc.ctx, a.db.Q(`SELECT `+noteCols+` FROM notes ORDER BY created_at DESC, id DESC LIMIT 50`))
+		rows, err := tx.Query(rc.ctx, a.db.Q(`SELECT `+noteCols+` FROM notes WHERE `+scopePredicate(1)+`
+			AND ($7 = '' OR kind = $7) AND (created_at, id) < ($8, $9::uuid)
+			ORDER BY created_at DESC, id DESC LIMIT $10`), args...)
 		if err != nil {
 			return err
 		}
@@ -67,7 +85,41 @@ func (a *App) listNotes(rc *reqCtx) error {
 	if err != nil {
 		return err
 	}
-	return writeJSON(rc, http.StatusOK, map[string]any{"items": items, "next_cursor": ""})
+	next := ""
+	if len(items) > size {
+		items = items[:size]
+		next = encodeCursor(items[size-1], kind)
+	}
+	return writeJSON(rc, http.StatusOK, map[string]any{"items": items, "next_cursor": next})
+}
+
+type cursorPos struct {
+	at time.Time
+	id string
+}
+
+// encodeCursor is opaque: the last row's sort key and ID, and the filter it belongs to.
+func encodeCursor(n note, filter string) string {
+	at, _ := time.Parse(tsLayout, n.CreatedAt)
+	raw := strconv.FormatInt(at.UnixMicro(), 10) + "|" + n.ID + "|" + filter
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+// decodeCursor: "" starts at the top; a cursor of another filter is invalid (P3.8).
+func decodeCursor(c, filter string) (cursorPos, bool) {
+	if c == "" {
+		return cursorPos{at: time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), id: "ffffffff-ffff-ffff-ffff-ffffffffffff"}, true
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(c)
+	parts := strings.SplitN(string(raw), "|", 3)
+	if err != nil || len(parts) != 3 || parts[2] != filter || !uuidRe.MatchString(parts[1]) {
+		return cursorPos{}, false
+	}
+	us, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return cursorPos{}, false
+	}
+	return cursorPos{at: time.UnixMicro(us).UTC(), id: parts[1]}, true
 }
 
 var kindRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
@@ -148,7 +200,7 @@ func (a *App) getNoteByID(ctx context.Context, id string) (note, error) {
 }
 
 func (a *App) getNote(rc *reqCtx) error {
-	n, err := a.getNoteByID(rc.ctx, rc.params["id"])
+	n, err := a.scopedNote(rc, rc.params["id"])
 	if err != nil {
 		return err
 	}
@@ -171,7 +223,7 @@ func (a *App) archiveNote(rc *reqCtx) error {
 	if err != nil {
 		return err
 	}
-	if _, err := a.getNoteByID(rc.ctx, id); err != nil {
+	if err := a.decideCommand(rc, id); err != nil { // P13.5: the target and its scope before the key
 		return err
 	}
 	archive := func(tx pgx.Tx) (int, any, error) {

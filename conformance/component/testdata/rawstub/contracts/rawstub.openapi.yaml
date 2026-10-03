@@ -53,8 +53,12 @@ paths:
   /notes:
     get:
       operationId: listNotes
-      summary: The newest notes (at most 50)
+      summary: The caller's visible notes, newest first, by cursor (P3.8; data scopes P6.5)
       x-be-permission: conformance.rawstub.view
+      parameters:
+        - { name: page_size, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: kind, in: query, description: "a kind dimension value; outside the caller's kinds 403 OUT_OF_SCOPE", schema: { type: string } }
       responses:
         "200":
           description: a page of notes

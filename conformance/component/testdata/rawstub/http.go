@@ -45,6 +45,12 @@ func routes() []*route {
 		{method: "POST", pattern: userPrefix + "/slow", guard: "conformance.rawstub.view", deadline: 5 * time.Second, handle: (*App).slow},
 	}
 	rs = append(rs, lifecycleRoutes()...)
+	rs = append(rs,
+		&route{method: "POST", pattern: userPrefix + "/_authz/check", guard: "authenticated", handle: (*App).authzCheck},
+		&route{method: "GET", pattern: userPrefix + "/_authz/explain", guard: "authenticated", handle: (*App).authzExplain},
+		&route{method: "GET", pattern: userPrefix + "/_shares/{type}/{id}", guard: "authenticated", handle: (*App).shares},
+		&route{method: "POST", pattern: userPrefix + "/_shares/{type}/{id}", guard: "authenticated", handle: (*App).shares},
+		&route{method: "DELETE", pattern: userPrefix + "/_shares/{type}/{id}/{share_id}", guard: "authenticated", handle: (*App).shares})
 	for _, r := range rs {
 		r.segs = strings.Split(strings.TrimPrefix(r.pattern, "/"), "/")
 	}

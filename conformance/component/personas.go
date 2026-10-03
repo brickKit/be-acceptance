@@ -52,6 +52,7 @@ func (r *Run) setupPersonas() {
 		all.Values[d] = []string{"*"}
 	}
 	r.authz.SetRole(pAll, r.allKeys(), all)
+	r.planScope()
 }
 
 func toRoleGrant(g Grant) fakes.RoleGrant {

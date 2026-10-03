@@ -19,7 +19,18 @@ data:
   schema: conformance_rawstub  # the suite replaces it with a random schema on every run
   role: conformance_rawstub_rw
 
-data_scopes: none
+data_scopes:
+  - { dimension: owner, column: owner_id,  mode: equals, tables: [notes] }
+  - { dimension: org,   column: dept_path, mode: prefix, tables: [notes] }
+  - { dimension: kind,  column: kind,      mode: in,     tables: [notes] }
+
+resources:
+  - type: conformance.rawstub.note
+    table: notes
+    view_key: conformance.rawstub.view
+    keys: [conformance.rawstub.view, conformance.rawstub.archive]
+    dimensions: [owner, org, kind]
+    derivation: direct          # no relations: nothing is shared, the ACL branch never applies
 
 permissions:
   - { key: conformance.rawstub.view,   title: 查看便签, type: page }

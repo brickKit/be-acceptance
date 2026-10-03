@@ -27,8 +27,11 @@ type Bundle struct {
 }
 
 type Grant struct {
-	FromTS *int64 `json:"from_ts"`
-	Until  *int64 `json:"until"`
+	FromTS       *int64              `json:"from_ts"`
+	Until        *int64              `json:"until"`
+	Levels       map[string]string   `json:"levels"`
+	DefaultLevel string              `json:"default_level"`
+	Values       map[string][]string `json:"values"`
 }
 
 type Profile struct {

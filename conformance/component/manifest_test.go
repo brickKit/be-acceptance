@@ -64,7 +64,7 @@ func TestLoadComponentValidatesFixtures(t *testing.T) {
 	if c.Assembly.Language != "go" || c.Assembly.Protocol != "1.0" {
 		t.Fatalf("assembly = %+v", c.Assembly)
 	}
-	if got := c.Fixtures.Resources["notes"]["create"].Path; got != "/conformance/rawstub/notes" {
+	if got := c.Fixtures.Resources["conformance.rawstub.note"]["create"].Path; got != "/conformance/rawstub/notes" {
 		t.Fatalf("create path = %q", got)
 	}
 	body, err := c.FixtureFile("samples/note-create.json")
@@ -84,7 +84,7 @@ func TestSelectProfilesWidget(t *testing.T) {
 
 func TestSelectProfilesRawstub(t *testing.T) {
 	got := SelectProfiles(rawstub(t))
-	want := []string{"core", "obs", "err", "auth", "grpc", "outbound", "idempotency", "db", "jobs", "lifecycle"}
+	want := []string{"core", "obs", "err", "auth", "scope", "grpc", "outbound", "idempotency", "db", "jobs", "lifecycle"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("profiles = %v, want %v", got, want)
 	}

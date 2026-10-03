@@ -3,7 +3,7 @@ package compconf
 import "context"
 
 // ImplementedProfiles are the profiles this suite version runs.
-var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc", "outbound", "db", "idempotency", "jobs", "lifecycle"}
+var ImplementedProfiles = []string{"core", "obs", "err", "auth", "scope", "grpc", "outbound", "db", "idempotency", "jobs", "lifecycle"}
 
 // step is one ordered action of the scenario, attributed to the case it exercises; Case ""
 // marks a setup step several cases depend on, which always runs.
@@ -66,6 +66,22 @@ func scenario() []step {
 		{"CP-DB-03", "pool limit under load", caseDB03},
 		{"CP-DB-05", "no owner session; partition upkeep", caseDB05},
 		{"CP-DB-06", "password rotation", caseDB06},
+		{"", "scope records and facts", stepScopeWorld},
+		{"CP-SCOPE-01", "level matrix", caseScope01},
+		{"CP-SCOPE-02", "levels per key", caseScope02},
+		{"CP-SCOPE-03", "dimension values", caseScope03},
+		{"CP-SCOPE-05", "highest of several roles", caseScope05},
+		{"CP-SCOPE-06", "no department", caseScope06},
+		{"CP-SCOPE-07", "invisible read", caseScope07},
+		{"CP-SCOPE-08", "command on an invisible record", caseScope08},
+		{"CP-SCOPE-09", "visible but not allowed", caseScope09},
+		{"CP-SCOPE-10", "List/Can consistency, random grants", caseScope10},
+		{"CP-SCOPE-11", "field masking", caseScope11},
+		{"CP-SCOPE-12", "_authz/check", caseScope12},
+		{"CP-SCOPE-13", "explain does not leak", caseScope13},
+		{"CP-SCOPE-14", "_shares without sharing", caseScope14},
+		{"CP-SCOPE-15", "share from the changefeed", caseScope15},
+		{"CP-SCOPE-04", "until", caseScope04},
 		{"CP-IDEM-01", "replay", caseIdem01},
 		{"CP-IDEM-02", "another fingerprint", caseIdem02},
 		{"CP-IDEM-03", "another target", caseIdem03},

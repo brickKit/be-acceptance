@@ -20,8 +20,9 @@ var platformDDL embed.FS
 // platformVersion is the version recorded in besdk_platform_version.
 const platformVersion = 1
 
-// ownsResourceTypes: ddl/07 (the ACL projection) is created only by an owner of resource types.
-const ownsResourceTypes = false
+// ownsResourceTypes: ddl/07 (the ACL projection) is created only by an owner of resource types;
+// the stub declares conformance.rawstub.note (it keeps no projection rows: no relations).
+const ownsResourceTypes = true
 
 // applyPlatform is the platform migration of P11.3, after the component's own migrations, as
 // the owner: the besdk_* tables and functions, the version row, then the current partition

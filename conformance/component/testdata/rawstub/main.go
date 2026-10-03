@@ -29,7 +29,8 @@ var broken = ""
 
 var brokenVariants = map[string]bool{"": true, "accept-refresh": true, "healthz-db": true, "leak-internal": true, "ipv4-only": true,
 	"readyz-live-db": true, "no-redact": true, "no-goaway": true,
-	"unbounded-pool": true, "secret-read-once": true, "cron-no-claim": true, "idem-select-claim": true, "no-deadline": true}
+	"unbounded-pool": true, "secret-read-once": true, "cron-no-claim": true, "idem-select-claim": true, "no-deadline": true,
+	"empty-dept-root": true, "invisible-403": true}
 
 // App holds the running component.
 type App struct {
