@@ -48,3 +48,8 @@ variants:
     breaks: P10.9, P13.6
     behaviour: an idempotency key is claimed with a plain SELECT and then an INSERT, not atomically
     must_fail: [CP-IDEM-07]
+  - name: no-deadline
+    breaks: P3.4, P7.7
+    behaviour: no route deadline and no outbound deadline; calls wait for the peer for ever
+    must_fail: [CP-OUT-07]
+    also_fails: [CP-OUT-02, CP-OUT-05, CP-CORE-08]

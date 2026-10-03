@@ -3,7 +3,7 @@ package compconf
 import "context"
 
 // ImplementedProfiles are the profiles this suite version runs.
-var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc", "db", "idempotency", "jobs", "lifecycle"}
+var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc", "outbound", "db", "idempotency", "jobs", "lifecycle"}
 
 // step is one ordered action of the scenario, attributed to the case it exercises; Case ""
 // marks a setup step several cases depend on, which always runs.
@@ -74,6 +74,14 @@ func scenario() []step {
 		{"CP-IDEM-07", "concurrent same key", caseIdem07},
 		{"CP-IDEM-08", "header and body key", caseIdem08},
 		{"CP-IDEM-05", "two-step in progress", caseIdem05},
+		{"CP-OUT-08", "outbound metadata", caseOut08},
+		{"CP-OUT-02", "outbound deadline", caseOut02},
+		{"CP-OUT-01", "one connection per dependency", caseOut01},
+		{"CP-OUT-06", "user-plane HTTP forwarding", caseOut06},
+		{"CP-OUT-03", "retries only idempotent methods", caseOut03},
+		{"CP-OUT-07", "peer hung: 504 in time", caseOut07},
+		{"CP-OUT-05", "outbound bulkhead", caseOut05},
+		{"CP-OUT-04", "retry budget", caseOut04},
 		{"", "second replica", stepSecondReplica},
 		{"CP-JOBS-01", "cron slots across two replicas", caseJobs01},
 		{"CP-JOBS-02", "singleton takeover", caseJobs02},

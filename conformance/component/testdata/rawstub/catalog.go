@@ -53,6 +53,8 @@ var beReasons = map[string]reasonEntry{
 		"This idempotency key was already used for a different request.", "这个幂等键已经用于另一个请求。"},
 	"IDEMPOTENCY_IN_PROGRESS": {"ABORTED", 409, "Still in progress", "仍在处理中",
 		"The first attempt of this request has not finished yet.", "这个请求的第一次执行还没有结束。"},
+	"OUTBOUND_LIMIT": {"RESOURCE_EXHAUSTED", 429, "Too busy", "系统繁忙",
+		"Too many requests to {target} at once. Try again shortly.", "同时发往 {target} 的请求过多，请稍后再试。"},
 	"BATCH_TOO_LARGE": {"INVALID_ARGUMENT", 400, "Batch too large", "批量过大",
 		"{field} has {got} items; at most {max} are allowed.", "{field} 有 {got} 项，最多允许 {max} 项。"},
 	"DB_TOO_MANY_CONNECTIONS": {"UNAVAILABLE", 503, "Service busy", "服务繁忙",

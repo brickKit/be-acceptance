@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -159,6 +160,24 @@ func TestCatalogues(t *testing.T) {
 		for r, e := range mine {
 			if c, ok := cat[r]; !ok || c != e {
 				t.Errorf("%s %s: stub %+v, catalogue %+v", file, r, e, c)
+			}
+		}
+	}
+}
+
+// Every be reason the stub raises is in its catalogue copy; an unknown one would answer the
+// generic INTERNAL instead (found by CP-OUT-05: OUTBOUND_LIMIT was missing).
+func TestEveryRaisedReasonIsCatalogued(t *testing.T) {
+	files, _ := filepath.Glob("*.go")
+	re := regexp.MustCompile(`beErr(?:Cause)?\("([A-Z_]+)"`)
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		b, _ := os.ReadFile(f)
+		for _, m := range re.FindAllSubmatch(b, -1) {
+			if _, ok := beReasons[string(m[1])]; !ok {
+				t.Errorf("%s raises %s, which is not in beReasons", f, m[1])
 			}
 		}
 	}

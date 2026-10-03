@@ -27,6 +27,10 @@ artifacts:
   - type: metadata
     files: [assembly.yaml, contracts/errors.yaml, migrations/lifecycle.yaml, conformance/fixtures.yaml]
 
+dependencies:
+  components:
+    - conformance/peer@1.0.0          # answered by the suite's fake peer: BatchGetOwners, the user-plane owner
+
 configSchema:
   type: object
   properties:

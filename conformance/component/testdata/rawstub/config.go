@@ -71,6 +71,10 @@ type Config struct {
 	HTTPDefaultTimeout, GRPCMaxConnAge   time.Duration
 	ShutdownGrace                        time.Duration
 
+	// PeerEndpoint and PeerGRPCEndpoint are brickKit's injected addresses of the required
+	// dependency conformance/peer (P2.6), http://host:port each.
+	PeerEndpoint, PeerGRPCEndpoint string
+
 	BusinessTZ    *time.Location
 	JobsOverrides map[string]jobOverride
 	LifecycleMode string // on, dry-run, off (P16.9)
@@ -117,6 +121,8 @@ func loadConfig(lookup envLookup, mode string) (*Config, []configProblem) {
 			probs = append(probs, configProblem{Key: secretKey, Class: err.class, Detail: err.detail})
 		}
 	}
+	peerHTTP, peerGRPC, ep := dependencyEndpoints(lookup, mode)
+	probs = append(probs, ep...)
 	jobs, jp := parseJobsOverrides(vals["JOBS_OVERRIDES"])
 	probs = append(probs, jp...)
 	mode, lp := parseDataLifecycle(vals["DATA_LIFECYCLE"])
@@ -126,6 +132,7 @@ func loadConfig(lookup envLookup, mode string) (*Config, []configProblem) {
 	}
 	c := buildConfig(lookup, vals)
 	c.JobsOverrides, c.LifecycleMode = jobs, mode
+	c.PeerEndpoint, c.PeerGRPCEndpoint = peerHTTP, peerGRPC
 	c.BusinessTZ, _ = time.LoadLocation(vals["BUSINESS_TIMEZONE"].s)
 	return c, nil
 }
@@ -178,4 +185,26 @@ func secretText(content string) (string, bool) {
 		content = content[:len(content)-1]
 	}
 	return content, content != ""
+}
+
+// dependencyEndpoints reads the injected addresses of conformance/peer, a required dependency:
+// absent or malformed is a configuration error when serving (P2.6).
+func dependencyEndpoints(lookup envLookup, mode string) (string, string, []configProblem) {
+	if mode != "serve" {
+		return "", "", nil
+	}
+	var probs []configProblem
+	get := func(k string) string {
+		v, ok := lookup(k)
+		if !ok || v == "" {
+			probs = append(probs, configProblem{Key: k, Class: "CONFIG_MISSING", Detail: "address of the required dependency conformance/peer"})
+			return ""
+		}
+		base, ok := familyURL(v)
+		if !ok {
+			probs = append(probs, configProblem{Key: k, Class: "CONFIG_INVALID", Detail: "not http://host:port"})
+		}
+		return base
+	}
+	return get("CONFORMANCE_PEER_ENDPOINT"), get("CONFORMANCE_PEER_GRPC_ENDPOINT"), probs
 }

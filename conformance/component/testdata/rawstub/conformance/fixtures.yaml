@@ -28,6 +28,16 @@ resources:
       method: GET
       path: /conformance/rawstub/notes
       key: conformance.rawstub.view
+    owner:
+      method: GET
+      path: /conformance/rawstub/notes/{id}/owner
+      key: conformance.rawstub.view
+      triggers: { grpc: conformance.peer.v1.PeerService/BatchGetOwners }
+    peer_owner:
+      method: GET
+      path: /conformance/rawstub/notes/{id}/peer-owner
+      key: conformance.rawstub.view
+      triggers: { http: "GET /conformance/peer/owners/{sub:alice}" }
     archive:
       method: POST
       path: /conformance/rawstub/notes/{id}/archive
@@ -57,6 +67,11 @@ resources:
       as: alice
       body_file: samples/owner-me.json
       expect: { status: 200 }
+
+dependencies:
+  conformance/peer:
+    conformance.peer.v1.PeerService/BatchGetOwners: { response_file: samples/owners-batch.json }
+    "GET /conformance/peer/owners/{owner_id}": { response_file: samples/peer-owner.json }
 
 pii_log:
   via: resources.owners.put_me

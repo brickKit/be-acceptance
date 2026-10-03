@@ -21,6 +21,7 @@ func baseEnv(t *testing.T) map[string]string {
 		"PG_OWNER_USER": "own", "PG_OWNER_PASSWORD_FILE": filepath.Join(dir, "missing"), "PG_SCHEMA": "s",
 		"AUTHZ_URL": "http://authz:8223/", "IAM_URL": "http://iam:8200", "IAM_ISSUER": "urn:be:t1:iam", "TENANT_ID": "t1",
 		"COMPONENT_ID": componentID, "COMPONENT_VERSION": "1.0.0",
+		"CONFORMANCE_PEER_ENDPOINT": "http://peer:8080", "CONFORMANCE_PEER_GRPC_ENDPOINT": "http://peer:9090",
 	}
 }
 
@@ -104,5 +105,16 @@ func TestUUIDv7(t *testing.T) {
 	}
 	if want := fmt.Sprintf("%012x", at.UnixMilli()); id[:8]+id[9:13] != want {
 		t.Errorf("timestamp %s, want %s", id[:8]+id[9:13], want)
+	}
+}
+
+func TestLoadConfigRequiredDependencyEndpoint(t *testing.T) {
+	env := baseEnv(t)
+	delete(env, "CONFORMANCE_PEER_GRPC_ENDPOINT")
+	if _, probs := loadConfig(lookupFrom(env), "serve"); len(probs) != 1 || probs[0].Key != "CONFORMANCE_PEER_GRPC_ENDPOINT" {
+		t.Fatalf("problems = %v", probs)
+	}
+	if _, probs := loadConfig(lookupFrom(env), "migrate"); len(probs) != 1 || probs[0].Key != "PG_OWNER_PASSWORD_FILE" {
+		t.Fatalf("migrate needs no dependency address: %v", probs)
 	}
 }

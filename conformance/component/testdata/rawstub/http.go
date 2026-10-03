@@ -39,6 +39,8 @@ func routes() []*route {
 		{method: "GET", pattern: userPrefix + "/notes", guard: "conformance.rawstub.view", handle: (*App).listNotes},
 		{method: "POST", pattern: userPrefix + "/notes", guard: "conformance.rawstub.create", handle: (*App).createNote},
 		{method: "GET", pattern: userPrefix + "/notes/{id}", guard: "conformance.rawstub.view", handle: (*App).getNote},
+		{method: "GET", pattern: userPrefix + "/notes/{id}/owner", guard: "conformance.rawstub.view", deadline: 2 * time.Second, handle: (*App).noteOwner},
+		{method: "GET", pattern: userPrefix + "/notes/{id}/peer-owner", guard: "conformance.rawstub.view", handle: (*App).notePeerOwner},
 		{method: "POST", pattern: userPrefix + "/notes/{id}/archive", guard: "conformance.rawstub.archive", handle: (*App).archiveNote},
 		{method: "POST", pattern: userPrefix + "/slow", guard: "conformance.rawstub.view", deadline: 5 * time.Second, handle: (*App).slow},
 	}
@@ -146,6 +148,9 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(deadline + 5*time.Second))
 	ctx, cancel := context.WithTimeout(r.Context(), deadline)
 	defer cancel()
+	if a.broken == "no-deadline" {
+		ctx = r.Context()
+	}
 	rc := &reqCtx{w: rec, r: r, ctx: ctx, route: rt, params: params, span: span, reqID: reqID}
 	if err := a.serve(rc); err != nil {
 		a.writeError(rc, a.deadlineAware(rc, err))

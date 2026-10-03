@@ -102,6 +102,33 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Note" }
+  /notes/{id}/owner:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getNoteOwner
+      summary: The note's owner as conformance/peer knows it (gRPC BatchGetOwners; route deadline 2 s)
+      x-be-permission: conformance.rawstub.view
+      x-be-deadline-seconds: 2
+      responses:
+        "200":
+          description: the owner
+          content:
+            application/json:
+              schema: { type: object, properties: { owner_id: { type: string }, display_name: { type: string } } }
+  /notes/{id}/peer-owner:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getNotePeerOwner
+      summary: The owner's profile from conformance/peer's user plane, read with the caller's token
+      x-be-permission: conformance.rawstub.view
+      responses:
+        "200":
+          description: the owner's profile
+          content:
+            application/json:
+              schema: { type: object }
   /notes/{id}/archive:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }

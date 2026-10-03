@@ -25,17 +25,18 @@ import (
 // slow down any of them, and it records what it receives (metadata, deadlines, connections,
 // headers). This is how the outbound cases observe the component.
 type Peer struct {
-	ID      string
-	methods map[string]protoreflect.MethodDescriptor
-	mu      sync.Mutex
-	answers map[string]PeerAnswer // rpc full name or "<METHOD> <path>"
-	calls   []Call
-	http    []HTTPCall
-	conns   atomic.Int64
-	release chan struct{}
-	grpcSrv *grpc.Server
-	grpcLn  net.Listener
-	httpSrv *Server
+	ID                    string
+	methods               map[string]protoreflect.MethodDescriptor
+	mu                    sync.Mutex
+	answers               map[string]PeerAnswer // rpc full name or "<METHOD> <path>"
+	calls                 []Call
+	http                  []HTTPCall
+	conns                 atomic.Int64
+	inflight, maxInflight atomic.Int64
+	release               chan struct{}
+	grpcSrv               *grpc.Server
+	grpcLn                net.Listener
+	httpSrv               *Server
 }
 
 // PeerAnswer is how the peer answers one call.
@@ -141,6 +142,12 @@ func (p *Peer) HTTPServer() *Server { return p.httpSrv }
 // HTTPURL is the HTTP base on 127.0.0.1.
 func (p *Peer) HTTPURL() string { return p.httpSrv.URL("127.0.0.1") }
 
+// MaxInflight is the most gRPC calls in progress at once since the last ResetMaxInflight.
+func (p *Peer) MaxInflight() int64 { return p.maxInflight.Load() }
+
+// ResetMaxInflight restarts the in-flight maximum.
+func (p *Peer) ResetMaxInflight() { p.maxInflight.Store(p.inflight.Load()) }
+
 // Connections counts accepted gRPC TCP connections.
 func (p *Peer) Connections() int64 { return p.conns.Load() }
 
@@ -179,6 +186,10 @@ func (p *Peer) handle(_ any, stream grpc.ServerStream) error {
 	p.mu.Lock()
 	a, rel := p.answers[name], p.release
 	p.mu.Unlock()
+	n := p.inflight.Add(1)
+	defer p.inflight.Add(-1)
+	for m := p.maxInflight.Load(); n > m && !p.maxInflight.CompareAndSwap(m, n); m = p.maxInflight.Load() {
+	}
 	if err := wait(stream, a, rel); err != nil {
 		return err
 	}

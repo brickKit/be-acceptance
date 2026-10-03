@@ -29,7 +29,7 @@ var broken = ""
 
 var brokenVariants = map[string]bool{"": true, "accept-refresh": true, "healthz-db": true, "leak-internal": true, "ipv4-only": true,
 	"readyz-live-db": true, "no-redact": true, "no-goaway": true,
-	"unbounded-pool": true, "secret-read-once": true, "cron-no-claim": true, "idem-select-claim": true}
+	"unbounded-pool": true, "secret-read-once": true, "cron-no-claim": true, "idem-select-claim": true, "no-deadline": true}
 
 // App holds the running component.
 type App struct {
@@ -43,6 +43,7 @@ type App struct {
 	ready    *Readiness
 	routes   []*route
 	broken   string
+	peer     *Peer
 }
 
 func main() {
@@ -86,7 +87,8 @@ func serve(cfg *Config, log *Logger) int {
 		log.Error("config_error", F{"key": "PG_PASSWORD_FILE", "error": err.Error()})
 		return 78
 	}
-	a := &App{cfg: cfg, log: log, metrics: m, exporter: newExporter(cfg, log), db: db, routes: routes(), broken: broken}
+	a := &App{cfg: cfg, log: log, metrics: m, exporter: newExporter(cfg, log), db: db, routes: routes(), broken: broken,
+		peer: newPeer(cfg)}
 	a.bundles = newBundleStore(cfg.AuthzURL, log)
 	jwks := newJWKS(cfg.IAMURL, log)
 	a.verifier = &tokenVerifier{keys: jwks, issuer: cfg.IAMIssuer, tenant: cfg.TenantID, now: time.Now, acceptRefresh: broken == "accept-refresh"}
