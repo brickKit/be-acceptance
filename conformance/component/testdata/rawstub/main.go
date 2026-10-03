@@ -30,7 +30,8 @@ var broken = ""
 var brokenVariants = map[string]bool{"": true, "accept-refresh": true, "healthz-db": true, "leak-internal": true, "ipv4-only": true,
 	"readyz-live-db": true, "no-redact": true, "no-goaway": true,
 	"unbounded-pool": true, "secret-read-once": true, "cron-no-claim": true, "idem-select-claim": true, "no-deadline": true,
-	"empty-dept-root": true, "invisible-403": true}
+	"empty-dept-root": true, "invisible-403": true,
+	"no-ce-id": true, "select-claim": true}
 
 // App holds the running component.
 type App struct {
@@ -45,6 +46,7 @@ type App struct {
 	routes   []*route
 	broken   string
 	peer     *Peer
+	bus      *Bus
 }
 
 func main() {
@@ -88,8 +90,13 @@ func serve(cfg *Config, log *Logger) int {
 		log.Error("config_error", F{"key": "PG_PASSWORD_FILE", "error": err.Error()})
 		return 78
 	}
+	bus, err := connectBus(cfg, log)
+	if err != nil {
+		log.Error("config_error", F{"key": "NATS_URL", "error": err.Error()})
+		return 78
+	}
 	a := &App{cfg: cfg, log: log, metrics: m, exporter: newExporter(cfg, log), db: db, routes: routes(), broken: broken,
-		peer: newPeer(cfg)}
+		peer: newPeer(cfg), bus: bus}
 	a.bundles = newBundleStore(cfg.AuthzURL, log)
 	jwks := newJWKS(cfg.IAMURL, log)
 	a.verifier = &tokenVerifier{keys: jwks, issuer: cfg.IAMIssuer, tenant: cfg.TenantID, now: time.Now, acceptRefresh: broken == "accept-refresh"}
@@ -129,6 +136,13 @@ func serve(cfg *Config, log *Logger) int {
 			}
 		}
 		newScheduler(a).Run(bg)
+		for err := a.bus.ensure(bg); err != nil; err = a.bus.ensure(bg) { // again at start (P12.4)
+			if !sleepCtx(bg, 2*time.Second) {
+				return
+			}
+		}
+		go a.runPump(bg)
+		go a.runConsumer(bg)
 	}()
 	log.Info("serving", F{"http": 8080, "grpc": 9090})
 
@@ -146,6 +160,7 @@ func serve(cfg *Config, log *Logger) int {
 	stopBG()
 	a.exporter.Wait(3 * time.Second)
 	db.pool.Close()
+	bus.nc.Close()
 	log.Info("shutdown_done", F{"exit_code": code})
 	return code
 }

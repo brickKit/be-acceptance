@@ -20,7 +20,7 @@ tags: [conformance, fixture]
 artifacts:
   - type: api-contract
     format: protobuf
-    files: [contracts/conformance/rawstub/v1/rawstub.proto]
+    files: [contracts/conformance/rawstub/v1/rawstub.proto, contracts/events/rawstub.events.json]
   - type: api-contract
     format: openapi
     files: [contracts/rawstub.openapi.yaml]
@@ -50,6 +50,11 @@ configSchema:
     PG_CONN_MAX_IDLE_TIME: {type: string, default: 5m}
     PG_MIGRATION_HOST: {type: string}
     PG_MIGRATION_PORT: {type: integer}
+    # events-pub / events-sub
+    EVENT_BUS_URL: {type: string}                   # one of EVENT_BUS_URL, NATS_URL
+    NATS_URL: {type: string}
+    EVENTS_MAX_DELIVER: {type: integer, default: 8}
+    EVENTS_BACKOFF: {type: string, default: "1s,10s,1m,5m,15m,30m,1h"}
     # auth
     AUTHZ_URL: {type: string}
     IAM_URL: {type: string}
@@ -80,6 +85,15 @@ deployment:
 
 migration:
   command: [/app/rawstub, migrate, up]
+
+# P12.16: the subjects of contracts/events and of fixtures events.consumes.
+events:
+  publishes:
+    - conformance.rawstub.archived.v1
+    - conformance.rawstub.created.v1
+    - conformance.rawstub.owner_noted.v1
+  subscribes:
+    - conformance.owner.updated.v1
 
 healthCheck:
   type: http

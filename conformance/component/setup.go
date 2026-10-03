@@ -48,8 +48,10 @@ func (r *Run) setup(ctx context.Context) error {
 		if r.nats, err = r.env.StartNATS(ctx, infra.NATSImage); err != nil {
 			return err
 		}
-		if r.natsConn, err = nats.Connect(fmt.Sprintf("nats://127.0.0.1:%d", r.nats.HostPort)); err == nil {
+		if r.natsConn, err = nats.Connect(fmt.Sprintf("nats://127.0.0.1:%d", r.nats.HostPort),
+			nats.MaxReconnects(-1), nats.ReconnectWait(300*time.Millisecond), nats.Name("compconf")); err == nil {
 			r.authz.OnChange = r.poke
+			_, _ = r.natsConn.Subscribe(">", r.bus.add)
 		}
 	}
 	r.setupPersonas()

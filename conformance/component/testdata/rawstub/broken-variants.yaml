@@ -63,3 +63,12 @@ variants:
     behaviour: a read of a record the caller cannot see answers 403 OUT_OF_SCOPE instead of 404
     must_fail: [CP-SCOPE-07]
     also_fails: [CP-SCOPE-10, CP-ERR-02]
+  - name: no-ce-id
+    breaks: P12 (envelope)
+    behaviour: the outbox pump publishes without ce-id and without Nats-Msg-Id
+    must_fail: [CP-EVP-01]
+    also_fails: [CP-EVP-02, CP-EVP-03]
+  - name: select-claim
+    breaks: P10.9, P12.1
+    behaviour: the outbox pump reads PENDING rows with a plain SELECT, then updates them (no FOR UPDATE SKIP LOCKED)
+    must_fail: [CP-EVP-03]

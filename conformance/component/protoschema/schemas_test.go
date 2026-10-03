@@ -26,3 +26,13 @@ func TestSchemaResolvesCrossFileRefs(t *testing.T) {
 		t.Fatal("invalid report accepted")
 	}
 }
+
+func TestCompileDoc(t *testing.T) {
+	s, err := CompileDoc("p", []byte(`{"type":"object","required":["a"],"properties":{"a":{"type":"string"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ValidateJSON(s, []byte(`{"a":"x"}`)) != nil || ValidateJSON(s, []byte(`{"a":1}`)) == nil {
+		t.Fatal("validation wrong")
+	}
+}

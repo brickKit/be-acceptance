@@ -18,7 +18,7 @@ import (
 
 // stepSecondReplica is a setup step: a second serving instance with the same configuration.
 func stepSecondReplica(ctx context.Context, r *Run) {
-	if r.pg == nil || !r.mainUp || !contains(r.ran, "jobs") {
+	if r.pg == nil || !r.mainUp || !(contains(r.ran, "jobs") || contains(r.ran, "events-pub")) {
 		return
 	}
 	in, err := r.startInstance(ctx, "replica", r.compEnv, fakes.NewLogs())

@@ -75,6 +75,17 @@ dependencies:
     conformance.peer.v1.PeerService/BatchGetOwners: { response_file: samples/owners-batch.json }
     "GET /conformance/peer/owners/{owner_id}": { response_file: samples/peer-owner.json }
 
+events:
+  produces:
+    - { via: resources.conformance.rawstub.note.create, subject: conformance.rawstub.created.v1 }
+    - { via: resources.conformance.rawstub.note.archive, subject: conformance.rawstub.archived.v1 }
+  consumes:
+    - subject: conformance.owner.updated.v1
+      sample_file: samples/owner-updated.json
+      aggregate_id: $.owner_id
+      observe: { sql: "SELECT version, credit_limit, display_name FROM owner_snapshots WHERE owner_id = $1" }
+      produces: conformance.rawstub.owner_noted.v1
+
 pii_log:
   via: resources.owners.put_me
   msg: owner_profile_updated

@@ -3,7 +3,7 @@ package compconf
 import "context"
 
 // ImplementedProfiles are the profiles this suite version runs.
-var ImplementedProfiles = []string{"core", "obs", "err", "auth", "scope", "grpc", "outbound", "db", "idempotency", "jobs", "lifecycle"}
+var ImplementedProfiles = []string{"core", "obs", "err", "auth", "scope", "grpc", "outbound", "events-pub", "events-sub", "db", "idempotency", "jobs", "lifecycle"}
 
 // step is one ordered action of the scenario, attributed to the case it exercises; Case ""
 // marks a setup step several cases depend on, which always runs.
@@ -23,6 +23,7 @@ func scenario() []step {
 		{"CP-CORE-02", "configuration errors exit 78", caseCore02},
 		{"", "migrate (when CP-CORE-01 did not run)", stepMigrate},
 		{"CP-LIFE-01", "partitions right after the migration", stepLife01Migrated},
+		{"CP-EVP-04", "streams right after the migration", stepEVP04Migrated},
 		{"", "start with PostgreSQL, the bus and authz down", stepStartWithDepsDown},
 		{"CP-CORE-04", "/healthz with PostgreSQL stopped", caseCore04},
 		{"", "PostgreSQL back", stepDatabaseBack},
@@ -98,7 +99,20 @@ func scenario() []step {
 		{"CP-OUT-07", "peer hung: 504 in time", caseOut07},
 		{"CP-OUT-05", "outbound bulkhead", caseOut05},
 		{"CP-OUT-04", "retry budget", caseOut04},
+		{"CP-EVP-04", "an existing stream is not changed", caseEVP04},
+		{"CP-EVP-01", "envelope", caseEVP01},
+		{"CP-EVS-09", "durables are exactly events.subscribes", caseEVS09},
+		{"CP-EVS-01", "durable parameters; offline catch-up", caseEVS01},
+		{"CP-EVS-02", "duplicate delivery", caseEVS02},
+		{"CP-EVS-03", "out of order", caseEVS03},
+		{"CP-EVS-04", "malformed and missing ce-id", caseEVS04},
+		{"CP-EVS-06", "causation and hop count", caseEVS06},
+		{"CP-EVS-07", "transaction document without legal entity", caseEVS07},
+		{"CP-EVS-05", "temporary failure", caseEVS05},
+		{"CP-EVS-08", "max deliveries and the dead letter", caseEVS08},
+		{"CP-EVP-02", "bus stopped", caseEVP02},
 		{"", "second replica", stepSecondReplica},
+		{"CP-EVP-03", "two replicas publish each row once", caseEVP03},
 		{"CP-JOBS-01", "cron slots across two replicas", caseJobs01},
 		{"CP-JOBS-02", "singleton takeover", caseJobs02},
 		{"CP-JOBS-05", "terminated sessions", caseJobs05},
@@ -111,6 +125,8 @@ func scenario() []step {
 		{"CP-LIFE-04", "lifecycle.yaml", caseLife04},
 		{"CP-AUTH-08", "stale token", caseAuth08},
 		{"CP-OBS-03", "metrics", caseObs03},
+		{"CP-EVP-05", "payloads against the contract; size", caseEVP05},
+		{"CP-EVP-06", "published subjects declared", caseEVP06},
 		{"CP-CORE-06", "SIGTERM", caseCore06},
 		{"CP-OBS-02", "log lines", caseObs02},
 		{"CP-OBS-04", "no secret or token in logs", caseObs04Leaks},

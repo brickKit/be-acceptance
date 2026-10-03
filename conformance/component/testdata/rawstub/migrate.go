@@ -74,6 +74,10 @@ func runMigrate(cfg *Config, log *Logger) int {
 		log.Error("migrate_failed", F{"error": err.Error()})
 		return 1
 	}
+	if err := migrateBus(cfg, log); err != nil { // the third step of the platform migration (P11.3)
+		log.Error("migrate_failed", F{"error": err.Error()})
+		return 1
+	}
 	log.Info("migrate_done", F{"applied": applied, "version": latestMigration()})
 	return 0
 }
@@ -163,5 +167,23 @@ func logBlockers(ctx context.Context, conn *pgx.Conn, cfg *Config, log *Logger) 
 		if rows.Scan(&pid, &q) == nil {
 			log.Error("migrate_blocked_by", F{"pid": pid, "query": q, "schema": cfg.PGSchema})
 		}
+	}
+}
+
+// migrateBus ensures the streams and the durable; it names what it could not create.
+func migrateBus(cfg *Config, log *Logger) error {
+	bus, err := connectBus(cfg, log)
+	if err != nil {
+		return err
+	}
+	defer bus.nc.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	for {
+		err = bus.ensure(ctx)
+		if err == nil || ctx.Err() != nil {
+			return err
+		}
+		time.Sleep(time.Second)
 	}
 }

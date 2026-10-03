@@ -21,6 +21,7 @@ func baseEnv(t *testing.T) map[string]string {
 		"PG_OWNER_USER": "own", "PG_OWNER_PASSWORD_FILE": filepath.Join(dir, "missing"), "PG_SCHEMA": "s",
 		"AUTHZ_URL": "http://authz:8223/", "IAM_URL": "http://iam:8200", "IAM_ISSUER": "urn:be:t1:iam", "TENANT_ID": "t1",
 		"COMPONENT_ID": componentID, "COMPONENT_VERSION": "1.0.0",
+		"NATS_URL":                  "nats://nats:4222",
 		"CONFORMANCE_PEER_ENDPOINT": "http://peer:8080", "CONFORMANCE_PEER_GRPC_ENDPOINT": "http://peer:9090",
 	}
 }

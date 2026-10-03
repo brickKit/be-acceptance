@@ -71,10 +71,11 @@ func (e *Env) Close(ctx context.Context) {
 type RunSpec struct {
 	Name           string // suffix; the container is <prefix>-<name>
 	Image          string
-	Aliases        []string // network aliases
-	Env            []string // KEY=VALUE, passed through a 0600 env file
-	Mounts         []string // docker -v values
-	Ports          []int    // container ports published on 127.0.0.1 at random host ports
+	Aliases        []string    // network aliases
+	Env            []string    // KEY=VALUE, passed through a 0600 env file
+	Mounts         []string    // docker -v values
+	Ports          []int       // container ports published on 127.0.0.1 at random host ports
+	FixedPorts     map[int]int // container port -> host port on 127.0.0.1, kept across a restart
 	Cmd            []string
 	AddHostGateway bool // host.docker.internal -> the host, where the fakes listen
 }
@@ -103,6 +104,9 @@ func (e *Env) Run(ctx context.Context, s RunSpec) (*Container, error) {
 	}
 	for _, p := range s.Ports {
 		args = append(args, "-p", "127.0.0.1::"+strconv.Itoa(p))
+	}
+	for c, h := range s.FixedPorts {
+		args = append(args, "-p", "127.0.0.1:"+strconv.Itoa(h)+":"+strconv.Itoa(c))
 	}
 	if s.AddHostGateway {
 		args = append(args, "--add-host", "host.docker.internal:host-gateway")

@@ -286,3 +286,6 @@ func newHTTPServer(a *App) *http.Server {
 		ErrorLog:          log.New(errorLogWriter{a.log}, "", 0),
 	}
 }
+
+// traceparent is the W3C trace context of the request's span (for the outbox, P12).
+func (rc *reqCtx) traceparent() string { return "00-" + rc.span.TraceID + "-" + rc.span.SpanID + "-01" }

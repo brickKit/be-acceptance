@@ -84,7 +84,7 @@ func TestSelectProfilesWidget(t *testing.T) {
 
 func TestSelectProfilesRawstub(t *testing.T) {
 	got := SelectProfiles(rawstub(t))
-	want := []string{"core", "obs", "err", "auth", "scope", "grpc", "outbound", "idempotency", "db", "jobs", "lifecycle"}
+	want := []string{"core", "obs", "err", "auth", "scope", "grpc", "outbound", "events-pub", "events-sub", "idempotency", "db", "jobs", "lifecycle"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("profiles = %v, want %v", got, want)
 	}

@@ -49,6 +49,10 @@ var declaredKeys = []keySpec{
 	{name: "GRPC_MAX_CONNECTION_AGE", format: "duration", def: str("5m")},
 	{name: "SHUTDOWN_GRACE", format: "duration", def: str("25s")},
 	{name: "BUSINESS_TIMEZONE", format: "zone", def: str("Asia/Shanghai")},
+	{name: "EVENT_BUS_URL", format: "url"},
+	{name: "NATS_URL", format: "url"},
+	{name: "EVENTS_MAX_DELIVER", format: "int", def: str("8")},
+	{name: "EVENTS_BACKOFF", format: "durations", def: str("1s,10s,1m,5m,15m,30m,1h")},
 	{name: "JOBS_OVERRIDES", format: "json", def: str("")},
 	{name: "DATA_LIFECYCLE", format: "json", def: str(`{"mode":"on"}`)},
 }
@@ -74,6 +78,11 @@ type Config struct {
 	// PeerEndpoint and PeerGRPCEndpoint are brickKit's injected addresses of the required
 	// dependency conformance/peer (P2.6), http://host:port each.
 	PeerEndpoint, PeerGRPCEndpoint string
+
+	// BusURL is EVENT_BUS_URL, else NATS_URL; only nats:// is offered (P12.12).
+	BusURL           string
+	EventsMaxDeliver int
+	EventsBackoff    []time.Duration
 
 	BusinessTZ    *time.Location
 	JobsOverrides map[string]jobOverride
@@ -123,6 +132,8 @@ func loadConfig(lookup envLookup, mode string) (*Config, []configProblem) {
 	}
 	peerHTTP, peerGRPC, ep := dependencyEndpoints(lookup, mode)
 	probs = append(probs, ep...)
+	busURL, bp := busURL(vals)
+	probs = append(probs, bp...)
 	jobs, jp := parseJobsOverrides(vals["JOBS_OVERRIDES"])
 	probs = append(probs, jp...)
 	mode, lp := parseDataLifecycle(vals["DATA_LIFECYCLE"])
@@ -133,6 +144,7 @@ func loadConfig(lookup envLookup, mode string) (*Config, []configProblem) {
 	c := buildConfig(lookup, vals)
 	c.JobsOverrides, c.LifecycleMode = jobs, mode
 	c.PeerEndpoint, c.PeerGRPCEndpoint = peerHTTP, peerGRPC
+	c.BusURL, c.EventsMaxDeliver, c.EventsBackoff = busURL, int(vals["EVENTS_MAX_DELIVER"].i), vals["EVENTS_BACKOFF"].ds
 	c.BusinessTZ, _ = time.LoadLocation(vals["BUSINESS_TIMEZONE"].s)
 	return c, nil
 }
@@ -207,4 +219,21 @@ func dependencyEndpoints(lookup envLookup, mode string) (string, string, []confi
 		return base
 	}
 	return get("CONFORMANCE_PEER_ENDPOINT"), get("CONFORMANCE_PEER_GRPC_ENDPOINT"), probs
+}
+
+// busURL picks the bus address (P12.12): EVENT_BUS_URL, else NATS_URL; one is required and
+// this runtime has only the nats:// adapter.
+func busURL(v map[string]parsed) (string, []configProblem) {
+	key := "EVENT_BUS_URL"
+	if !v[key].set {
+		key = "NATS_URL"
+	}
+	u := v[key]
+	switch {
+	case !u.set:
+		return "", []configProblem{{Key: "NATS_URL", Class: "CONFIG_MISSING", Detail: "one of EVENT_BUS_URL, NATS_URL is required"}}
+	case !strings.HasPrefix(u.s, "nats://"):
+		return "", []configProblem{{Key: key, Class: "CONFIG_INVALID", Detail: "this runtime offers only the nats:// bus adapter"}}
+	}
+	return u.s, nil
 }

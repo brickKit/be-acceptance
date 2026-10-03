@@ -130,3 +130,21 @@ func conciseErr(err error) error {
 	}
 	return fmt.Errorf("%s", strings.TrimSpace(msg))
 }
+
+// CompileDoc compiles a standalone schema document (an event payload schema of a contract);
+// $ref to be-protocol's schemas resolve.
+func CompileDoc(name string, doc []byte) (*jsonschema.Schema, error) {
+	if _, err := loadCompiler(); err != nil {
+		return nil, err
+	}
+	v, err := jsonschema.UnmarshalJSON(bytes.NewReader(doc))
+	if err != nil {
+		return nil, err
+	}
+	c := jsonschema.NewCompiler()
+	id := "https://compconf.invalid/doc/" + name
+	if err := c.AddResource(id, v); err != nil {
+		return nil, err
+	}
+	return c.Compile(id)
+}

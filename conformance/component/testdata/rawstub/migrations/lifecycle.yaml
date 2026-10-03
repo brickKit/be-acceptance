@@ -6,3 +6,5 @@ tables:
     class: master
   rawstub_migrations:
     class: platform        # the stub's own migration-state table (not an official SDK, P11.11)
+  owner_snapshots:
+    class: snapshot        # rebuildable from conformance/peer; no retention floor

@@ -152,6 +152,10 @@ func (a *App) createNote(rc *reqCtx) error {
 			CreatedAt: now.Format(tsLayout), Version: 1}
 		_, err := tx.Exec(rc.ctx, a.db.Q(`INSERT INTO notes (id, title, owner_id, dept_path, kind, created_at, version)
 			VALUES ($1, $2, $3, $4, $5, $6, 1)`), n.ID, n.Title, n.OwnerID, n.DeptPath, n.Kind, now)
+		if err == nil {
+			err = a.enqueue(rc.ctx, tx, event{subject: "conformance.rawstub.created.v1", aggID: n.ID, version: 1, traceparent: rc.traceparent(),
+				payload: map[string]any{"note_id": n.ID, "title": n.Title, "kind": n.Kind, "owner_id": n.OwnerID, "version": 1}})
+		}
 		return http.StatusCreated, n, err
 	}
 	if key == "" {
@@ -236,6 +240,10 @@ func (a *App) archiveNote(rc *reqCtx) error {
 		}
 		n, err = scanNote(tx.QueryRow(rc.ctx, a.db.Q(`UPDATE notes SET archived_at = now(), version = version + 1
 			WHERE id = $1 RETURNING `+noteCols), id))
+		if err == nil {
+			err = a.enqueue(rc.ctx, tx, event{subject: "conformance.rawstub.archived.v1", aggID: n.ID, version: n.Version, traceparent: rc.traceparent(),
+				payload: map[string]any{"note_id": n.ID, "archived_at": *n.ArchivedAt, "version": n.Version}})
+		}
 		return http.StatusOK, n, err
 	}
 	if key == "" {

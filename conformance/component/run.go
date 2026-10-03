@@ -80,6 +80,7 @@ type Run struct {
 	migrated   bool
 	replica    *instance // the second serving instance of the jobs profile
 	scope      *scopeWorld
+	bus        busRecorder
 	oldSecrets []string // secret values replaced during the run (CP-DB-06), still never logged
 }
 

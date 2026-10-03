@@ -1,0 +1,59 @@
+{
+  "$schema": "https://github.com/brickKit/be-protocol/schemas/events-contract.schema.json",
+  "title": "conformance/rawstub events",
+  "note": "Additive only. created and archived share the aggregate type conformance.rawstub.note and the note row's version; owner_noted is published by the handler of conformance.owner.updated.v1.",
+  "envelope": {
+    "description": "CloudEvents 1.0 binary mode, fixed by be-protocol P12."
+  },
+  "events": [
+    {
+      "subject": "conformance.rawstub.created.v1",
+      "x-aggregate-type": "conformance.rawstub.note",
+      "x-consumption": "state",
+      "grade": "core",
+      "note": "Published by POST /notes in the creating transaction.",
+      "payload": {
+        "type": "object",
+        "required": ["note_id", "title", "kind", "owner_id", "version"],
+        "properties": {
+          "note_id": { "type": "string" },
+          "title": { "type": "string" },
+          "kind": { "type": "string" },
+          "owner_id": { "type": "string" },
+          "version": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    {
+      "subject": "conformance.rawstub.archived.v1",
+      "x-aggregate-type": "conformance.rawstub.note",
+      "x-consumption": "state",
+      "grade": "core",
+      "note": "Published by POST /notes/{id}/archive when the note is archived.",
+      "payload": {
+        "type": "object",
+        "required": ["note_id", "archived_at", "version"],
+        "properties": {
+          "note_id": { "type": "string" },
+          "archived_at": { "type": "string", "format": "date-time" },
+          "version": { "type": "integer", "minimum": 2 }
+        }
+      }
+    },
+    {
+      "subject": "conformance.rawstub.owner_noted.v1",
+      "x-aggregate-type": "conformance.rawstub.owner_note",
+      "x-consumption": "state",
+      "grade": "core",
+      "note": "Published by the handler of conformance.owner.updated.v1 in its transaction (causation = the handled event).",
+      "payload": {
+        "type": "object",
+        "required": ["owner_id", "version"],
+        "properties": {
+          "owner_id": { "type": "string" },
+          "version": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  ]
+}

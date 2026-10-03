@@ -84,7 +84,13 @@ type NATS struct {
 
 // StartNATS starts nats-server -js and waits until it accepts TCP connections.
 func (e *Env) StartNATS(ctx context.Context, image string) (*NATS, error) {
-	c, err := e.Run(ctx, RunSpec{Name: "nats", Image: image, Aliases: []string{"nats"}, Ports: []int{4222},
+	// A fixed host port: a restarted container keeps it, so clients reconnect (a random one
+	// would change on docker start).
+	hp, err := freePort()
+	if err != nil {
+		return nil, err
+	}
+	c, err := e.Run(ctx, RunSpec{Name: "nats", Image: image, Aliases: []string{"nats"}, FixedPorts: map[int]int{4222: hp},
 		Cmd: []string{"-js"}})
 	if err != nil {
 		return nil, err
@@ -120,3 +126,12 @@ func randHex(n int) string {
 
 // RandHex returns n random bytes as hex (for random identities and secrets).
 func RandHex(n int) string { return randHex(n) }
+
+func freePort() (int, error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port, nil
+}
