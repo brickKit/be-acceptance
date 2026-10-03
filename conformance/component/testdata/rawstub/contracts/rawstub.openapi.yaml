@@ -98,6 +98,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Note" }
+  /notes/{id}/archive:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: archiveNote
+      summary: Archives a note (once; the row is locked for the change); 404 NOT_FOUND when absent
+      x-be-permission: conformance.rawstub.archive
+      responses:
+        "200":
+          description: the note
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Note" }
   /slow:
     post:
       operationId: slow
@@ -106,6 +119,7 @@ paths:
       x-be-deadline-seconds: 5
       parameters:
         - { name: ms, in: query, required: true, schema: { type: integer, minimum: 0 } }
+        - { name: via, in: query, required: false, schema: { enum: [sleep, db] } }
       responses:
         "200":
           description: waited
@@ -123,4 +137,8 @@ components:
         id: { type: string }
         title: { type: string }
         owner_id: { type: string }
+        dept_path: { type: string }
+        kind: { type: string }
         created_at: { type: string, format: date-time }
+        archived_at: { type: [string, "null"], format: date-time }
+        version: { type: integer }

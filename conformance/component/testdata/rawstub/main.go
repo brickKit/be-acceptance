@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // the runtime embeds its own zone database (P11.7)
 
 	"google.golang.org/grpc"
 )
@@ -27,7 +28,8 @@ const (
 var broken = ""
 
 var brokenVariants = map[string]bool{"": true, "accept-refresh": true, "healthz-db": true, "leak-internal": true, "ipv4-only": true,
-	"readyz-live-db": true, "no-redact": true, "no-goaway": true}
+	"readyz-live-db": true, "no-redact": true, "no-goaway": true,
+	"unbounded-pool": true, "secret-read-once": true}
 
 // App holds the running component.
 type App struct {
@@ -117,6 +119,14 @@ func serve(cfg *Config, log *Logger) int {
 	go jwks.Run(bg)
 	go db.secret.Watch(bg)
 	go RunDBProbe(bg, db, a.ready, log, func(err error) { fatal <- err })
+	go func() { // background work starts once the schema is in place (P1.4)
+		for !a.ready.dbDone() {
+			if !sleepCtx(bg, 500*time.Millisecond) {
+				return
+			}
+		}
+		newScheduler(a).Run(bg)
+	}()
 	log.Info("serving", F{"http": 8080, "grpc": 9090})
 
 	sig := make(chan os.Signal, 1)

@@ -193,7 +193,10 @@ func caseAuth09(ctx context.Context, r *Run) {
 		return
 	}
 	for _, op := range r.comp.Operations {
-		if !r.ev.check(id, op.Guard != "", "%s %s declares no x-be-permission", op.Method, op.Path) {
+		if op.Internal {
+			continue // x-be-internal: system traffic, no guard (P3.16)
+		}
+		if !r.ev.check(id, op.Guard != "", "%s %s declares no x-be-permission and is not x-be-internal (P3.16)", op.Method, op.Path) {
 			continue
 		}
 		var body []reqOpt
@@ -249,4 +252,16 @@ func caseAuth12(ctx context.Context, r *Run) {
 	r.expect401(ctx, id, op, "agent deeper in the act chain", "Bearer "+r.token(p, fakes.WithClaim("act", nested)), "UNSUPPORTED_DELEGATION")
 	r.expect401(ctx, id, op, "ceil and dg with delegation false", "Bearer "+r.token(p, fakes.WithClaim("act", map[string]any{"sub": uuidv7(), "kind": "user"}),
 		fakes.WithClaim("ceil", []string{"view_as_ro"}), fakes.WithClaim("dg", "dg_1")), "UNSUPPORTED_DELEGATION")
+	// rc.2 order (E2, iam AT-050): stale before delegation.
+	now := time.Now().Unix()
+	old := r.token(pStaleDeleg, fakes.WithClaim("iat", now-120), fakes.WithClaim("nbf", now-120), fakes.WithClaim("act", agent))
+	r.authz.SetStale(r.personas[pStaleDeleg].Sub, now-60)
+	var x *exchange
+	for deadline := time.Now().Add(25 * time.Second); time.Now().Before(deadline); time.Sleep(time.Second) {
+		if x = r.call(ctx, op.Method, r.target(op), withToken(old)); x.reason() == "TOKEN_STALE" {
+			break
+		}
+	}
+	r.ev.check(id, x.Status == 401 && x.reason() == "TOKEN_STALE",
+		"a stale token that is also delegated (act.kind agent) = %d %s, want 401 TOKEN_STALE: the stale check comes first (E2)", x.Status, x.reason())
 }

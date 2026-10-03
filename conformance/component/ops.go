@@ -92,14 +92,17 @@ func (r *Run) fixtureOp(via string) (FixtureOp, bool) {
 }
 
 // fixtureBody is the body of a fixtures operation.
-func (r *Run) fixtureBody(op FixtureOp) []byte {
+func (r *Run) fixtureBody(op FixtureOp) []byte { return r.fixtureBodyFor(op, "") }
+
+// fixtureBodyFor is the body with {id} = id.
+func (r *Run) fixtureBodyFor(op FixtureOp, id string) []byte {
 	if op.BodyFile != "" {
 		if b, err := r.comp.FixtureFile(op.BodyFile); err == nil {
-			return []byte(r.substitute(string(b), ""))
+			return []byte(r.substitute(string(b), id))
 		}
 	}
 	if op.Body != nil {
-		return []byte(r.substitute(mustJSON(op.Body), ""))
+		return []byte(r.substitute(mustJSON(op.Body), id))
 	}
 	return nil
 }

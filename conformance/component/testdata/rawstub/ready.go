@@ -129,7 +129,11 @@ func probeOnce(ctx context.Context, d *DB, r *Readiness, log *Logger) error {
 	}
 	switch {
 	case ver == latestMigration():
-		r.set(false, true)
+		ok, err := platformApplied(pctx, d)
+		if err != nil {
+			return err
+		}
+		r.set(false, ok)
 	case ver > latestMigration():
 		return &fatalError{fmt.Sprintf("schema migration version %s is newer than the image's %s", ver, latestMigration())}
 	}

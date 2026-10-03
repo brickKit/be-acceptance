@@ -32,3 +32,11 @@ variants:
     breaks: P7.5
     behaviour: the gRPC server sets no MaxConnectionAge; a connection lives for ever
     must_fail: [CP-RPC-05]
+  - name: unbounded-pool
+    breaks: P10.5
+    behaviour: the connection pool ignores PG_POOL_MAX and opens a connection per concurrent request
+    must_fail: [CP-DB-03]
+  - name: secret-read-once
+    breaks: P2.9
+    behaviour: PG_PASSWORD_FILE is read once at start; a replaced file is never read again
+    must_fail: [CP-DB-06]

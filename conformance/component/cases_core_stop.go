@@ -2,6 +2,7 @@ package compconf
 
 import (
 	"context"
+	"strconv"
 	"time"
 )
 
@@ -20,7 +21,7 @@ func caseCore06(ctx context.Context, r *Run) {
 		if s.Key != "" {
 			persona = r.personaWith(s.Key)
 		}
-		target := r.fixtureTarget(*s, "", map[string]string{"ms": "3000"})
+		target := r.fixtureTarget(*s, r.slowRecord(ctx), map[string]string{"ms": strconv.Itoa(r.slowMS(*s, 3000))})
 		tok := r.token(persona)
 		go func() { slow <- r.call(ctx, s.Method, target, withToken(tok)) }()
 		time.Sleep(700 * time.Millisecond)
@@ -46,4 +47,22 @@ func caseCore06(ctx context.Context, r *Run) {
 	r.ev.check(id, err == nil && code == 0, "exit code after SIGTERM = %d (%v), want 0 (P1.6)", code, err)
 	r.ev.check(id, took < limit, "exited %v after SIGTERM, not before stopGracePeriodSeconds %v (P1.12)", took.Round(100*time.Millisecond), limit)
 	r.ev.check(id, took <= r.shutdownGrace()+2*time.Second, "exited %v after SIGTERM, beyond SHUTDOWN_GRACE %v (P1.6)", took.Round(100*time.Millisecond), r.shutdownGrace())
+}
+
+// slowMS keeps a slow request below its route deadline (x-be-deadline-seconds, else
+// HTTP_DEFAULT_TIMEOUT): at most want, and 1 s less than the deadline.
+func (r *Run) slowMS(s FixtureOp, want int) int {
+	deadline := 10 * time.Second
+	if d, err := time.ParseDuration(r.envValue("HTTP_DEFAULT_TIMEOUT")); err == nil {
+		deadline = d
+	}
+	for _, o := range r.comp.Operations {
+		if o.Method == s.Method && matchTemplate(o.Path, s.Path) && o.DeadlineSeconds > 0 {
+			deadline = time.Duration(o.DeadlineSeconds) * time.Second
+		}
+	}
+	if ms := int(deadline.Milliseconds()) - 1000; ms < want {
+		return max(ms, 100)
+	}
+	return want
 }

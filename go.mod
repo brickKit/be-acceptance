@@ -3,10 +3,10 @@ module github.com/brickKit/be-acceptance
 go 1.25.0
 
 require (
-	github.com/brickKit/be-protocol v1.0.0-rc.1
+	github.com/brickKit/be-protocol v1.0.0-rc.2
 	github.com/brickKit/be-sdk-go v0.2.7
-	github.com/brickKit/contract-infra-authz/v2 v2.0.0-rc.1
-	github.com/brickKit/contract-infra-iam v1.0.0-rc.1
+	github.com/brickKit/contract-infra-authz/v2 v2.0.0-rc.2
+	github.com/brickKit/contract-infra-iam v1.0.0-rc.2
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/jackc/pgx/v5 v5.11.0

@@ -39,6 +39,7 @@ func routes() []*route {
 		{method: "GET", pattern: userPrefix + "/notes", guard: "conformance.rawstub.view", handle: (*App).listNotes},
 		{method: "POST", pattern: userPrefix + "/notes", guard: "conformance.rawstub.create", handle: (*App).createNote},
 		{method: "GET", pattern: userPrefix + "/notes/{id}", guard: "conformance.rawstub.view", handle: (*App).getNote},
+		{method: "POST", pattern: userPrefix + "/notes/{id}/archive", guard: "conformance.rawstub.archive", handle: (*App).archiveNote},
 		{method: "POST", pattern: userPrefix + "/slow", guard: "conformance.rawstub.view", deadline: 5 * time.Second, handle: (*App).slow},
 	}
 	for _, r := range rs {
@@ -190,7 +191,7 @@ func (a *App) deadlineAware(rc *reqCtx, err error) error {
 		return err
 	}
 	if errors.Is(rc.r.Context().Err(), context.Canceled) {
-		return &apiError{Code: "CANCELLED", Reason: "INTERNAL", Domain: "be", cause: err}
+		return beErrCause("REQUEST_CANCELLED", err)
 	}
 	if errors.Is(rc.ctx.Err(), context.DeadlineExceeded) {
 		var de *dbError
@@ -249,9 +250,7 @@ func (a *App) finish(rc *reqCtx, tmpl string, start time.Time) {
 		n := rc.err.normalized()
 		f["error.code"], f["error.reason"] = n.Code, n.Reason
 		f["error"] = rootCause(rc.err).Error()
-		if l := levelForCode(n.Code); l != "none" {
-			level = l
-		}
+		level = accessLogLevel(n.Code)
 	}
 	a.log.Log(level, "http_request", f)
 }

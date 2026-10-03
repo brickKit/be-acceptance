@@ -79,6 +79,7 @@ func caseCore01(ctx context.Context, r *Run) {
 			snaps[i] = s
 		}
 	}
+	r.migrated = true
 	r.ev.check(id, snaps[0] == snaps[1], "the second migration run changed the schema or its rows (P1.1)")
 	code, logs, err := r.runOnce(ctx, "badarg", nil, []string{cmd[0], "compconf-unknown-argument"}, time.Minute)
 	r.ev.check(id, err == nil && code == 64,
@@ -204,4 +205,17 @@ func jsonLineNaming(logs, key string) bool {
 		}
 	}
 	return false
+}
+
+// stepMigrate is a setup step: the schema is migrated even when the core profile is not run.
+func stepMigrate(ctx context.Context, r *Run) {
+	cmd := r.comp.Manifest.Migration.Command
+	if r.migrated || len(cmd) == 0 {
+		return
+	}
+	code, logs, err := r.runOnce(ctx, "migrate", r.compEnv, cmd, 2*time.Minute)
+	if err != nil || code != 0 {
+		r.ev.fail("CP-CORE-03", "migrating before the run: exit %d (%v): %.300s", code, err, logs)
+	}
+	r.migrated = true
 }

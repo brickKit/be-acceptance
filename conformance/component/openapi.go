@@ -23,6 +23,7 @@ type Operation struct {
 	DeadlineSeconds int    // x-be-deadline-seconds, 0 = default
 	MaxBodyBytes    int    // x-be-max-body-bytes, 0 = default
 	Idempotency     bool   // accepts Idempotency-Key or idempotency_key
+	Internal        bool   // x-be-internal: system traffic only, no guard needed (P3.16)
 }
 
 type oaDoc struct {
@@ -35,6 +36,7 @@ type oaDoc struct {
 type oaOp struct {
 	OperationID string `yaml:"operationId"`
 	Permission  string `yaml:"x-be-permission"`
+	Internal    bool   `yaml:"x-be-internal"`
 	Deadline    int    `yaml:"x-be-deadline-seconds"`
 	MaxBody     int    `yaml:"x-be-max-body-bytes"`
 	Parameters  []struct {
@@ -120,7 +122,7 @@ func parseOpenAPI(fsys fs.FS, file string) ([]Operation, error) {
 
 func toOperation(p, method string, op oaOp) Operation {
 	o := Operation{OperationID: op.OperationID, Method: strings.ToUpper(method), Path: p,
-		Guard: op.Permission, DeadlineSeconds: op.Deadline, MaxBodyBytes: op.MaxBody}
+		Guard: op.Permission, DeadlineSeconds: op.Deadline, MaxBodyBytes: op.MaxBody, Internal: op.Internal}
 	for _, prm := range op.Parameters {
 		if prm.In == "header" && strings.EqualFold(prm.Name, "Idempotency-Key") {
 			o.Idempotency = true
@@ -134,8 +136,9 @@ func toOperation(p, method string, op oaOp) Operation {
 	return o
 }
 
-// Protected reports whether the operation is not Public.
-func (o Operation) Protected() bool { return o.Guard != GuardPublic }
+// Protected reports whether the operation is not Public. A missing guard counts as protected
+// (P3.16, fail closed); an x-be-internal operation carries no user and is not.
+func (o Operation) Protected() bool { return o.Guard != GuardPublic && !o.Internal }
 
 // KeyGuarded reports whether the guard is a permission key.
 func (o Operation) KeyGuarded() bool {

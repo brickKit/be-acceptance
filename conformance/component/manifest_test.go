@@ -101,3 +101,26 @@ func TestSelectProfilesPublicOnlyHasNoAuth(t *testing.T) {
 		}
 	}
 }
+
+// rc.2 P3.16 and P2.8 trigger keys: a missing guard counts as protected unless x-be-internal;
+// db by PG_SCHEMA or PG_HOST, blob by S3_BUCKET or S3_URL.
+func TestSelectProfilesFailClosedAndTriggerKeys(t *testing.T) {
+	c := rawstub(t)
+	for i := range c.Operations {
+		c.Operations[i].Guard = "public"
+	}
+	c.Operations[0].Guard = ""
+	if !contains(SelectProfiles(c), "auth") {
+		t.Fatal("an operation without x-be-permission must select auth")
+	}
+	c.Operations[0].Internal = true
+	if contains(SelectProfiles(c), "auth") {
+		t.Fatal("an x-be-internal operation needs no guard")
+	}
+	delete(c.Manifest.ConfigSchema.Properties, "PG_SCHEMA")
+	c.Manifest.ConfigSchema.Properties["S3_URL"] = ConfigProp{Type: "string"}
+	got := SelectProfiles(c)
+	if !contains(got, "db") || !contains(got, "blob") {
+		t.Fatalf("trigger keys: %v", got)
+	}
+}

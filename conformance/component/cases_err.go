@@ -203,6 +203,9 @@ func errorInfo(st *status.Status) *errdetails.ErrorInfo {
 // the mapped status.
 func (r *Run) compareWithREST(ctx context.Context, id, res, rid string, op FixtureOp, st *status.Status, ei *errdetails.ErrorInfo) {
 	get, ok := r.comp.Fixtures.Resources[res]["get"]
+	if op.PairedWith != "" { // rc.2: the pairing is declared
+		get, ok = r.fixtureOp(op.PairedWith)
+	}
 	if !ok || get.Path == "" || ei == nil || !strings.Contains(mustJSON(op.Body), "{id}") {
 		return
 	}

@@ -5,7 +5,7 @@ users:
 
 grants:
   rawstub_editor:
-    keys: [conformance.rawstub.view, conformance.rawstub.create]
+    keys: [conformance.rawstub.view, conformance.rawstub.create, conformance.rawstub.archive]
     default_level: all
 
 resources:
@@ -26,6 +26,11 @@ resources:
       method: GET
       path: /conformance/rawstub/notes
       key: conformance.rawstub.view
+    archive:
+      method: POST
+      path: /conformance/rawstub/notes/{id}/archive
+      key: conformance.rawstub.archive
+      expect: { status: 200 }
     get_over_grpc:
       grpc: conformance.rawstub.v1.NoteService/GetNote
       body: { id: "{id}" }
@@ -58,4 +63,8 @@ slow:
   method: POST
   path: /conformance/rawstub/slow
   key: conformance.rawstub.view
-  query: { ms: "{ms}" }
+  query: { ms: "{ms}", via: sleep }
+
+lock:
+  sql: "SELECT 1 FROM notes WHERE id = $1 FOR UPDATE"
+  while: resources.notes.archive          # answers 409 LOCK_TIMEOUT within lock_timeout

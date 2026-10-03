@@ -5,7 +5,7 @@ import "gopkg.in/yaml.v3"
 // SelectProfiles applies the rules of be-protocol schemas/conformance-cases.yaml (profiles,
 // "when") to the component's manifests and returns the selected profiles in catalogue order.
 func SelectProfiles(c *Component) []string {
-	hasDB := c.HasConfigKey("PG_SCHEMA")
+	hasDB := c.HasConfigKey("PG_SCHEMA") || c.HasConfigKey("PG_HOST")
 	rules := []struct {
 		name string
 		on   bool
@@ -23,7 +23,7 @@ func SelectProfiles(c *Component) []string {
 		{"db", hasDB},
 		{"jobs", hasDB},
 		{"lifecycle", hasDB},
-		{"blob", c.HasConfigKey("S3_BUCKET")},
+		{"blob", c.HasConfigKey("S3_BUCKET") || c.HasConfigKey("S3_URL")},
 		{"shell", len(c.Manifest.Shell.Members) > 0},
 	}
 	var out []string

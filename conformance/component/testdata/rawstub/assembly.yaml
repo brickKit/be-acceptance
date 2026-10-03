@@ -24,3 +24,4 @@ data_scopes: none
 permissions:
   - { key: conformance.rawstub.view,   title: 查看便签, type: page }
   - { key: conformance.rawstub.create, title: 新建便签, type: action }
+  - { key: conformance.rawstub.archive, title: 归档便签, type: action }

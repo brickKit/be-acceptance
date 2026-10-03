@@ -17,6 +17,8 @@ const (
 	pAll   = "compconf_all"   // a role holding every key at level all, every dimension value *
 	pNone  = "compconf_none"  // no role at all
 	pStale = "compconf_stale" // like pAll; its sub is made stale by CP-AUTH-08
+	// pStaleDeleg is like pAll; CP-AUTH-12 makes its sub stale and sends it a delegated token.
+	pStaleDeleg = "compconf_stale_deleg"
 )
 
 type persona struct {
@@ -38,6 +40,7 @@ func (r *Run) setupPersonas() {
 	r.personas[pAll] = persona{Sub: uuidv7(), Roles: []string{pAll}, Dept: &dept}
 	r.personas[pNone] = persona{Sub: uuidv7(), Dept: &dept}
 	r.personas[pStale] = persona{Sub: uuidv7(), Roles: []string{pAll}, Dept: &dept}
+	r.personas[pStaleDeleg] = persona{Sub: uuidv7(), Roles: []string{pAll}, Dept: &dept}
 	for code, g := range r.comp.Fixtures.Grants {
 		r.authz.SetRole(code, g.Keys, toRoleGrant(g))
 	}
@@ -63,9 +66,13 @@ func toRoleGrant(g Grant) fakes.RoleGrant {
 	return rg
 }
 
-// allKeys: every permission key the component mentions.
+// allKeys: every permission key the component mentions, plus the runtime's own keys of the
+// lifecycle and operations contracts (P16.8, P14.4).
 func (r *Run) allKeys() []string {
 	set := map[string]bool{}
+	for _, k := range r.runtimeKeys() {
+		set[k] = true
+	}
 	for _, p := range r.comp.Assembly.Permissions {
 		set[p.Key] = true
 	}
@@ -152,4 +159,10 @@ func uuidv7() string {
 	b[6] = (b[6] & 0x0f) | 0x70
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// runtimeKeys are <domain>.<name>.lifecycle.read|thaw|admin and <domain>.<name>.ops.
+func (r *Run) runtimeKeys() []string {
+	stem := strings.ReplaceAll(r.comp.ID(), "/", ".")
+	return []string{stem + ".lifecycle.read", stem + ".lifecycle.thaw", stem + ".lifecycle.admin", stem + ".ops"}
 }

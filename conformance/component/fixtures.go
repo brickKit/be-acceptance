@@ -6,6 +6,7 @@ import "gopkg.in/yaml.v3"
 // schemas/fixtures.schema.json). Fields of profiles this suite version does not run are kept
 // as raw values.
 type Fixtures struct {
+	Config       map[string]string               `yaml:"config"`
 	Users        map[string]User                 `yaml:"users"`
 	Grants       map[string]Grant                `yaml:"grants"`
 	Resources    map[string]map[string]FixtureOp `yaml:"resources"`
@@ -60,6 +61,7 @@ type FixtureOp struct {
 	UserFacing bool              `yaml:"user_facing"`
 	// Fingerprint is nil when absent, empty when declared empty.
 	Fingerprint []string          `yaml:"fingerprint"`
+	PairedWith  string            `yaml:"paired_with"`
 	Triggers    *Triggers         `yaml:"triggers"`
 	Filters     map[string]Filter `yaml:"filters"`
 	Sort        *struct {

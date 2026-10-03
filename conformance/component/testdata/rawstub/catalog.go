@@ -43,6 +43,10 @@ var beReasons = map[string]reasonEntry{
 		"Not enough time was left to finish the operation.", "剩余时间不足以完成这次操作。"},
 	"BODY_TOO_LARGE": {"INVALID_ARGUMENT", 413, "Request too large", "请求过大",
 		"The request body is larger than the {limit} bytes allowed.", "请求体超过允许的 {limit} 字节。"},
+	"DEPENDENCY_UNAVAILABLE": {"UNAVAILABLE", 503, "Temporarily unavailable", "暂时不可用",
+		"A service this request needs ({dependency}) cannot be reached right now. Try again shortly.", "这个请求依赖的服务（{dependency}）暂时连不上，请稍后再试。"},
+	"REQUEST_CANCELLED": {"CANCELLED", 499, "Request cancelled", "请求已取消",
+		"The request was cancelled by the caller before it finished.", "请求在完成之前被调用方取消了。"},
 	"BATCH_TOO_LARGE": {"INVALID_ARGUMENT", 400, "Batch too large", "批量过大",
 		"{field} has {got} items; at most {max} are allowed.", "{field} 有 {got} 项，最多允许 {max} 项。"},
 	"DB_TOO_MANY_CONNECTIONS": {"UNAVAILABLE", 503, "Service busy", "服务繁忙",
@@ -75,6 +79,16 @@ func levelForCode(code string) string {
 		return "error"
 	case "UNAVAILABLE", "DEADLINE_EXCEEDED":
 		return "warn"
+	}
+	return "info"
+}
+
+// accessLogLevel is the level of an access-log line by its code (P4.6): ERROR for INTERNAL,
+// UNKNOWN, DATA_LOSS; WARN for UNAVAILABLE, DEADLINE_EXCEEDED; INFO otherwise, OK and
+// CANCELLED included.
+func accessLogLevel(code string) string {
+	if l := levelForCode(code); l != "none" {
+		return l
 	}
 	return "info"
 }

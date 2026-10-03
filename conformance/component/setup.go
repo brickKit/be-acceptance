@@ -36,7 +36,7 @@ func (r *Run) setup(ctx context.Context) error {
 	if err := r.startFakes(); err != nil {
 		return err
 	}
-	if r.comp.HasConfigKey("PG_SCHEMA") {
+	if r.comp.HasConfigKey("PG_SCHEMA") || r.comp.HasConfigKey("PG_HOST") {
 		if r.pg, err = r.env.StartPostgres(ctx, infra.PostgresImage); err != nil {
 			return err
 		}
@@ -199,6 +199,9 @@ func (r *Run) buildEnv() error {
 		v.PeerHTTP[id], v.PeerGRPC[id] = p.HTTPServer().Port(), p.GRPCPort()
 	}
 	for k, p := range r.comp.Manifest.ConfigSchema.Properties {
+		if _, given := r.comp.Fixtures.Config[k]; given {
+			continue
+		}
 		if p.Secret && !strings.HasPrefix(k, "PG_") { // the component's own secrets: random values
 			if v.Extra == nil {
 				v.Extra = map[string]string{}

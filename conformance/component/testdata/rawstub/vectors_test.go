@@ -200,7 +200,11 @@ func TestErrorLevelVectors(t *testing.T) {
 	for _, c := range loadVectors(t, "errors-levels.json") {
 		var in struct{ Code string }
 		_ = json.Unmarshal(c.Input, &in)
-		if got := map[string]string{"level": levelForCode(in.Code)}; !jsonEqual(t, got, c.Expected) {
+		level := levelForCode(in.Code)
+		if c.Op == "access_log_level" {
+			level = accessLogLevel(in.Code)
+		}
+		if got := map[string]string{"level": level}; !jsonEqual(t, got, c.Expected) {
 			t.Errorf("%s: got %v, want %s", c.ID, got, c.Expected)
 		}
 	}

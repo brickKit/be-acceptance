@@ -97,7 +97,7 @@ func caseResult(c Case, o outcome, ran bool, skip, notRun string) reportCase {
 			rc.Status = "warn"
 		}
 	case o.na != "" && !o.touched:
-		rc.Status, rc.Message = "skipped", reqs+"not applicable: "+o.na
+		rc.Status, rc.Message = "not_applicable", reqs+"not applicable: "+o.na
 	case !o.touched:
 		rc.Status, rc.Message = "fail", reqs+"not exercised: the run did not reach this case"
 	default:
@@ -123,7 +123,7 @@ func profileStatus(cases []reportCase) string {
 		return "fail"
 	case st["warn"] > 0:
 		return "warn"
-	case st["skipped"] == len(cases):
+	case st["skipped"]+st["not_applicable"] == len(cases):
 		return "skipped"
 	}
 	return "pass"

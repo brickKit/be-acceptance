@@ -45,6 +45,9 @@ func newMetrics(component string) *Metrics {
 	m.define("be_tx_retries_total", "Transaction bodies re-run after a serialization failure or deadlock.", "counter", "reason")
 	m.define("be_db_pool_wait_seconds", "Time waited for a database connection.", "histogram")
 	m.define("be_secret_reload_failures_total", "Secret files that could not be re-read.", "counter", "key")
+	m.define("be_job_runs_total", "Runs of background jobs.", "counter", "job", "result")
+	m.define("be_job_duration_seconds", "Duration of background job runs.", "histogram", "job")
+	m.define("be_job_last_success_timestamp_seconds", "Unix time of a job's last successful run.", "gauge", "job")
 	return m
 }
 
@@ -161,4 +164,11 @@ func fmtFloat(f float64) string {
 		return "+Inf"
 	}
 	return strconv.FormatFloat(f, 'g', -1, 64)
+}
+
+// Set sets a labelled gauge.
+func (m *Metrics) Set(name string, v float64, values ...string) {
+	m.mu.Lock()
+	m.get(name, values).value = v
+	m.mu.Unlock()
 }

@@ -49,10 +49,10 @@ func parseValue(k keySpec, raw *string) (parsed, *parseErr) {
 
 // parseTyped applies the presence rules, then the format (vectors config, "Rules").
 func parseTyped(v valueSpec) (parsed, *parseErr) {
-	absent := v.value == nil || (*v.value == "" && v.format != "string")
+	absent := v.value == nil || *v.value == "" // an empty string is unset (P2.3, vectors config)
 	if absent {
 		if v.def != nil {
-			if *v.def == "" && v.format != "string" {
+			if *v.def == "" {
 				return parsed{}, nil // an empty default means "not set" (OTEL_BASE_URL)
 			}
 			p, err := parsePresent(v, *v.def)
@@ -142,6 +142,14 @@ func parsePresent(v valueSpec, s string) (parsed, *parseErr) {
 			return inv("not I-JSON of the required kind")
 		}
 		return parsed{set: true, json: j, s: s}, nil
+	case "zone":
+		if s == "" || s == "Local" {
+			return inv("not an IANA time zone")
+		}
+		if _, err := time.LoadLocation(s); err != nil {
+			return inv("not an IANA time zone")
+		}
+		return parsed{set: true, s: s}, nil
 	case "enum":
 		for _, e := range v.enum {
 			if s == e {

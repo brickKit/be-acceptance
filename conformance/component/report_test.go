@@ -44,7 +44,7 @@ func TestReportStatusesAndSchema(t *testing.T) {
 	if byID["CP-CORE-04"].Status != "fail" || !strings.Contains(byID["CP-CORE-04"].Message, "P1.3") {
 		t.Fatalf("CORE-04 = %+v", byID["CP-CORE-04"])
 	}
-	if byID["CP-CORE-08"].Status != "skipped" {
+	if byID["CP-CORE-08"].Status != "not_applicable" { // rc.2: neither skipped nor failed
 		t.Fatalf("n/a case = %+v", byID["CP-CORE-08"])
 	}
 	if rep.Profiles["obs"].Status != "pass" || rep.Profiles["db"].Status != "skipped" {

@@ -1,6 +1,7 @@
 package compconf
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -62,5 +63,16 @@ func TestComponentEnvRequiredKeyWithoutValue(t *testing.T) {
 	_, _, err := componentEnv(c, suiteValues{})
 	if err == nil || !strings.Contains(err.Error(), "PG_HOST") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestJobsOverridesShortenPlatformAndFixtureJobs(t *testing.T) {
+	c := widget(t)
+	got := map[string]map[string]any{}
+	if err := json.Unmarshal([]byte(jobsOverrides(c)), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["be.cleanup"]["cron"] != "@every 2s" || got["be.lifecycle"]["interval"] != "3s" || got["widget.daily"]["cron"] != "@every 2s" {
+		t.Fatalf("JOBS_OVERRIDES = %v", got)
 	}
 }

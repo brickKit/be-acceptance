@@ -131,6 +131,11 @@ func caseObs04Leaks(_ context.Context, r *Run) {
 				r.ev.fail(id, "the value of secret %s appears in a log line", k)
 			}
 		}
+		for _, v := range r.oldSecrets {
+			if len(v) >= 4 && strings.Contains(l.Raw, v) {
+				r.ev.fail(id, "a replaced secret value appears in a log line")
+			}
+		}
 		for _, t := range r.tokens {
 			if sig := t[strings.LastIndex(t, ".")+1:]; len(sig) > 10 && strings.Contains(l.Raw, sig) {
 				r.ev.fail(id, "an access token appears in a log line (P18.4)")

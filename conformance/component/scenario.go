@@ -3,7 +3,7 @@ package compconf
 import "context"
 
 // ImplementedProfiles are the profiles this suite version runs.
-var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc"}
+var ImplementedProfiles = []string{"core", "obs", "err", "auth", "grpc", "db"}
 
 // step is one ordered action of the scenario, attributed to the case it exercises; Case ""
 // marks a setup step several cases depend on, which always runs.
@@ -21,6 +21,7 @@ func scenario() []step {
 		{"CP-CORE-14", "secret declarations", caseCore14Static},
 		{"CP-CORE-01", "migrate twice; unknown argument", caseCore01},
 		{"CP-CORE-02", "configuration errors exit 78", caseCore02},
+		{"", "migrate (when CP-CORE-01 did not run)", stepMigrate},
 		{"", "start with PostgreSQL, the bus and authz down", stepStartWithDepsDown},
 		{"CP-CORE-04", "/healthz with PostgreSQL stopped", caseCore04},
 		{"", "PostgreSQL back", stepDatabaseBack},
@@ -57,6 +58,12 @@ func scenario() []step {
 		{"CP-RPC-06", "batch limit", caseRPC06},
 		{"CP-RPC-05", "GOAWAY after MaxConnectionAge", caseRPC05},
 		{"CP-ERR-03", "revoked grant answers generic INTERNAL", caseErr03},
+		{"CP-DB-01", "random identity, ownership, nothing outside the schema", caseDB01},
+		{"CP-DB-04", "platform tables against the reference DDL", caseDB04},
+		{"CP-DB-02", "lock timeout", caseDB02},
+		{"CP-DB-03", "pool limit under load", caseDB03},
+		{"CP-DB-05", "no owner session; partition upkeep", caseDB05},
+		{"CP-DB-06", "password rotation", caseDB06},
 		{"CP-AUTH-08", "stale token", caseAuth08},
 		{"CP-OBS-03", "metrics", caseObs03},
 		{"CP-CORE-06", "SIGTERM", caseCore06},

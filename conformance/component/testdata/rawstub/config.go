@@ -48,6 +48,9 @@ var declaredKeys = []keySpec{
 	{name: "HTTP_DEFAULT_TIMEOUT", format: "duration", def: str("10s")},
 	{name: "GRPC_MAX_CONNECTION_AGE", format: "duration", def: str("5m")},
 	{name: "SHUTDOWN_GRACE", format: "duration", def: str("25s")},
+	{name: "BUSINESS_TIMEZONE", format: "zone", def: str("Asia/Shanghai")},
+	{name: "JOBS_OVERRIDES", format: "json", def: str("")},
+	{name: "DATA_LIFECYCLE", format: "json", def: str(`{"mode":"on"}`)},
 }
 
 // Config is the parsed configuration of the process.
@@ -67,6 +70,10 @@ type Config struct {
 	OtelBaseURL, DefaultLocale, LogLevel string
 	HTTPDefaultTimeout, GRPCMaxConnAge   time.Duration
 	ShutdownGrace                        time.Duration
+
+	BusinessTZ    *time.Location
+	JobsOverrides map[string]jobOverride
+	LifecycleMode string // on, dry-run, off (P16.9)
 }
 
 // configProblem is one configuration error: the key and its class (CONFIG_MISSING,
@@ -110,10 +117,17 @@ func loadConfig(lookup envLookup, mode string) (*Config, []configProblem) {
 			probs = append(probs, configProblem{Key: secretKey, Class: err.class, Detail: err.detail})
 		}
 	}
+	jobs, jp := parseJobsOverrides(vals["JOBS_OVERRIDES"])
+	probs = append(probs, jp...)
+	mode, lp := parseDataLifecycle(vals["DATA_LIFECYCLE"])
+	probs = append(probs, lp...)
 	if len(probs) > 0 {
 		return nil, probs
 	}
-	return buildConfig(lookup, vals), nil
+	c := buildConfig(lookup, vals)
+	c.JobsOverrides, c.LifecycleMode = jobs, mode
+	c.BusinessTZ, _ = time.LoadLocation(vals["BUSINESS_TIMEZONE"].s)
+	return c, nil
 }
 
 func buildConfig(lookup envLookup, v map[string]parsed) *Config {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"math/rand/v2"
 	"os"
 	"strconv"
@@ -45,11 +47,16 @@ func openDB(cfg *Config, log *Logger, m *Metrics) (*DB, error) {
 		return nil, err
 	}
 	pc.MaxConns = int32(cfg.PGPoolMax)
+	if broken == "unbounded-pool" {
+		pc.MaxConns = 1000
+	}
 	pc.MinConns = int32(min(cfg.PGPoolMinIdle, cfg.PGPoolMax))
 	pc.MaxConnLifetime = cfg.PGConnMaxLifetime
 	pc.MaxConnIdleTime = cfg.PGConnMaxIdleTime
 	pc.ConnConfig.ConnectTimeout = 3 * time.Second
 	pc.ConnConfig.RuntimeParams["TimeZone"] = "UTC"
+	pc.ConnConfig.RuntimeParams["application_name"] = cfg.ComponentID + "@" + cfg.ComponentVersion // P10.2
+	pc.MinConns = max(pc.MinConns, 1)                                                               // P10.5: never close the last one
 	pc.BeforeConnect = func(_ context.Context, cc *pgx.ConnConfig) error {
 		cc.Password = sf.Value()
 		return nil
@@ -178,7 +185,7 @@ func classifyDB(ctx context.Context, err error) error {
 			return beErrCause("LOCK_TIMEOUT", err)
 		case "57014", "25P04":
 			if cancelled {
-				return &apiError{Code: "CANCELLED", Reason: "INTERNAL", Domain: "be", cause: err}
+				return beErrCause("REQUEST_CANCELLED", err)
 			}
 			return beErrCause("STATEMENT_TIMEOUT", err)
 		case "53300":
@@ -187,10 +194,15 @@ func classifyDB(ctx context.Context, err error) error {
 		return internalErr(err)
 	}
 	if cancelled {
-		return &apiError{Code: "CANCELLED", Reason: "INTERNAL", Domain: "be", cause: err}
+		return beErrCause("REQUEST_CANCELLED", err)
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return beErrCause("STATEMENT_TIMEOUT", err)
+	}
+	if unreachable(err) { // the database cannot be reached (one reason, metadata.dependency)
+		e := beErrCause("DEPENDENCY_UNAVAILABLE", err)
+		e.Metadata = map[string]string{"dependency": "db"}
+		return e
 	}
 	return internalErr(err)
 }
@@ -229,7 +241,10 @@ func (s *secretFile) Value() string {
 
 // Watch re-reads the file when it changes; a failure keeps the last good value.
 func (s *secretFile) Watch(ctx context.Context) {
-	for sleepCtx(ctx, 30*time.Second) {
+	if broken == "secret-read-once" {
+		return
+	}
+	for sleepCtx(ctx, 10*time.Second) { // at most 30 s apart (P2.9)
 		fi, err := os.Stat(s.path)
 		s.mu.Lock()
 		changed := err != nil || !fi.ModTime().Equal(s.mtime) || fi.Size() != s.size
@@ -273,3 +288,11 @@ func (d *DB) probeCapabilities(ctx context.Context) error {
 type fatalError struct{ msg string }
 
 func (e *fatalError) Error() string { return e.msg }
+
+// unreachable: the connection could not be made or was lost.
+func unreachable(err error) bool {
+	var ce *pgconn.ConnectError
+	var ne net.Error
+	return errors.As(err, &ce) || errors.As(err, &ne) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		strings.Contains(err.Error(), "conn closed")
+}

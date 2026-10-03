@@ -1,6 +1,7 @@
 package compconf
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -59,6 +60,12 @@ func componentEnv(c *Component, v suiteValues) (env []string, secrets map[string
 		if _, ok := props[k]; ok {
 			vals[k] = val
 		}
+	}
+	if _, ok := props["JOBS_OVERRIDES"]; ok {
+		vals["JOBS_OVERRIDES"] = jobsOverrides(c)
+	}
+	for k, val := range c.Fixtures.Config { // the component's own keys (fixtures config, rc.2)
+		vals[k] = val
 	}
 	for k, val := range v.Extra {
 		vals[k] = val
@@ -149,4 +156,18 @@ func formatDefault(v any) string {
 		return strconv.FormatFloat(x, 'f', -1, 64)
 	}
 	return fmt.Sprint(v)
+}
+
+// jobsOverrides is the suite's JOBS_OVERRIDES: be.cleanup every 2 s (CP-JOBS-01), be.lifecycle
+// every 3 s (CP-DB-05) and each fixtures jobs.cron override (P14.5).
+func jobsOverrides(c *Component) string {
+	m := map[string]any{
+		"be.cleanup":   map[string]string{"cron": "@every 2s"},
+		"be.lifecycle": map[string]string{"interval": "3s"},
+	}
+	for _, j := range c.Fixtures.Jobs.Cron {
+		m[j.Name] = j.Override
+	}
+	b, _ := json.Marshal(m)
+	return string(b)
 }

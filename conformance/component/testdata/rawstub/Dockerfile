@@ -7,6 +7,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
 COPY migrations/ ./migrations/
+COPY platform/ ./platform/
 RUN go build -trimpath -ldflags "-s -w -X main.broken=${BROKEN}" -o /out/rawstub .
 
 # alpine has /bin/sh and busybox wget for the platform's health check (P1.9).

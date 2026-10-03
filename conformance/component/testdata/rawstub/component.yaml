@@ -58,6 +58,10 @@ configSchema:
     HTTP_DEFAULT_TIMEOUT: {type: string, default: 10s}
     GRPC_MAX_CONNECTION_AGE: {type: string, default: 5m}
     SHUTDOWN_GRACE: {type: string, default: 25s}
+    # jobs / lifecycle
+    BUSINESS_TIMEZONE: {type: string, default: Asia/Shanghai}
+    JOBS_OVERRIDES: {type: string, default: ""}
+    DATA_LIFECYCLE: {type: string, default: '{"mode":"on"}'}
   required: [PG_HOST, PG_DATABASE, PG_USER, PG_PASSWORD_FILE, PG_OWNER_USER, PG_OWNER_PASSWORD_FILE, PG_SCHEMA,
              AUTHZ_URL, IAM_URL, IAM_ISSUER, TENANT_ID]
 

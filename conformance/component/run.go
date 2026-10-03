@@ -76,6 +76,9 @@ type Run struct {
 	notRunNote string
 	lastInfo   map[string]any // the last /_be/info body
 	ready      bool
+	slowID     string   // the record a slow path with {id} uses
+	migrated   bool
+	oldSecrets []string // secret values replaced during the run (CP-DB-06), still never logged
 }
 
 // Execute runs the suite and writes the report files.

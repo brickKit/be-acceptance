@@ -143,6 +143,9 @@ func migrateOnce(ctx context.Context, conn *pgx.Conn, cfg *Config, log *Logger) 
 		applied++
 		log.Info("migration_applied", F{"version": m.version, "name": m.name})
 	}
+	if err := applyPlatform(ctx, conn, cfg); err != nil {
+		return applied, err
+	}
 	return applied, nil
 }
 
