@@ -413,6 +413,14 @@ func caseDB06(ctx context.Context, r *Run) {
 		return l.At.After(changed) && l.Str("level") == "info" && strings.Contains(l.Raw, "PG_PASSWORD_FILE")
 	})
 	r.ev.check(id, len(lines) >= 1, "no INFO line naming PG_PASSWORD_FILE after the file changed (P2.9)")
+	if ok < 3 {
+		// The component can no longer reach its database. A fresh instance reads the new
+		// password at start, so the cases after this one test what they are about; without it
+		// the secret-read-once variant failed 27 further cases with 503.
+		if err := r.restartMain(ctx); err != nil {
+			r.logf("restarting the main instance after %s: %v", id, err)
+		}
+	}
 	r.ev.pass(id)
 }
 

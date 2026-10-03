@@ -111,6 +111,13 @@ func (p *Peer) call(ctx context.Context, rc *reqCtx, method string, req []byte) 
 	out := &rawMsg{}
 	err = conn.Invoke(cctx, "/"+peerService+"/"+method, &rawMsg{b: req}, out)
 	if err != nil {
+		// At the end of the outbound budget gRPC does not always report DEADLINE_EXCEEDED: a
+		// stream reset at that moment comes back as CANCELLED or INTERNAL. The budget ran out
+		// either way (P7.7), as the HTTP path below already says; without this CP-OUT-07 got
+		// 500 INTERNAL from a hung peer once in 17 rounds.
+		if errors.Is(cctx.Err(), context.DeadlineExceeded) {
+			return nil, beErrCause("DEADLINE_BUDGET_EXHAUSTED", err)
+		}
 		return nil, peerError(err)
 	}
 	return out.b, nil

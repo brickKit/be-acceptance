@@ -79,6 +79,28 @@ func (r *Run) startMain(ctx context.Context) error {
 	return err
 }
 
+// restartMain replaces the main instance with a fresh one and waits until it is ready. A case
+// that has just shown a fault which leaves the component unable to serve calls it, so that one
+// fault fails one case and not every case after it.
+func (r *Run) restartMain(ctx context.Context) error {
+	if r.main != nil {
+		_ = r.main.Stop(ctx, r.comp.Manifest.Deployment.StopGracePeriodSeconds)
+		_ = r.main.Remove(ctx)
+	}
+	if r.stopLogs != nil {
+		r.stopLogs()
+	}
+	r.mainUp = false
+	if err := r.startMain(ctx); err != nil {
+		return err
+	}
+	if _, err := waitStatus(ctx, r.base+"/readyz", 200, 60*time.Second); err != nil {
+		return err
+	}
+	r.mainUp = true
+	return nil
+}
+
 // waitStatus polls url until it answers want or the timeout passes; it returns the last status.
 func waitStatus(ctx context.Context, url string, want int, timeout time.Duration) (int, error) {
 	deadline := time.Now().Add(timeout)

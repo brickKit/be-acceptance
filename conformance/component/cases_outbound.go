@@ -271,7 +271,8 @@ func caseOut07(ctx context.Context, r *Run) {
 		withPeerAnswer(t.peer, t.method, fakes.PeerAnswer{Hang: true}, func() {
 			x := r.fire(ctx, t)
 			d := r.routeDeadline(t.op)
-			r.ev.check(id, x.Status == 504, "%s with %s hung = %d %s %v, want 504 (P3.4)", t.op.Path, t.method, x.Status, x.reason(), x.Err)
+			r.ev.check(id, x.Status == 504, "%s with %s hung = %d %s %v after %v (route deadline %v), want 504 (P3.4)",
+				t.op.Path, t.method, x.Status, x.reason(), x.Err, x.Took.Round(10*time.Millisecond), d)
 			r.ev.check(id, x.Took <= d+time.Second, "%s with %s hung answered after %v, route deadline %v (P9.1)", t.op.Path, t.method, x.Took.Round(100*time.Millisecond), d)
 		})
 	}
