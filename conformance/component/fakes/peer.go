@@ -69,7 +69,7 @@ type HTTPCall struct {
 // NewPeer compiles the dependency's protos (contracts holds them at their package paths;
 // imports resolve be/v1/limits.proto and the like).
 func NewPeer(id string, contracts fs.FS, imports ...fs.FS) (*Peer, error) {
-	methods, err := compileProtos(contracts, imports...)
+	methods, err := CompileProtos(contracts, imports...)
 	if err != nil {
 		return nil, fmt.Errorf("fake-peer %s: %w", id, err)
 	}

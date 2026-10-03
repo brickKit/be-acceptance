@@ -28,6 +28,8 @@ func main() {
 		err = runGate(os.Args[2:])
 	case "bump-version":
 		err = runBumpVersion(os.Args[2:])
+	case "conformance":
+		err = runConformance(os.Args[2:])
 	default:
 		fmt.Fprintf(os.Stderr, "子命令 %q 未知\n", os.Args[1])
 		os.Exit(1)
@@ -65,6 +67,9 @@ func printUsage() {
 	fmt.Println("  gate openapi-additive-scan --root <path> [--only <id>]  contracts/*.openapi.yaml 相对组件最近一次发布 tag 只增不删不改（决策 0302，buf 只管 .proto）")
 	fmt.Println("      --only <id>：只扫这一个组件或外壳（metadata.id，或目录 components/<scope>/<name>、shell/<scope>/<name>）；")
 	fmt.Println("                 --strict 只作用于它；找不到 → exit 2（ship.sh 发布前用 --only <id> --strict）")
+	fmt.Println()
+	fmt.Println("  conformance component --dir <组件根目录> --image <镜像> [--out <目录>] [--profiles core,obs,err,auth] [--dep-contracts <ID>=<目录>] [--keep]")
+	fmt.Println("      组件一致性黑盒套件 compconf（be-protocol 1.0）：起一次性 PG16/NATS 与四个假服务，跑适用的 profile，写 compconf-report.json")
 	fmt.Println()
 	fmt.Println("  bump-version --root <path> --plan <计划文件> [--apply]   自动传播一次版本变更（算出所有下游要跟着同步的组件，改好全部文件），计划文件格式见 versionbump 包文档")
 }

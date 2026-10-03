@@ -11,9 +11,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// compileProtos compiles every .proto under contracts, resolving imports from contracts, then
+// CompileProtos compiles every .proto under contracts, resolving imports from contracts, then
 // from each of imports (be-protocol proto/), then from the standard well-known types.
-func compileProtos(contracts fs.FS, imports ...fs.FS) (map[string]protoreflect.MethodDescriptor, error) {
+func CompileProtos(contracts fs.FS, imports ...fs.FS) (map[string]protoreflect.MethodDescriptor, error) {
 	var files []string
 	err := fs.WalkDir(contracts, ".", func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() && strings.HasSuffix(p, ".proto") {
