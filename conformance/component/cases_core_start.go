@@ -116,17 +116,34 @@ func stepDatabaseBack(ctx context.Context, r *Run) {
 	r.ev.fail("CP-CORE-03", "45 s after PostgreSQL came back /readyz still waits for db_identity or migrations")
 }
 
-// CP-AUTH-10: before the first bundle, protected routes answer 503 AUTHZ_NOT_READY; Public
-// routes serve normally.
+// CP-AUTH-10: before the first bundle the token is still verified first (no or a bad token
+// answers 401 TOKEN_INVALID), then every route that is not Public answers 503
+// AUTHZ_NOT_READY, Authenticated ones included; Public routes serve normally (P1.5, P6.2 as
+// ruled for rc.2: fail closed, 401 before 503).
 func caseAuth10(ctx context.Context, r *Run) {
 	const id = "CP-AUTH-10"
 	if !r.needMain(id) {
 		return
 	}
-	if op, ok := r.probeOp(); ok {
-		x := r.call(ctx, op.Method, r.target(op), withToken(r.token(r.personaFor(op))))
+	n := 0
+	for _, op := range r.comp.Operations {
+		if !op.Protected() {
+			continue
+		}
+		n++
+		var body []reqOpt
+		if op.Method != "GET" && op.Method != "DELETE" && op.Method != "HEAD" {
+			body = append(body, withBody([]byte("{}")))
+		}
+		x := r.call(ctx, op.Method, r.target(op), body...)
+		r.ev.check(id, x.Status == 401 && x.reason() == "TOKEN_INVALID",
+			"%s %s without a token before the bundle = %d %s, want 401 TOKEN_INVALID (the token is verified before the bundle check)", op.Method, op.Path, x.Status, x.reason())
+		x = r.call(ctx, op.Method, r.target(op), append(body, withToken(r.token(r.personaFor(op))))...)
 		r.ev.check(id, x.Status == 503 && x.reason() == "AUTHZ_NOT_READY",
-			"%s %s with a valid token before the bundle = %d %s, want 503 AUTHZ_NOT_READY (P1.5, P6.2)", op.Method, op.Path, x.Status, x.reason())
+			"%s %s (guard %s) with a valid token before the bundle = %d %s, want 503 AUTHZ_NOT_READY (P1.5, P6.2)", op.Method, op.Path, op.Guard, x.Status, x.reason())
+	}
+	if n == 0 {
+		r.ev.notApplicable(id, "no protected route")
 	}
 	if op, ok := r.publicOp(); ok {
 		x := r.call(ctx, op.Method, r.target(op))

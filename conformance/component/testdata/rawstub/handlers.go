@@ -15,9 +15,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// guard is the decision chain of P6.2: Public → allow; verify the token (P5); the token
-// checks of E2 that need the bundle (stale, revoked grant, delegation); Authenticated →
-// allow; no bundle → 503; the route's key → 403 MISSING_PERMISSION.
+// guard is the decision chain of P6.2: Public → allow; verify the token (P5); no bundle yet
+// → 503 for every other route, Authenticated included (P1.5, fail closed); the token checks
+// of E2 that need the bundle (stale, revoked grant, delegation); Authenticated → allow; the
+// route's key → 403 MISSING_PERMISSION.
 func (a *App) guard(rc *reqCtx) error {
 	g := rc.route.guard
 	if g == "public" {
@@ -33,23 +34,21 @@ func (a *App) guard(rc *reqCtx) error {
 	}
 	rc.claims = claims
 	b := a.bundles.Current()
-	if b != nil {
-		if reason, kind := tokenChecks(b, claims); reason != "" {
-			a.metrics.Inc("be_authz_denied_total", reason)
-			if reason == "TOKEN_STALE" {
-				e := beErr(reason, nil)
-				e.header = map[string]string{"WWW-Authenticate": `Bearer error="token_stale"`}
-				return e
-			}
-			return beErr(reason, map[string]string{"kind": kind})
+	if b == nil { // before the first bundle every non-Public route fails closed, after the token check
+		a.metrics.Inc("be_authz_denied_total", "AUTHZ_NOT_READY")
+		return beErr("AUTHZ_NOT_READY", nil)
+	}
+	if reason, kind := tokenChecks(b, claims); reason != "" {
+		a.metrics.Inc("be_authz_denied_total", reason)
+		if reason == "TOKEN_STALE" {
+			e := beErr(reason, nil)
+			e.header = map[string]string{"WWW-Authenticate": `Bearer error="token_stale"`}
+			return e
 		}
+		return beErr(reason, map[string]string{"kind": kind})
 	}
 	if g == "authenticated" {
 		return nil
-	}
-	if b == nil {
-		a.metrics.Inc("be_authz_denied_total", "AUTHZ_NOT_READY")
-		return beErr("AUTHZ_NOT_READY", nil)
 	}
 	if !hasKey(b, claims, g, time.Now().Unix()) {
 		a.metrics.Inc("be_authz_denied_total", "MISSING_PERMISSION")
