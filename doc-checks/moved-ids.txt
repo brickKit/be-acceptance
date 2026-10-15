@@ -1,0 +1,21 @@
+# Expectation IDs moved to another document. Format: <old> <new> <new document>
+BL13 IC01 docs/zh/06-protocols/05b-inventory-costing.md
+BL14 IC02 docs/zh/06-protocols/05b-inventory-costing.md
+BL15 IC03 docs/zh/06-protocols/05b-inventory-costing.md
+BL16 IC04 docs/zh/06-protocols/05b-inventory-costing.md
+BL17 IC05 docs/zh/06-protocols/05b-inventory-costing.md
+BL20 IC06 docs/zh/06-protocols/05b-inventory-costing.md
+BL22 IC07 docs/zh/06-protocols/05b-inventory-costing.md
+BL23 IC08 docs/zh/06-protocols/05b-inventory-costing.md
+BL27 IC09 docs/zh/06-protocols/05b-inventory-costing.md
+BL28 IC10 docs/zh/06-protocols/05b-inventory-costing.md
+BL32 IC11 docs/zh/06-protocols/05b-inventory-costing.md
+BL37 IC12 docs/zh/06-protocols/05b-inventory-costing.md
+BL38 IC13 docs/zh/06-protocols/05b-inventory-costing.md
+BL45 IC14 docs/zh/06-protocols/05b-inventory-costing.md
+BL57 IC15 docs/zh/06-protocols/05b-inventory-costing.md
+BL58 IC16 docs/zh/06-protocols/05b-inventory-costing.md
+BL59 IC17 docs/zh/06-protocols/05b-inventory-costing.md
+BL61 IC18 docs/zh/06-protocols/05b-inventory-costing.md
+BL72 IC19 docs/zh/06-protocols/05b-inventory-costing.md
+BL73 IC20 docs/zh/06-protocols/05b-inventory-costing.md

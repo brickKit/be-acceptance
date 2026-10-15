@@ -1,3 +1,1 @@
-/build/
-# 本地 go build 产物（go build ./cmd/be-acceptance 默认输出到仓库根）
-/be-acceptance
+__pycache__/
