@@ -1,0 +1,16 @@
+[project]
+name = "be-acceptance-conformance"
+version = "0.0.0"
+description = "Runs probes and components from outside: the probe tests and the conformance profile"
+requires-python = ">=3.14"
+dependencies = ["be-sdk", "pytest", "pytest-asyncio", "httpx", "asyncpg", "pyyaml"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+be-sdk = { git = "https://github.com/brickKit/be-sdk-python", rev = "6bd24818a42eca02debbf80f9afd2652590277cf" }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
