@@ -3,7 +3,7 @@ module github.com/brickKit/be-acceptance/probes/go
 go 1.26.0
 
 require (
-	github.com/brickKit/be-sdk-go/v3 v3.0.0-alpha.1.0.20261017220632-940735ae73bc
+	github.com/brickKit/be-sdk-go/v3 v3.0.0-alpha.1.0.20261017225245-e50b0d48995d
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 )

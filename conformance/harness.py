@@ -56,7 +56,13 @@ def go_binary(out: pathlib.Path) -> list[str]:
     return [str(out)]
 
 
-PY = ["uv", "run", "--frozen", "--project", str(ROOT / "probes" / "py"), "python", "-m", "probe_py"]
+def py_probe() -> list[str]:
+    """The Python probe's locked environment, run with its own interpreter as the image does (no wrapper writing to
+    its output)."""
+    project = ROOT / "probes" / "py"
+    subprocess.run(["uv", "sync", "--frozen", "--no-dev", "--project", str(project)], check=True, timeout=600,
+                   capture_output=True, env={k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"})
+    return [str(project / ".venv" / "bin" / "python"), "-m", "probe_py"]
 
 
 @dataclass
