@@ -2,7 +2,7 @@
 package main
 
 import (
-	"github.com/brickKit/be-acceptance/probes/go/probe"
+	"github.com/brickKit/be-acceptance/probes/go/v3/probe"
 	"github.com/brickKit/be-sdk-go/v3/launcher"
 )
 

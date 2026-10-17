@@ -45,6 +45,7 @@ class Spec:
     stream: str
     grpc_port: int
     command: list[str]
+    version: str  # metadata.version of its component.yaml, injected as COMPONENT_VERSION like BrickKit does
 
     @property
     def prefix(self) -> str:
@@ -101,7 +102,7 @@ class Deployment:
         await ensure_bucket()
         db = await testing.provision(need("BE_ACC_PG_ADMIN"), DATABASE, spec.schema, spec.schema + "_owner",
                                      spec.schema + "_rw")
-        return {**db, **self.world.env(spec.id), "COMPONENT_ID": spec.id, "COMPONENT_VERSION": "3.0.0",
+        return {**db, **self.world.env(spec.id), "COMPONENT_ID": spec.id, "COMPONENT_VERSION": spec.version,
                 "BUS_URL": self.bus_url, "IMPLEMENTATION_INSTANCE": str(uuid.uuid4()), "STOP_DRAIN_DELAY": "100ms",
                 "OBJECT_STORE_URL": need("BE_ACC_S3_URL"), "OBJECT_STORE_BUCKET": "be-acceptance",
                 "OBJECT_STORE_PREFIX": spec.schema + "/", "OBJECT_STORE_ACCESS_KEY": need("BE_ACC_S3_ACCESS_KEY"),
@@ -188,3 +189,9 @@ async def ensure_bucket(name: str = "be-acceptance") -> None:
             await s3.head_bucket(Bucket=name)
         except Exception:  # noqa: BLE001 - missing
             await s3.create_bucket(Bucket=name)
+
+
+def manifest_version(kind: str) -> str:
+    import yaml
+
+    return yaml.safe_load((ROOT / "probes" / kind / "component.yaml").read_text())["metadata"]["version"]

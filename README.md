@@ -7,7 +7,7 @@
 | 目录 | 是什么 | 怎样运行 |
 | --- | --- | --- |
 | `models/` | 参考模型：用随机交错演算各协议的关键条款，正确版本通过、每个坏变体被发现。模型只证明协议在模型中的性质，不是 SDK、数据库或消息系统的运行结果 | `make models`，或 `python3 models/<编号>-<名字>.py` |
-| `probes/` | 两种语言的通信探针 `test/probe-go`（`probes/go/`）与 `test/probe-py`（`probes/py/`），同一份契约（`probes/CONTRACT.md`）；各自是一个 BrickKit 组件，发布标签 `test-probe-<语言>/<版本>`，Go 另有模块标签 `probes/go/v<版本>` | 见各自的 `AGENTS.md` |
+| `probes/` | 两种语言的通信探针 `test/probe-go`（`probes/go/`）与 `test/probe-py`（`probes/py/`），同一份契约（`probes/CONTRACT.md`）；各自是一个 BrickKit 组件，发布标签 `test-probe-<语言>/<版本>`，Go 另有模块标签 `probes/go/v<版本>`（模块路径带主版本：`github.com/brickKit/be-acceptance/probes/go/v3`） | 见各自的 `AGENTS.md` |
 | `conformance/` | 从外部运行探针与组件：两种探针单跑、互相调用与互发事件；核心剖面（`profile/`，13 项检查，每项先过自检；报告按协议 18 判定） | `make probes`（要真实的 PostgreSQL、NATS 与对象存储，环境变量见 `conformance/harness.py`） |
 | `doc-checks/` | 文档检查：预期编号（33）、必需依赖无环与组合闭包（34）、本地链接与锚点（含现行文档不链接 `archive/`、`dev/`） | `make doc-checks PROJECT=<装配项目根目录>`（检出在装配项目的 `tools/be-acceptance` 时默认就是项目根目录） |
 

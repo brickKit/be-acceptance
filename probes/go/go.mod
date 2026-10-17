@@ -1,4 +1,4 @@
-module github.com/brickKit/be-acceptance/probes/go
+module github.com/brickKit/be-acceptance/probes/go/v3
 
 go 1.26.0
 

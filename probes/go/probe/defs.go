@@ -12,7 +12,7 @@ import (
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
 	ID          = "test/probe-go"
-	Version     = "3.0.0"
+	Version     = "3.0.1"
 	GRPCPort    = 9600
 	Stream      = "test.probe_go"
 	WrittenType = "test.probe.written.v1"
