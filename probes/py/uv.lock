@@ -264,7 +264,7 @@ wheels = [
 [[package]]
 name = "be-sdk"
 version = "3.0.0a1"
-source = { git = "https://github.com/brickKit/be-sdk-python?rev=83f95a287c1b62f798fd97a3323a709e795a63f6#83f95a287c1b62f798fd97a3323a709e795a63f6" }
+source = { git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a1#80a242f3330ff0d0a36141f8955d57cec752013d" }
 dependencies = [
     { name = "aioboto3" },
     { name = "asyncpg" },
@@ -293,7 +293,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?rev=83f95a287c1b62f798fd97a3323a709e795a63f6" }]
+requires-dist = [{ name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a1" }]
 
 [[package]]
 name = "boto3"

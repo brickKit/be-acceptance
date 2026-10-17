@@ -6,7 +6,7 @@ requires-python = ">=3.14"
 dependencies = ["be-sdk"]
 
 [tool.uv.sources]
-be-sdk = { git = "https://github.com/brickKit/be-sdk-python", rev = "83f95a287c1b62f798fd97a3323a709e795a63f6" }
+be-sdk = { git = "https://github.com/brickKit/be-sdk-python", tag = "v3.0.0a1" }
 
 [build-system]
 requires = ["hatchling"]

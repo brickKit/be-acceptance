@@ -218,6 +218,8 @@ def judge_access(obs: dict) -> list[str]:
     for r in http:
         if not all(k in r for k in ("method", "route", "status", "duration_ms", "request_id", "trace_id")):
             p.append(f"an HTTP access line lacks fields: {sorted(r)}")
+        if any(seg.startswith((":", "*")) for seg in str(r.get("route", "")).split("/")):
+            p.append(f"route {r['route']} is not in the OpenAPI form ({{id}})")
         if r.get("route", "").startswith(("/healthz", "/readyz", "/metrics", "/.well-known")) and r.get("level") == "INFO":
             p.append(f"an INFO access line for the platform endpoint {r['route']}")
     for r in grpc:
