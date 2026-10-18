@@ -1,8 +1,8 @@
 """Creates a cell's BrickKit project from its cell.yaml, from scratch every time: init, the two install sources, the
 shells and lone probes at their exact versions, then the deploy file with each probe placed as the cell says and exposed on host port 30000 + its port (the
 driver and the profile reach it there) (members
-compiled into a shell but not hosted in this cell are removed from the project). Rebuilding beats upgrading here:
-two shells compile in the same probes, and upgrading one would move every member under it."""
+compiled into a shell but not hosted in this cell are removed from the project). Rebuilding rather than upgrading
+gives every cell a clean project made only from cell.yaml."""
 from __future__ import annotations
 
 import pathlib

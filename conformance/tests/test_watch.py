@@ -22,3 +22,11 @@ def test_a_ramp_far_below_earlier_runs_is_named():
     ramp = {"driver": {"steps": [], "sustained_rate": 300.0}}
     assert watch.anomalies(ramp, "ramp", [{"sustained": 1900.0}])
     assert watch.anomalies(ramp, "ramp", [{"sustained": 400.0}]) == []
+
+
+def test_a_slow_path_at_a_fixed_rate_is_named_even_without_errors():
+    slow_write = {"driver": {"latency_ms": {"P50": 46.3, "P99": 50.4}, "error_rate": 0, "throughput": 50.0},
+                  "completion": {"received": {"n": 10, "p50_ms": 120.0, "p99_ms": 400.0}}}
+    assert "above the plausible 30 ms for write" in watch.anomalies(slow_write, "50", [], "write")[0]
+    slow_write["driver"]["latency_ms"]["P50"] = 6.0
+    assert watch.anomalies(slow_write, "50", [], "write") == []

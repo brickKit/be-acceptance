@@ -17,6 +17,13 @@ import yaml
 
 POLL, SUMMARY, STALL = 30, 300, 900
 FIXED = {"50": 50.0, "200": 200.0}
+# Plausible upper bounds at a fixed rate on one machine, per operation: the p50 of the hop the caller measures (calls)
+# or of the request (writes, ms), and the p99 of the event's arrival (ms). Far above what the trials read (hop 1-7 ms,
+# write 3-8 ms, arrival p99 under 0.5 s); a figure past them is wrong somewhere even when every request succeeded
+# (the Python SDK's 46 ms writes with Nagle on passed every test).
+LIMITS = {"echo-1k-grpc": 10, "echo-1k-http": 10, "echo-60k-grpc": 25, "echo-60k-http": 25, "work-grpc": 30,
+          "work-http": 30, "write": 30, "relay": 30, "big-event": 60}
+ARRIVAL_P99 = 2000
 
 
 def campaign_running() -> bool:
@@ -57,7 +64,7 @@ def figures(o: dict) -> dict:
     return {"p50": (d.get("latency_ms") or {}).get("P50"), "p99": (d.get("latency_ms") or {}).get("P99")}
 
 
-def anomalies(o: dict, load: str, earlier: list[dict]) -> list[str]:
+def anomalies(o: dict, load: str, earlier: list[dict], op: str = "") -> list[str]:
     d, out = o["driver"], []
     if not o.get("before", {}).get("settled", True):
         out.append(f"the system had not settled before it ({o['before'].get('left')})")
@@ -66,6 +73,12 @@ def anomalies(o: dict, load: str, earlier: list[dict]) -> list[str]:
             out.append(f"errors at a fixed rate: {d.get('errors')}")
         if (d.get("throughput") or 0) < 0.95 * FIXED[load]:
             out.append(f"throughput {d.get('throughput')}/s at {load}/s offered")
+        p50 = (d.get("hop_ms") or d.get("latency_ms") or {}).get("P50")
+        if op in LIMITS and p50 is not None and p50 > LIMITS[op]:
+            out.append(f"p50 {p50:.1f} ms at a fixed rate, above the plausible {LIMITS[op]} ms for {op}")
+        arrival = ((o.get("completion") or {}).get("received") or {}).get("p99_ms")
+        if arrival is not None and arrival > ARRIVAL_P99:
+            out.append(f"events arrive with p99 {arrival:.0f} ms at a fixed rate")
     now = figures(o)
     for name, worse in (("p99", lambda a, b: a > 3 * b and a - b > 20), ("p50", lambda a, b: a > 2 * b and a - b > 5),
                         ("sustained", lambda a, b: a < 0.5 * b)):
@@ -96,7 +109,7 @@ def watch(out: str, spec_file: str) -> int:
                     print(f"UNREADABLE {f.relative_to(root)}", flush=True)
                     continue
                 run, k = key(f, root)
-                if problems := anomalies(o, f.parent.name, by_key.get(k, [])):
+                if problems := anomalies(o, f.parent.name, by_key.get(k, []), f.parent.parent.name):
                     found += 1
                     print(f"ANOMALY {run}/{k}: {'; '.join(problems)}", flush=True)
                 by_key.setdefault(k, []).append(figures(o))
