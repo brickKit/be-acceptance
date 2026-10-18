@@ -1,6 +1,6 @@
 [project]
 name = "be-test-probe-py"
-version = "3.0.0"
+version = "3.1.0"
 description = "The acceptance suite's Python probe (test/probe-py)"
 requires-python = ">=3.14"
 dependencies = ["be-sdk"]

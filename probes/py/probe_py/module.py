@@ -16,11 +16,10 @@ from besdk.events.consumer import Received, Sub
 from besdk.events.core import Event, Projection
 from besdk.http import Route
 from besdk.system import Method
-from probe_py import CALLERS, ID, MAX_BYTES, MAX_WORK_MS, RELAY_BYTES, STREAM, WRITTEN_TYPE
+from probe_py import CALLERS, MAX_BYTES, MAX_WORK_MS, RELAY_BYTES, WRITTEN_TYPE, Variant, prefix
 
 ECHO, WORK = "/test.probe.v1.Probe/Echo", "/test.probe.v1.Probe/Work"
 RELAY_POLL, RELAY_CONCURRENCY, RELAY_LEASE, RELAY_TIMEOUT = 0.5, 4, 30, 10.0
-NO_NEXT = errs.define(ID, "NO_NEXT_PROBE", errs.Code.FAILED_PRECONDITION, 409, errs.RETRY_NO, "No next probe is configured")
 
 
 def invalid(msg: str) -> errs.Error:
@@ -43,8 +42,11 @@ def number(body: dict, key: str, hi: int) -> int:
 
 
 class Probe:
-    def __init__(self, rt):
-        self.rt = rt
+    def __init__(self, rt, variant: Variant):
+        self.rt, self.v, self.ops = rt, variant, prefix(variant.id)
+        # the probe's own reason: this deployment gives the probe no next probe to call
+        self.no_next = errs.define(variant.id, "NO_NEXT_PROBE", errs.Code.FAILED_PRECONDITION, 409, errs.RETRY_NO,
+                                   "No next probe is configured")
         self.next = rt.config.string("PROBE_NEXT")
         self._tasks: list[asyncio.Task] = []
 
@@ -55,7 +57,7 @@ class Probe:
         for method, path, op, h in (("POST", "echo", "echo", self.echo_http), ("POST", "work", "work", self.work_http),
                                     ("POST", "write", "write", self.write), ("POST", "call", "call", self.call),
                                     ("GET", "seen", "read", self.seen)):
-            r.add(Route(method, "/api/probe/" + path, h, f"test.probe.{op}" if guard else "", public=not guard))
+            r.add(Route(method, "/api/probe/" + path, h, f"{self.ops}.{op}" if guard else "", public=not guard))
 
     async def echo_http(self, c):
         body = await c.json()
@@ -76,7 +78,7 @@ class Probe:
         async def fn(tx):
             await tx.execute("INSERT INTO probe_writes (id, size) VALUES ($1, $2)", uuid.UUID(rid), n)
             data = {"id": rid, "relay": relay, **({"blob": "w" * n} if n else {})}
-            await self.rt.events.emit(tx, STREAM, Event(WRITTEN_TYPE, rid, 1, Projection.FULL, data))
+            await self.rt.events.emit(tx, self.v.stream, Event(WRITTEN_TYPE, rid, 1, Projection.FULL, data))
 
         await self.rt.db.tx(fn)
         return JSONResponse({"id": rid}, status_code=201)
@@ -86,7 +88,8 @@ class Probe:
         op, surface = body.get("op"), body.get("surface")
         n, ms = number(body, "bytes", MAX_BYTES), number(body, "ms", MAX_WORK_MS)
         if not self.next:
-            raise NO_NEXT.new("PROBE_NEXT is not set")
+            raise self.no_next.new("PROBE_NEXT is not set")
+        start = time.perf_counter()
         if surface == "grpc" and op == "echo":
             await self.echo_next(n)
         elif surface == "grpc" and op == "work":
@@ -95,17 +98,18 @@ class Probe:
         elif surface == "http" and op in ("echo", "work"):
             h = self.rt.http(self.next)
             if h is None:
-                raise NO_NEXT.new("PROBE_NEXT has no endpoint")
+                raise self.no_next.new("PROBE_NEXT has no endpoint")
             path, payload = ("/api/probe/echo", {"payload": "e" * n}) if op == "echo" else ("/api/probe/work", {"ms": ms})
             await h.do("POST", path, payload, idempotent=True, forward_user=self.rt.config.bool("PROBE_GUARD"))
         else:
             raise invalid("op must be echo or work, surface grpc or http")
-        return JSONResponse({"ok": True})
+        # the hop alone, as the caller sees it: the driver's own request to this probe is not in it
+        return JSONResponse({"ok": True, "elapsed_us": int((time.perf_counter() - start) * 1_000_000)})
 
     def _stub(self, method: str, kind):
         channel = self.rt.grpc(self.next)
         if channel is None:
-            raise NO_NEXT.new("PROBE_NEXT has no grpc endpoint")
+            raise self.no_next.new("PROBE_NEXT has no grpc endpoint")
         return channel.unary_unary(method, request_serializer=kind.SerializeToString, response_deserializer=kind.FromString)
 
     async def echo_next(self, n: int) -> None:
@@ -138,7 +142,7 @@ class Probe:
 
         s.add("test.probe.v1.Probe", {"Echo": handler(echo, wrappers_pb2.BytesValue),
                                       "Work": handler(work, wrappers_pb2.UInt32Value)},
-              {"Echo": Method("test.probe.echo", CALLERS), "Work": Method("test.probe.work", CALLERS)})
+              {"Echo": Method(f"{self.ops}.echo", CALLERS), "Work": Method(f"{self.ops}.work", CALLERS)})
 
     # ------------------------------------------------------------------ events and the relay
 

@@ -16,12 +16,22 @@ def test_the_manifests_declare_what_the_sdk_reads():
                           str(ROOT / "probes" / "py" / "scripts" / "config_schema.py")], capture_output=True, text=True,
                          check=True).stdout
     generated = yaml.safe_load(out)["configSchema"]
-    assert schema("py") == generated, "regenerate: uv run python scripts/config_schema.py (probes/py)"
-    assert schema("go") == generated, "the Go probe declares the same keys"
+    for kind in ("go", "go2", "go3", "go4", "py", "py2"):
+        assert schema(kind) == generated, f"{kind}: regenerate (probes/py: uv run python scripts/config_schema.py)"
+
+
+def test_the_variant_directories_are_generated_and_fit_their_ports(specs):
+    r = subprocess.run(["python3", str(ROOT / "probes" / "variants.py"), "--check"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    for kind, spec in specs.items():
+        m = yaml.safe_load((ROOT / "probes" / kind / "component.yaml").read_text())
+        assert m["metadata"]["id"] == spec.id and m["deployment"]["extraPorts"][0]["port"] == spec.grpc_port, kind
 
 
 def test_the_python_probe_is_merge_safe():
     # compiled into Python shells, so it must not touch the process (component implementation conventions)
+    # the entry point (__main__.py) picks a definition by COMPONENT_ID and is never loaded in a shell
+    module = [str(p) for p in (ROOT / "probes" / "py" / "probe_py").glob("*.py") if p.name != "__main__.py"]
     r = subprocess.run(["uv", "run", "--frozen", "--project", str(ROOT / "probes" / "py"), "python", "-m",
-                        "besdk.mergesafety", str(ROOT / "probes" / "py" / "probe_py")], capture_output=True, text=True)
+                        "besdk.mergesafety", *module], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr

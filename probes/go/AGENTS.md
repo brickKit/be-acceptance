@@ -6,7 +6,7 @@
 
 | 路径 | 内容 |
 | --- | --- |
-| `main.go` | 单跑入口（`serve`、`migrate`） |
+| `main.go` | 单跑入口（`serve`、`migrate`），按 `COMPONENT_ID` 选变体 |
 | `probe/defs.go` | 契约常量、配置键、流、资源与操作 |
 | `probe/probe.go` | 模块：用户面、系统面、写入与事件、转发工作项 |
 | `probe/rpc.go` | 手写的 gRPC 服务描述（不需要生成代码） |

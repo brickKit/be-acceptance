@@ -1,0 +1,157 @@
+apiVersion: brickkit/v1
+kind: Component
+
+metadata:
+  id: test/probe-py2
+  name: Python probe (py2)
+  version: 3.1.0
+  description: "A variant of test/probe-py: the same code under its own component ID, ports and event stream"
+  repository: https://github.com/brickKit/be-acceptance
+
+deployment:
+  type: container
+  build:
+    context: .
+    dockerfile: Dockerfile
+  port: 8605
+  extraPorts:
+    - name: grpc
+      port: 9605
+      protocol: grpc
+
+healthCheck:
+  type: http
+  path: /healthz
+
+readinessCheck:
+  type: http
+  path: /readyz
+
+migration:
+  command: ["python", "-m", "probe_py", "migrate"]
+
+local:
+  runCommand: [uv, run, --project, ../py, python, -m, probe_py]
+  migrationCommand: [uv, run, --project, ../py, python, -m, probe_py, migrate]
+
+events:
+  publishes: [test.probe.written.v1]
+  subscribes: [test.probe.written.v1]
+
+configSchema:
+  type: object
+  required: [PG_HOST, PG_DATABASE, PG_USER, PG_PASSWORD, PG_SCHEMA, BUS_URL, IMPLEMENTATION_INSTANCE]
+  properties:
+    PROBE_NEXT:
+      type: string
+      description: "the component ID of the probe that call and relay go to; unset: none"
+    PROBE_PEER_STREAM:
+      type: string
+      description: "the peer probe's event stream to consume (test.probe_go, test.probe_py); unset: none"
+    PROBE_GUARD:
+      type: boolean
+      description: "true: the user routes need a credential and their operation instead of being public; SDK default false"
+    LOG_LEVEL:
+      type: string
+      enum: [debug, info, warn, error]
+      description: "SDK default info"
+    OTEL_URL:
+      type: string
+      description: "process-level: the same for every member of a shell"
+    STOP_DRAIN_DELAY:
+      type: string
+      description: "a duration (e.g. 2s, 500ms); SDK default 2s"
+    STOP_TIMEOUT:
+      type: string
+      description: "a duration (e.g. 2s, 500ms); SDK default 30s"
+    DEPLOYMENT_ID:
+      type: string
+      description: "process-level: the same for every member of a shell"
+    IAM_ISSUER:
+      type: string
+      description: "process-level: the same for every member of a shell"
+    IAM_JWKS_URL:
+      type: string
+      description: "process-level: the same for every member of a shell"
+    AUTHZ_GRPC_URL:
+      type: string
+      description: "process-level: the same for every member of a shell"
+    AUDIT_GRPC_URL:
+      type: string
+      description: "process-level: the same for every member of a shell"
+    SERVICE_TLS_CERT_FILE:
+      type: string
+      secret: true
+      mount: file
+      description: "a file path, re-read on rotation"
+    SERVICE_TLS_KEY_FILE:
+      type: string
+      secret: true
+      mount: file
+      description: "a file path, re-read on rotation"
+    SERVICE_TLS_CA_FILE:
+      type: string
+      secret: true
+      mount: file
+      description: "a file path, re-read on rotation"
+    PG_HOST:
+      type: string
+    PG_PORT:
+      type: integer
+      description: "SDK default 5432"
+    PG_DATABASE:
+      type: string
+    PG_USER:
+      type: string
+    PG_PASSWORD:
+      type: string
+      secret: true
+    PG_SCHEMA:
+      type: string
+    PG_POOLER_PREPARED:
+      type: boolean
+      description: "SDK default true"
+    PG_STATEMENT_TIMEOUT:
+      type: string
+      description: "a duration (e.g. 2s, 500ms); SDK default 5s"
+    PG_LOCK_TIMEOUT:
+      type: string
+      description: "a duration (e.g. 2s, 500ms); SDK default 2s"
+    PG_IDLE_IN_TX_TIMEOUT:
+      type: string
+      description: "a duration (e.g. 2s, 500ms); SDK default 10s"
+    PG_POOL_FOREGROUND:
+      type: integer
+      description: "SDK default 8"
+    PG_POOL_BACKGROUND:
+      type: integer
+      description: "SDK default 4"
+    BUS_URL:
+      type: string
+      secret: true
+      description: "process-level: the same for every member of a shell"
+    IMPLEMENTATION_INSTANCE:
+      type: string
+    OBJECT_STORE_URL:
+      type: string
+    OBJECT_STORE_REGION:
+      type: string
+      description: "SDK default us-east-1"
+    OBJECT_STORE_BUCKET:
+      type: string
+    OBJECT_STORE_PREFIX:
+      type: string
+    OBJECT_STORE_ACCESS_KEY:
+      type: string
+    OBJECT_STORE_SECRET_KEY:
+      type: string
+      secret: true
+    PG_MIGRATION_HOST:
+      type: string
+    PG_MIGRATION_PORT:
+      type: integer
+    PG_OWNER_USER:
+      type: string
+    PG_OWNER_PASSWORD:
+      type: string
+      secret: true

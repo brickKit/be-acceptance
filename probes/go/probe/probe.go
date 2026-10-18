@@ -23,20 +23,44 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// Definition is the probe as the launcher and the shells take it.
-func Definition() component.Definition {
-	return component.Definition{ID: ID, Version: Version, Keys: Keys(), Migrations: Migrations(), GRPCPort: GRPCPort,
-		Streams: Streams(), Subscribes: true, Authz: Authz(),
-		New: func(rt *runtime.Runtime) (component.Module, error) { return &Probe{rt: rt}, nil }}
+// Definition is one probe variant as the launcher and the shells take it.
+func Definition(v Variant) component.Definition {
+	return component.Definition{ID: v.ID, Version: Version, Keys: Keys(), Migrations: Migrations(), GRPCPort: v.GRPCPort,
+		Streams: []events.Stream{{Name: v.Stream, Partitions: 4}}, Subscribes: true, Authz: Authz(v.ID),
+		New: func(rt *runtime.Runtime) (component.Module, error) {
+			// the probe's own reason: this deployment gives the probe no next probe to call
+			return &Probe{rt: rt, v: v, noNext: errs.Define(v.ID, "NO_NEXT_PROBE", errs.FailedPrecondition, 409,
+				errs.RetryNo, "No next probe is configured")}, nil
+		}}
+}
+
+// Definitions are every Go probe variant, for the shells that compile them in.
+func Definitions() []component.Definition {
+	out := make([]component.Definition, len(Variants))
+	for i, v := range Variants {
+		out[i] = Definition(v)
+	}
+	return out
+}
+
+// ByID finds a variant; false when the ID is not a Go probe.
+func ByID(id string) (Variant, bool) {
+	for _, v := range Variants {
+		if v.ID == id {
+			return v, true
+		}
+	}
+	return Variant{}, false
 }
 
 // Probe is the module.
-type Probe struct{ rt *runtime.Runtime }
+type Probe struct {
+	rt     *runtime.Runtime
+	v      Variant
+	noNext errs.Declared
+}
 
 func invalid(msg string) error { return errs.New(errs.ReasonRequestInvalid, msg) }
-
-// noNext is the probe's own reason: this deployment gives the probe no next probe to call.
-var noNext = errs.Define(ID, "NO_NEXT_PROBE", errs.FailedPrecondition, 409, errs.RetryNo, "No next probe is configured")
 
 // Routes registers the user surface; with PROBE_GUARD the routes need a credential and the operation.
 func (p *Probe) Routes(r *httpx.Routes) error {
@@ -44,7 +68,7 @@ func (p *Probe) Routes(r *httpx.Routes) error {
 	add := func(method, path, op string, h httpx.Handler) {
 		route := httpx.Route{Method: method, Path: "/api/probe/" + path, Handle: h, Public: !guard}
 		if guard {
-			route.Operation = "test.probe." + op
+			route.Operation = Prefix(p.v.ID) + "." + op
 		}
 		r.Add(route)
 	}
@@ -122,7 +146,7 @@ func (p *Probe) write(c *httpx.Context) error {
 		if _, err := tx.Exec(ctx, "INSERT INTO probe_writes (id, size) VALUES ($1, $2)", id, in.Bytes); err != nil {
 			return err
 		}
-		_, err := p.rt.Events.Emit(ctx, tx, Stream, events.Event{Type: WrittenType, RecordID: id, Version: 1,
+		_, err := p.rt.Events.Emit(ctx, tx, p.v.Stream, events.Event{Type: WrittenType, RecordID: id, Version: 1,
 			Projection: events.Full, Data: written{ID: id, Relay: in.Relay, Blob: strings.Repeat("w", in.Bytes)}})
 		return err
 	})
@@ -150,9 +174,10 @@ func (p *Probe) call(c *httpx.Context) error {
 	}
 	next := p.rt.Config.String("PROBE_NEXT")
 	if next == "" {
-		return noNext.New("PROBE_NEXT is not set")
+		return p.noNext.New("PROBE_NEXT is not set")
 	}
 	var err error
+	start := time.Now()
 	switch {
 	case in.Surface == "grpc" && in.Op == "echo":
 		err = p.echoNext(c.Ctx(), next, in.Bytes)
@@ -166,13 +191,14 @@ func (p *Probe) call(c *httpx.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(200, map[string]bool{"ok": true})
+	// the hop alone, as the caller sees it: the driver's own request to this probe is not in it
+	return c.JSON(200, map[string]any{"ok": true, "elapsed_us": time.Since(start).Microseconds()})
 }
 
 func (p *Probe) grpcNext(ctx context.Context, next, method string, in, out any) error {
 	conn, ok := p.rt.GRPC(next)
 	if !ok {
-		return noNext.New("PROBE_NEXT has no grpc endpoint")
+		return p.noNext.New("PROBE_NEXT has no grpc endpoint")
 	}
 	return conn.Invoke(ctx, method, in, out, calls.Idempotent())
 }
@@ -191,7 +217,7 @@ func (p *Probe) echoNext(ctx context.Context, next string, n int) error {
 func (p *Probe) httpNext(ctx context.Context, next string, in callIn) error {
 	h, ok := p.rt.HTTP(next)
 	if !ok {
-		return noNext.New("PROBE_NEXT has no endpoint")
+		return p.noNext.New("PROBE_NEXT has no endpoint")
 	}
 	req := calls.Request{Method: "POST", Idempotent: true, ForwardUser: p.rt.Config.Bool("PROBE_GUARD")}
 	if in.Op == "echo" {
@@ -217,8 +243,8 @@ func (p *Probe) seen(c *httpx.Context) error {
 
 // Services registers the system surface.
 func (p *Probe) Services(s *grpcx.Services) error {
-	s.Register(&desc, p, map[string]grpcx.Method{"Echo": {Operation: "test.probe.echo", Callers: Callers},
-		"Work": {Operation: "test.probe.work", Callers: Callers}})
+	s.Register(&desc, p, map[string]grpcx.Method{"Echo": {Operation: Prefix(p.v.ID) + ".echo", Callers: Callers},
+		"Work": {Operation: Prefix(p.v.ID) + ".work", Callers: Callers}})
 	return nil
 }
 

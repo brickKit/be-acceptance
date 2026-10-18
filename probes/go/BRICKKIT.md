@@ -2,7 +2,7 @@
 
 ## 组件定位
 
-验收用的 Go 通信探针：回送、消耗 CPU、一个事务内写一行并发事件、收到对方事件后调用下一个探针，用来量每条通信路径的代价。没有业务逻辑，不进货架；与另一种语言的探针实现同一份契约（be-acceptance 仓库的 `probes/CONTRACT.md`）。
+验收用的 Go 通信探针：回送、消耗 CPU、一个事务内写一行并发事件、收到对方事件后调用下一个探针，用来量每条通信路径的代价。没有业务逻辑，不进货架；与另一种语言的探针实现同一份契约（be-acceptance 仓库的 `probes/CONTRACT.md`）。同一份代码另以变体的组件 ID 发布（`test/probe-go2`、`-go3`、`-go4`），外壳编进全部变体。
 
 ## 部署前准备
 
@@ -21,7 +21,7 @@
 
 ## 契约索引
 
-用户面 `/api/probe/echo`、`/work`、`/write`、`/call`、`/seen`；系统面 `/test.probe.v1.Probe/Echo`、`/Work`；事件 `test.probe.written.v1`，流 `test.probe_go`。完整定义在 be-acceptance 仓库的 `probes/CONTRACT.md`。
+用户面 `/api/probe/echo`、`/work`、`/write`、`/call`、`/seen`；系统面 `/test.probe.v1.Probe/Echo`、`/Work`；事件 `test.probe.written.v1`，流 `test.probe_go`；资源类型与操作键的前缀 `test.probe_go`；`/call` 的回答带调用方测的这一跳耗时 `elapsed_us`。完整定义在 be-acceptance 仓库的 `probes/CONTRACT.md`。
 
 ## 外壳声明
 

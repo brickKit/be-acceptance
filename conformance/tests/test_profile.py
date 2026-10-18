@@ -10,8 +10,10 @@ from profile import checks, observe
 from profile.model import SUITE_VERSION, Check, Report, Result, Verdict, run
 
 
-async def observe_pair(d, specs):
-    """Both probes, each the other's next and peer, observed while they work."""
+async def observe_pair(d, all_specs):
+    """The Go and the Python probe, each the other's next and peer, observed while they work (the variants run the
+    same code; test_probes covers them alone)."""
+    specs = {k: all_specs[k] for k in ("go", "py")}
     go, py = specs["go"], specs["py"]
     ports = {"go": free_port(), "py": free_port()}
     envs = {"go": await d.env(go, {"PROBE_NEXT": py.id, "PROBE_PEER_STREAM": py.stream, "STOP_DRAIN_DELAY": "1s",

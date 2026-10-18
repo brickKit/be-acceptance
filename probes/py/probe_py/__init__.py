@@ -1,6 +1,7 @@
 """The Python probe: the acceptance suite's communication-only component (be-acceptance probes/CONTRACT.md), the same
 contract as the Go probe. No business logic, so what it measures comes from the language, the topology and the engines
 only."""
+from dataclasses import dataclass
 from importlib.resources import files
 
 from besdk.authz import Definitions, Operation, Resource
@@ -8,26 +9,56 @@ from besdk.component import Definition
 from besdk.config import Key, Type
 from besdk.events.core import Stream
 
-ID, VERSION, GRPC_PORT = "test/probe-py", "3.0.0", 9601
-STREAM, WRITTEN_TYPE = "test.probe_py", "test.probe.written.v1"
-CALLERS = ["test/probe-go", "test/probe-py"]
+VERSION, WRITTEN_TYPE = "3.1.0", "test.probe.written.v1"
 RELAY_BYTES, MAX_WORK_MS, MAX_BYTES = 1024, 1000, 512 << 10
 
 
-def authz() -> Definitions:
-    """The probe's one resource and its operations: they protect the user routes when PROBE_GUARD is on and the system
+@dataclass(frozen=True)
+class Variant:
+    """One probe component: the same code under its own component ID, ports and event stream, so a shell can host
+    several and two probes can call each other inside one process."""
+
+    id: str
+    stream: str
+    http_port: int  # the port its image listens on alone (deployment.port)
+    grpc_port: int
+
+
+VARIANTS = [Variant("test/probe-py", "test.probe_py", 8601, 9601), Variant("test/probe-py2", "test.probe_py2", 8605, 9605)]
+# every probe of either language may call the probes' system methods
+CALLERS = ["test/probe-go", "test/probe-go2", "test/probe-go3", "test/probe-go4", "test/probe-py", "test/probe-py2"]
+
+
+def prefix(component_id: str) -> str:
+    """A variant's resource type and operation-key prefix: test/probe-py2 -> test.probe_py2 (no two components own the
+    same keys)."""
+    return component_id.replace("/", ".").replace("-", "_")
+
+
+def authz(component_id: str) -> Definitions:
+    """A variant's one resource and its operations: they protect the user routes when PROBE_GUARD is on and the system
     methods always."""
-    ops = [Operation("test.probe.read", "test.probe", "read", "low")]
-    ops += [Operation(f"test.probe.{op}", "test.probe", "action", "low") for op in ("echo", "work", "write", "call")]
-    return Definitions(ID, [Resource("test.probe", "test.probe.read", {}, {})], ops)
+    p = prefix(component_id)
+    ops = [Operation(f"{p}.read", p, "read", "low")]
+    ops += [Operation(f"{p}.{op}", p, "action", "low") for op in ("echo", "work", "write", "call")]
+    return Definitions(component_id, [Resource(p, f"{p}.read", {}, {})], ops)
 
 
-def definition() -> Definition:
+def definition(v: Variant = VARIANTS[0]) -> Definition:
     from probe_py.module import Probe
 
-    return Definition(ID, VERSION, Probe, keys=[
+    return Definition(v.id, VERSION, lambda rt: Probe(rt, v), keys=[
         Key("PROBE_NEXT", Type.STRING),  # the probe that call and relay go to; empty: none
         Key("PROBE_PEER_STREAM", Type.STRING),  # the peer's event stream to consume; empty: none
         Key("PROBE_GUARD", Type.BOOLEAN, default=False)],
-        migrations=files("probe_py") / "migrations", grpc_port=GRPC_PORT, streams=[Stream(STREAM, 4)],
-        subscribes=True, authz=authz())
+        migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4)],
+        subscribes=True, authz=authz(v.id))
+
+
+def definitions() -> list[Definition]:
+    """Every Python probe variant, for the Python shell."""
+    return [definition(v) for v in VARIANTS]
+
+
+def by_id(component_id: str) -> Variant | None:
+    return next((v for v in VARIANTS if v.id == component_id), None)

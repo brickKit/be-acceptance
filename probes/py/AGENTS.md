@@ -8,7 +8,7 @@
 | --- | --- |
 | `probe_py/__init__.py` | 定义：契约常量、配置键、流、资源与操作 |
 | `probe_py/module.py` | 模块：用户面、系统面、写入与事件、转发队列 |
-| `probe_py/__main__.py` | 单跑入口（`serve`、`migrate`） |
+| `probe_py/__main__.py` | 单跑入口（`serve`、`migrate`），按 `COMPONENT_ID` 选变体；外壳不加载它 |
 | `probe_py/migrations/` | 迁移 |
 | `scripts/config_schema.py` | 从 SDK 的键清单生成 `component.yaml` 的 `configSchema` |
 | `Dockerfile` | 镜像（与宿主机同版本的 Python，Alpine） |
