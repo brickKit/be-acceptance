@@ -138,6 +138,8 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
             lines += [f"PROBE_NEXT: {nxt}", f"PROBE_NEXT_URL: $endpoint:{nxt}", f"PROBE_NEXT_GRPC_URL: $endpoint:{nxt}:grpc"]
         if prev := c.previous_of(probe):
             lines.append(f"PROBE_PEER_STREAM: {stream_of(prev)}")
+        if c.concurrency != 1:
+            lines.append(f"PROBE_SUB_CONCURRENCY: {c.concurrency}")
         (cfg / f"{f}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
 
 

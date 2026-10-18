@@ -42,6 +42,7 @@ class Cell:
     deployment: str = "0190f3a1-0000-7000-8000-00000000e001"
     shells: dict[str, list[str]] = field(default_factory=dict)  # shell -> hosted members
     alone: list[str] = field(default_factory=list)  # probes running alone
+    concurrency: int = 1  # messages each probe's subscription handles at once (PROBE_SUB_CONCURRENCY)
 
     @staticmethod
     def load(directory: str | pathlib.Path) -> Cell:
@@ -50,7 +51,7 @@ class Cell:
         shells = {k.split("@")[0]: list(v) for k, v in (spec.get("shells") or {}).items()}
         alone = [a.split("@")[0] for a in spec.get("alone") or []]
         c = Cell(d, spec["cell"], spec.get("chain") or [], spec.get("database", "be_experiment"), spec.get("bus", "jetstream"),
-                 shells=shells, alone=alone)
+                 shells=shells, alone=alone, concurrency=int(spec.get("subscription_concurrency", 1)))
         unknown = [p for p in c.chain if p not in c.probes]
         if unknown:
             raise ValueError(f"{c.name}: the chain names probes the cell does not run: {unknown}")
