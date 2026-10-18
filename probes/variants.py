@@ -15,7 +15,7 @@ LANG = {"go": "Go", "py": "Python"}
 
 DOCKER = {
     "go": """# The Go probe built at its release tag (the code lives in probes/go); COMPONENT_ID picks this variant.
-FROM golang:1.26.0-alpine AS build
+FROM golang:1.27.2-alpine AS build
 RUN CGO_ENABLED=0 GOBIN=/out go install -trimpath github.com/brickKit/be-acceptance/probes/go/v3@v{version}
 
 FROM alpine:3.24.2
@@ -25,14 +25,14 @@ EXPOSE {port} {grpc}
 ENTRYPOINT ["/probe-go"]
 """,
     "py": """# The Python probe built at its release tag (the code lives in probes/py); COMPONENT_ID picks this variant.
-FROM python:3.14.4-alpine AS build
-COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /bin/uv
+FROM python:3.15.0-alpine AS build
+COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/uv
 RUN apk add --no-cache git && git clone -q --depth 1 --branch test-probe-py/{version} https://github.com/brickKit/be-acceptance /src \\
     && mkdir -p /app && cp -r /src/probes/py/. /app
 WORKDIR /app
 RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.14.4-alpine
+FROM python:3.15.0-alpine
 COPY --from=build /app/.venv /app/.venv
 ENV PATH=/app/.venv/bin:$PATH PORT={port}
 EXPOSE {port} {grpc}

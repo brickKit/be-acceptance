@@ -1,5 +1,5 @@
 # The Go probe alone: a static binary on Alpine (the health check runs through /bin/sh and wget).
-FROM golang:1.26.0-alpine AS build
+FROM golang:1.27.2-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

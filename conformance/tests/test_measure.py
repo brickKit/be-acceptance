@@ -31,7 +31,7 @@ def cleanup():
 
 async def test_cpu_reads_as_burnt(cleanup):
     # exactly 3 s of CPU in one process (a shell loop on `date +%s` burns anywhere from 2 to 3 s)
-    name = start("python:3.14.4-alpine", "python", "-c",
+    name = start("python:3.15.0-alpine", "python", "-c",
                  "import time; time.sleep(1); e = time.process_time() + 3\nwhile time.process_time() < e: pass\n"
                  "time.sleep(60)")
     cleanup.append(name)
@@ -44,7 +44,7 @@ async def test_cpu_reads_as_burnt(cleanup):
 
 
 async def test_memory_reads_as_held(cleanup):
-    name = start("python:3.14.4-alpine", "python", "-c",
+    name = start("python:3.15.0-alpine", "python", "-c",
                  "b = bytearray(200 * 1024 * 1024); import time; time.sleep(60)")
     cleanup.append(name)
     await asyncio.sleep(3)
