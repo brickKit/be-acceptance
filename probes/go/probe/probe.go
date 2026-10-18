@@ -196,9 +196,9 @@ func (p *Probe) call(c *httpx.Context) error {
 }
 
 func (p *Probe) grpcNext(ctx context.Context, next, method string, in, out any) error {
-	conn, ok := p.rt.GRPC(next)
+	conn, ok := p.rt.GRPCAt(next, p.rt.Config.String("PROBE_NEXT_GRPC_URL"))
 	if !ok {
-		return p.noNext.New("PROBE_NEXT has no grpc endpoint")
+		return p.noNext.New("PROBE_NEXT_GRPC_URL is not set")
 	}
 	return conn.Invoke(ctx, method, in, out, calls.Idempotent())
 }
@@ -215,9 +215,9 @@ func (p *Probe) echoNext(ctx context.Context, next string, n int) error {
 }
 
 func (p *Probe) httpNext(ctx context.Context, next string, in callIn) error {
-	h, ok := p.rt.HTTP(next)
+	h, ok := p.rt.HTTPAt(next, p.rt.Config.String("PROBE_NEXT_URL"))
 	if !ok {
-		return p.noNext.New("PROBE_NEXT has no endpoint")
+		return p.noNext.New("PROBE_NEXT_URL is not set")
 	}
 	req := calls.Request{Method: "POST", Idempotent: true, ForwardUser: p.rt.Config.Bool("PROBE_GUARD")}
 	if in.Op == "echo" {

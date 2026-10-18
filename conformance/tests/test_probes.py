@@ -51,9 +51,9 @@ async def test_the_probes_call_each_other_and_exchange_events(bus, specs, world,
     d = Deployment(world, await fresh_bus(bus, [go.stream, py.stream]), tmp_path)
     try:
         gport, pport = free_port(), free_port()
-        g = await d.start(go, await d.env(go, {"PROBE_NEXT": py.id, "PROBE_PEER_STREAM": py.stream,
+        g = await d.start(go, await d.env(go, {"PROBE_PEER_STREAM": py.stream,
                                                **address(py, pport)}), gport)
-        p = await d.start(py, await d.env(py, {"PROBE_NEXT": go.id, "PROBE_PEER_STREAM": go.stream,
+        p = await d.start(py, await d.env(py, {"PROBE_PEER_STREAM": go.stream,
                                                **address(go, gport)}), pport)
         for caller in (g, p):
             for surface in ("grpc", "http"):

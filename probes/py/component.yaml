@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-py
   name: Python probe
-  version: 3.1.0
+  version: 3.2.0
   description: "The acceptance suite's Python probe: the same contract as the Go probe, for measuring paths"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -45,6 +45,12 @@ configSchema:
     PROBE_NEXT:
       type: string
       description: "the component ID of the probe that call and relay go to; unset: none"
+    PROBE_NEXT_URL:
+      type: string
+      description: "the next probe's user surface: $endpoint:<its ID> (protocol P4.26); unset: no HTTP calls"
+    PROBE_NEXT_GRPC_URL:
+      type: string
+      description: "the next probe's system surface: $endpoint:<its ID>:grpc (protocol P4.26); unset: no gRPC calls"
     PROBE_PEER_STREAM:
       type: string
       description: "the peer probe's event stream to consume (test.probe_go, test.probe_py); unset: none"

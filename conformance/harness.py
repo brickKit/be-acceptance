@@ -137,9 +137,10 @@ class Deployment:
 
 
 def address(spec: Spec, port: int) -> dict:
-    """The dependency addresses BrickKit would inject for a probe listening on port (and its grpc port)."""
-    return {f"{spec.prefix}_ENDPOINT": f"http://127.0.0.1:{port}",
-            f"{spec.prefix}_GRPC_ENDPOINT": f"http://127.0.0.1:{spec.grpc_port}"}
+    """A probe's next-probe configuration as a cell writes it with $endpoint: references (protocol P4.26): its
+    component ID, user surface and system surface."""
+    return {"PROBE_NEXT": spec.id, "PROBE_NEXT_URL": f"http://127.0.0.1:{port}",
+            "PROBE_NEXT_GRPC_URL": f"http://127.0.0.1:{spec.grpc_port}"}
 
 
 async def fresh_bus(kind: str, streams: list[str]) -> str:

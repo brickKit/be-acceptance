@@ -13,11 +13,11 @@
 
 ## 依赖说明
 
-不声明组件依赖：要调用的下一个探针由部署指定（`PROBE_NEXT` 加上它的地址变量），实验按格组合探针。
+不声明组件依赖：要调用的下一个探针由部署用配置指定（`PROBE_NEXT` 与它的地址，协议 P4.26），不构成依赖边，实验按格任意组合、可以成环。
 
 ## 配置指南
 
-全部键见 `component.yaml` 的 `configSchema`（由 SDK 的键清单生成）。必填：`PG_HOST`、`PG_DATABASE`、`PG_USER`、`PG_PASSWORD`、`PG_SCHEMA`（自己的数据库目标、运行角色与 schema，密码是密钥）；`BUS_URL`（消息系统，JetStream 的 `nats://` 或 PostgreSQL 队列的 `pgqueue://`，密钥）；`IMPLEMENTATION_INSTANCE`（生产者实例的身份，部署工具给每个实例一个 UUID）。探针自己的键：`PROBE_NEXT`（下一个探针的组件 ID）、`PROBE_PEER_STREAM`（要消费的对方的流）、`PROBE_GUARD`（用户面是否要凭据）。
+全部键见 `component.yaml` 的 `configSchema`（由 SDK 的键清单生成）。必填：`PG_HOST`、`PG_DATABASE`、`PG_USER`、`PG_PASSWORD`、`PG_SCHEMA`（自己的数据库目标、运行角色与 schema，密码是密钥）；`BUS_URL`（消息系统，JetStream 的 `nats://` 或 PostgreSQL 队列的 `pgqueue://`，密钥）；`IMPLEMENTATION_INSTANCE`（生产者实例的身份，部署工具给每个实例一个 UUID）。探针自己的键：`PROBE_NEXT`（下一个探针的组件 ID）、`PROBE_NEXT_URL` 与 `PROBE_NEXT_GRPC_URL`（它的两个地址，用 `$endpoint:<ID>` 与 `$endpoint:<ID>:grpc` 填）、`PROBE_PEER_STREAM`（要消费的对方的流）、`PROBE_GUARD`（用户面是否要凭据）。
 
 ## 契约索引
 

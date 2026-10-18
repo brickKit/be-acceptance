@@ -96,9 +96,9 @@ class Probe:
             await self._stub(WORK, wrappers_pb2.UInt32Value)(wrappers_pb2.UInt32Value(value=ms),
                                                              metadata=options(idempotent=True))
         elif surface == "http" and op in ("echo", "work"):
-            h = self.rt.http(self.next)
+            h = self.rt.http_at(self.next, self.rt.config.string("PROBE_NEXT_URL"))
             if h is None:
-                raise self.no_next.new("PROBE_NEXT has no endpoint")
+                raise self.no_next.new("PROBE_NEXT_URL is not set")
             path, payload = ("/api/probe/echo", {"payload": "e" * n}) if op == "echo" else ("/api/probe/work", {"ms": ms})
             await h.do("POST", path, payload, idempotent=True, forward_user=self.rt.config.bool("PROBE_GUARD"))
         else:
@@ -107,9 +107,9 @@ class Probe:
         return JSONResponse({"ok": True, "elapsed_us": int((time.perf_counter() - start) * 1_000_000)})
 
     def _stub(self, method: str, kind):
-        channel = self.rt.grpc(self.next)
+        channel = self.rt.grpc_at(self.next, self.rt.config.string("PROBE_NEXT_GRPC_URL"))
         if channel is None:
-            raise self.no_next.new("PROBE_NEXT has no grpc endpoint")
+            raise self.no_next.new("PROBE_NEXT_GRPC_URL is not set")
         return channel.unary_unary(method, request_serializer=kind.SerializeToString, response_deserializer=kind.FromString)
 
     async def echo_next(self, n: int) -> None:

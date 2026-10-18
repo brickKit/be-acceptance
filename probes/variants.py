@@ -79,7 +79,7 @@ def docs(kind: str, lang: str) -> dict[str, str]:
 
 ## 依赖说明
 
-不声明组件依赖：下一个探针由部署指定（`PROBE_NEXT` 加上它的地址变量）。
+不声明组件依赖：下一个探针由部署用配置指定（`PROBE_NEXT`、`PROBE_NEXT_URL`、`PROBE_NEXT_GRPC_URL`，协议 P4.26）。
 
 ## 配置指南
 

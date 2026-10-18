@@ -16,9 +16,9 @@ async def observe_pair(d, all_specs):
     specs = {k: all_specs[k] for k in ("go", "py")}
     go, py = specs["go"], specs["py"]
     ports = {"go": free_port(), "py": free_port()}
-    envs = {"go": await d.env(go, {"PROBE_NEXT": py.id, "PROBE_PEER_STREAM": py.stream, "STOP_DRAIN_DELAY": "1s",
+    envs = {"go": await d.env(go, {"PROBE_PEER_STREAM": py.stream, "STOP_DRAIN_DELAY": "1s",
                                    **address(py, ports["py"])}),
-            "py": await d.env(py, {"PROBE_NEXT": go.id, "PROBE_PEER_STREAM": go.stream, "STOP_DRAIN_DELAY": "1s",
+            "py": await d.env(py, {"PROBE_PEER_STREAM": go.stream, "STOP_DRAIN_DELAY": "1s",
                                    **address(go, ports["go"])})}
     obs = {k: {"component": specs[k].id, "stream": specs[k].stream, "partitions": 4,
                "impl": envs[k]["IMPLEMENTATION_INSTANCE"], "owner": specs[k].schema + "_owner",

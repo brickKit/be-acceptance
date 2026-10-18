@@ -9,7 +9,7 @@ from besdk.component import Definition
 from besdk.config import Key, Type
 from besdk.events.core import Stream
 
-VERSION, WRITTEN_TYPE = "3.1.0", "test.probe.written.v1"
+VERSION, WRITTEN_TYPE = "3.2.0", "test.probe.written.v1"
 RELAY_BYTES, MAX_WORK_MS, MAX_BYTES = 1024, 1000, 512 << 10
 
 
@@ -49,6 +49,8 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
 
     return Definition(v.id, VERSION, lambda rt: Probe(rt, v), keys=[
         Key("PROBE_NEXT", Type.STRING),  # the probe that call and relay go to; empty: none
+        Key("PROBE_NEXT_URL", Type.STRING),  # its user surface ($endpoint:<id>), protocol P4.26
+        Key("PROBE_NEXT_GRPC_URL", Type.STRING),  # its system surface ($endpoint:<id>:grpc)
         Key("PROBE_PEER_STREAM", Type.STRING),  # the peer's event stream to consume; empty: none
         Key("PROBE_GUARD", Type.BOOLEAN, default=False)],
         migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4)],

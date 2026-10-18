@@ -11,7 +11,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.1.0"
+	Version     = "3.2.0"
 	WrittenType = "test.probe.written.v1"
 	RelayBytes  = 1024
 	MaxWorkMS   = 1000
@@ -51,8 +51,10 @@ func Migrations() fs.FS {
 // Keys are the probe's own configuration keys.
 func Keys() []config.Key {
 	return []config.Key{
-		{Name: "PROBE_NEXT", Type: config.String},        // the probe that call and relay go to; empty: none
-		{Name: "PROBE_PEER_STREAM", Type: config.String}, // the peer's event stream to consume; empty: none
+		{Name: "PROBE_NEXT", Type: config.String},          // the probe that call and relay go to; empty: none
+		{Name: "PROBE_NEXT_URL", Type: config.String},      // its user surface ($endpoint:<id>), protocol P4.26
+		{Name: "PROBE_NEXT_GRPC_URL", Type: config.String}, // its system surface ($endpoint:<id>:grpc)
+		{Name: "PROBE_PEER_STREAM", Type: config.String},   // the peer's event stream to consume; empty: none
 		{Name: "PROBE_GUARD", Type: config.Boolean, Default: false},
 	}
 }
