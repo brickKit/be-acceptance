@@ -9,7 +9,7 @@ from besdk.component import Definition
 from besdk.config import Key, Type
 from besdk.events.core import Stream
 
-VERSION, WRITTEN_TYPE = "3.2.5", "test.probe.written.v1"
+VERSION, WRITTEN_TYPE = "3.2.6", "test.probe.written.v1"
 RELAY_BYTES, MAX_WORK_MS, MAX_BYTES = 1024, 1000, 512 << 10
 
 
