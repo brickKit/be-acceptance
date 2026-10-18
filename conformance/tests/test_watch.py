@@ -30,3 +30,25 @@ def test_a_slow_path_at_a_fixed_rate_is_named_even_without_errors():
     assert "above the plausible 30 ms for write" in watch.anomalies(slow_write, "50", [], "write")[0]
     slow_write["driver"]["latency_ms"]["P50"] = 6.0
     assert watch.anomalies(slow_write, "50", [], "write") == []
+
+
+def saturated(errors, cores):
+    return {"driver": {"errors": errors}, "resources": {"containers": {
+        "brickkit-d-s-test-probe-py-3-2-4-1": {"process": {"cores": cores}},
+        "be-postgres": {"process": {"cores": 3.0}}}}}
+
+
+def test_an_expected_limit_at_200_is_counted_not_reported():
+    assert watch.expected_limit(saturated({"503 OUTBOUND_LIMIT": 900}, 1.02), "200", ["errors"], True) == "CPU saturated"
+    # the infrastructure being busy is not the component's limit; nor are errors of another kind
+    assert watch.expected_limit(saturated({"503 OUTBOUND_LIMIT": 900}, 0.4), "200", ["errors"], True) == ""
+    assert watch.expected_limit(saturated({"500 INTERNAL": 3}, 1.02), "200", ["errors"], True) == ""
+    slow_arrival = saturated({}, 0.5)
+    assert watch.expected_limit(slow_arrival, "200", ["events arrive with p99 5000 ms"], True) == \
+        "subscription one at a time"
+    assert watch.expected_limit(slow_arrival, "200", ["events arrive with p99 5000 ms"], False) == "", \
+        "slow at 50/s too: a defect, not a limit"
+
+
+def test_nothing_at_50_is_an_expected_limit():
+    assert watch.expected_limit(saturated({"503 OUTBOUND_LIMIT": 900}, 1.02), "50", ["errors"], True) == ""

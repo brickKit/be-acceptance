@@ -3,7 +3,11 @@ what needs acting on: a cell failed, no progress for a while, the campaign proce
 wrong (taken on a system that never settled, errors at a fixed rate, the fixed rate not reached, far off the same
 measurement in earlier runs). Otherwise one summary every 5 minutes: progress, the estimated time left, anomalies so far.
 
-    python cells/watch.py <output> <campaign.yaml>"""
+    python cells/watch.py <output> <campaign.yaml> [--from-now]
+
+Expected limits at 200/s (a container's CPU saturated with only limit errors; only slow arrival where 50/s was
+fine) are counted in the summary instead of waking anyone. --from-now, for a re-armed monitor, skips what is there.
+"""
 from __future__ import annotations
 
 import json
@@ -24,6 +28,7 @@ FIXED = {"50": 50.0, "200": 200.0}
 LIMITS = {"echo-1k-grpc": 10, "echo-1k-http": 10, "echo-60k-grpc": 25, "echo-60k-http": 25, "work-grpc": 30,
           "work-http": 30, "write": 30, "relay": 30, "big-event": 60}
 ARRIVAL_P99 = 2000
+LIMIT_ERRORS = ("OUTBOUND_LIMIT", "SERVICE_BUSY", "DEADLINE_EXCEEDED")
 
 
 def campaign_running() -> bool:
@@ -88,12 +93,44 @@ def anomalies(o: dict, load: str, earlier: list[dict], op: str = "") -> list[str
     return out
 
 
-def watch(out: str, spec_file: str) -> int:
+def expected_limit(o: dict, load: str, problems: list[str], fine_at_50: bool) -> str:
+    """The category of an expected limit, counted in the summary instead of waking anyone, or "" when the problems
+    need a look. Only at 200/s: anything at 50/s is a problem (the queue defect of 2026-10-18 showed there)."""
+    if load != "200":
+        return ""
+    errors = o["driver"].get("errors") or {}
+    cores = max((v["process"]["cores"] for k, v in o["resources"]["containers"].items() if k.startswith("brickkit-")),
+                default=0)
+    if cores >= 0.9 and all(any(e in k for e in LIMIT_ERRORS) for k in errors):
+        return "CPU saturated"
+    if not errors and fine_at_50 and all(x.startswith("events arrive") for x in problems):
+        return "subscription one at a time"
+    return ""
+
+
+def watch(out: str, spec_file: str, from_now: bool = False) -> int:
+    """from_now: the results already there were reported by an earlier watcher (a monitor re-armed); they only feed
+    the comparisons."""
     root, total = pathlib.Path(out), planned(spec_file)
     seen: dict[pathlib.Path, float] = {}
     by_key: dict[str, list[dict]] = {}
+    clean50: set[str] = set()  # operations whose 50/s measurement had nothing to report
+    limits: dict[str, int] = {}  # expected limits by category
     found, started = 0, time.time()
     last_progress = last_summary = time.time()
+    if from_now:
+        for f in sorted(root.glob("**/result.json"), key=lambda p: p.stat().st_mtime):
+            seen[f] = f.stat().st_mtime
+            try:
+                o = json.loads(f.read_text())
+            except (ValueError, OSError):
+                continue
+            run, k = key(f, root)
+            if f.parent.name == "50" and not anomalies(o, "50", [], f.parent.parent.name):
+                clean50.add(k.rsplit("/", 1)[0])
+            by_key.setdefault(k, []).append(figures(o))
+        for f in [*root.glob("**/idle.json"), *root.glob("**/failed.txt")]:
+            seen[f] = f.stat().st_mtime
     while True:
         files = {p for pat in ("**/result.json", "**/idle.json", "**/failed.txt") for p in root.glob(pat)}
         for f in sorted(files - seen.keys(), key=lambda p: p.stat().st_mtime):
@@ -109,9 +146,15 @@ def watch(out: str, spec_file: str) -> int:
                     print(f"UNREADABLE {f.relative_to(root)}", flush=True)
                     continue
                 run, k = key(f, root)
-                if problems := anomalies(o, f.parent.name, by_key.get(k, []), f.parent.parent.name):
-                    found += 1
-                    print(f"ANOMALY {run}/{k}: {'; '.join(problems)}", flush=True)
+                problems = anomalies(o, f.parent.name, by_key.get(k, []), f.parent.parent.name)
+                if f.parent.name == "50":
+                    (clean50.discard if problems else clean50.add)(k.rsplit("/", 1)[0])
+                if problems:
+                    if category := expected_limit(o, f.parent.name, problems, k.rsplit("/", 1)[0] in clean50):
+                        limits[category] = limits.get(category, 0) + 1
+                    else:
+                        found += 1
+                        print(f"ANOMALY {run}/{k}: {'; '.join(problems)}", flush=True)
                 by_key.setdefault(k, []).append(figures(o))
             last_progress = time.time()
         now = time.time()
@@ -119,7 +162,7 @@ def watch(out: str, spec_file: str) -> int:
             done = len([p for p in seen if p.name != "failed.txt"])
             failed = [str(p.parent.relative_to(root)) for p in seen if p.name == "failed.txt"]
             print(f"ENDED: the campaign process is gone; {done}/{total} measurements, failed {failed}, "
-                  f"anomalies {found}", flush=True)
+                  f"anomalies {found}, expected limits {limits or 'none'}", flush=True)
             return 0
         if now - last_progress > STALL:
             ps = subprocess.run(["docker", "ps", "--format", "{{.Names}} {{.Status}}"], capture_output=True, text=True)
@@ -127,7 +170,7 @@ def watch(out: str, spec_file: str) -> int:
             print(f"STALL: no progress for {int((now - last_progress) / 60)} min; containers {cells}", flush=True)
             last_progress = now  # said again after another stall period, not every poll
         if now - last_summary > SUMMARY:
-            print(summary(root, seen, total, started, found), flush=True)
+            print(summary(root, seen, total, started, found) + f"; expected limits {limits or 'none'}", flush=True)
             last_summary = now
         time.sleep(POLL)
 
@@ -145,4 +188,4 @@ def summary(root: pathlib.Path, seen: dict[pathlib.Path, float], total: int, sta
 
 
 if __name__ == "__main__":
-    sys.exit(watch(sys.argv[1], sys.argv[2]))
+    sys.exit(watch(sys.argv[1], sys.argv[2], "--from-now" in sys.argv[3:]))
