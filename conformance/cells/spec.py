@@ -33,7 +33,7 @@ def file_of(component_id: str) -> str:
 class Cell:
     dir: pathlib.Path
     name: str
-    chain: list[str]  # each probe calls the next and consumes the previous one's stream; the last calls the first
+    chain: list[str]  # each probe calls the next and consumes the previous one's stream; the last calls the first; empty: none
     database: str = "be_experiment"
     bus: str = "jetstream"  # or pgqueue
     deployment: str = "0190f3a1-0000-7000-8000-00000000e001"
@@ -46,7 +46,7 @@ class Cell:
         spec = yaml.safe_load((d / "cell.yaml").read_text())
         shells = {k.split("@")[0]: list(v) for k, v in (spec.get("shells") or {}).items()}
         alone = [a.split("@")[0] for a in spec.get("alone") or []]
-        c = Cell(d, spec["cell"], spec["chain"], spec.get("database", "be_experiment"), spec.get("bus", "jetstream"),
+        c = Cell(d, spec["cell"], spec.get("chain") or [], spec.get("database", "be_experiment"), spec.get("bus", "jetstream"),
                  shells=shells, alone=alone)
         unknown = [p for p in c.chain if p not in c.probes]
         if unknown:

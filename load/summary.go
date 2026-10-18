@@ -16,7 +16,7 @@ type Summary struct {
 	OK           int            `json:"ok"`
 	Errors       map[string]int `json:"errors"`
 	ErrorRate    float64        `json:"error_rate"`
-	Throughput   float64        `json:"throughput"` // answered without error, per second
+	Throughput   float64        `json:"throughput"` // answered without error within the measured window, per second
 	Latency      Percentiles    `json:"latency_ms"` // from when each request was due
 	Service      Percentiles    `json:"service_ms"` // from when each request was actually sent
 	Hop          *Percentiles   `json:"hop_ms,omitempty"`
@@ -54,7 +54,22 @@ func summarize(p Plan, samples []Sample) Summary {
 	if s.Sent > 0 {
 		s.ErrorRate = float64(s.Sent-s.OK) / float64(s.Sent)
 	}
-	s.Throughput = float64(s.OK) / p.Duration.Seconds()
+	// only answers inside the window count: past saturation the rest arrive after it, and counting them would make a
+	// saturated target look as if it kept up
+	var first time.Time
+	for _, x := range samples {
+		if first.IsZero() || x.Due.Before(first) {
+			first = x.Due
+		}
+	}
+	last := first.Add(p.Duration)
+	inWindow := 0
+	for _, x := range samples {
+		if x.Error == "" && !x.Done.After(last) {
+			inWindow++
+		}
+	}
+	s.Throughput = float64(inWindow) / p.Duration.Seconds()
 	s.Latency, s.Service = percentiles(lat), percentiles(svc)
 	if len(hop) > 0 {
 		h := percentiles(hop)
@@ -63,13 +78,16 @@ func summarize(p Plan, samples []Sample) Summary {
 	return s
 }
 
-// Ramp raises the rate step by step until the p99 latency passes the limit or the error rate passes 1%
-// (experiment plan: "加压到 p99 超过截止时间或错误率超过 1%").
+// Ramp raises the rate step by step (each step Factor times the last, or plus Step when Factor is 0) until the p99
+// latency passes the limit or the error rate passes 1% (experiment plan: "加压到 p99 超过截止时间或错误率超过 1%"), or
+// the throughput falls below MinThroughput of the offered rate: past saturation the queue only grows, and within a
+// step shorter than the latency limit the p99 alone would never say so.
 type Ramp struct {
-	Start, Step, Max float64
-	StepTime         time.Duration
-	P99Limit         time.Duration
-	MaxErrorRate     float64
+	Start, Step, Factor, Max float64
+	StepTime                 time.Duration
+	P99Limit                 time.Duration
+	MaxErrorRate             float64
+	MinThroughput            float64 // e.g. 0.9; 0: not checked
 }
 
 // RampResult is every step and the highest rate that stayed within both limits.
@@ -81,7 +99,13 @@ type RampResult struct {
 
 func ramp(ctx context.Context, client *http.Client, base Plan, r Ramp) RampResult {
 	var out RampResult
-	for rate := r.Start; rate <= r.Max; rate += r.Step {
+	next := func(rate float64) float64 {
+		if r.Factor > 1 {
+			return rate * r.Factor
+		}
+		return rate + r.Step
+	}
+	for rate := r.Start; rate <= r.Max; rate = next(rate) {
 		p := base
 		p.Rate, p.Duration = rate, r.StepTime
 		s := summarize(p, Run(ctx, client, p))
@@ -93,6 +117,9 @@ func ramp(ctx context.Context, client *http.Client, base Plan, r Ramp) RampResul
 			return out
 		case s.ErrorRate > r.MaxErrorRate:
 			out.StoppedBy = "errors"
+			return out
+		case r.MinThroughput > 0 && s.Throughput < r.MinThroughput*rate:
+			out.StoppedBy = "saturated"
 			return out
 		}
 		out.Sustained = rate

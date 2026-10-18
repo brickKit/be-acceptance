@@ -15,7 +15,9 @@ func server(t *testing.T, h http.HandlerFunc) string {
 	return s.URL
 }
 
-func client() *http.Client { return &http.Client{Transport: &http.Transport{MaxIdleConnsPerHost: 1024}} }
+func client() *http.Client {
+	return &http.Client{Transport: &http.Transport{MaxIdleConnsPerHost: 1024}}
+}
 
 func TestTheRateIsHeld(t *testing.T) {
 	url := server(t, func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`{}`)) })
@@ -87,6 +89,13 @@ func TestTheRampStopsAtCapacity(t *testing.T) {
 	r := ramp(context.Background(), client(), Plan{Target: url, Op: Op{Kind: "echo"}},
 		Ramp{Start: 20, Step: 20, Max: 200, StepTime: 2 * time.Second, P99Limit: 300 * time.Millisecond, MaxErrorRate: 0.01})
 	if r.StoppedBy != "p99" || r.Sustained < 20 || r.Sustained > 60 {
+		t.Fatalf("stopped by %s at a sustained %v/s; want p99 near 50/s (%d steps)", r.StoppedBy, r.Sustained, len(r.Steps))
+	}
+	// with steps shorter than the latency limit, saturation is what stops it
+	r = ramp(context.Background(), client(), Plan{Target: url, Op: Op{Kind: "echo"}},
+		Ramp{Start: 20, Factor: 1.5, Max: 400, StepTime: 2 * time.Second, P99Limit: time.Minute, MaxErrorRate: 0.01,
+			MinThroughput: 0.9})
+	if r.StoppedBy != "saturated" || r.Sustained < 20 || r.Sustained > 60 {
 		t.Fatalf("stopped by %s at a sustained %v/s; want p99 near 50/s (%d steps)", r.StoppedBy, r.Sustained, len(r.Steps))
 	}
 }

@@ -4,6 +4,7 @@ every component's config file (the chain wired with $endpoint: references). Secr
 are referenced from config; the object storage keys come from the environment (BE_ACC_S3_ACCESS_KEY, _SECRET_KEY)."""
 from __future__ import annotations
 
+import io
 import pathlib
 import shutil
 import uuid
@@ -63,8 +64,9 @@ def certificates(c: Cell) -> None:
 
 
 async def clean_bus(c: Cell) -> None:
-    if c.bus != "jetstream":
-        raise NotImplementedError("the PostgreSQL queue cells come with T4.7")
+    if c.bus == "pgqueue":
+        await pg_bus(c)
+        return
     from besdk.events import jetstream
 
     tr = await jetstream.Transport.connect(need("BE_ACC_NATS_URL"), "cell-prepare")
@@ -78,10 +80,36 @@ async def clean_bus(c: Cell) -> None:
         await tr.close()
 
 
+async def pg_bus(c: Cell) -> None:
+    """The PostgreSQL queue in the experiment database's own schema be_bus, owned by the bus role be_bus (fresh every
+    time); every component reaches it with that role, as they share one NATS."""
+    from besdk import obs
+    from besdk.events import pgqueue
+
+    admin = urlsplit(need("BE_ACC_PG_ADMIN"))
+    conn = await asyncpg.connect(admin._replace(path="/" + c.database).geturl())
+    try:
+        if not await conn.fetchval("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'be_bus')"):
+            await conn.execute("CREATE ROLE be_bus LOGIN")
+        await conn.execute("ALTER ROLE be_bus LOGIN PASSWORD 'be_bus-pw'")
+        await conn.execute("DROP SCHEMA IF EXISTS be_bus CASCADE")
+        await conn.execute("CREATE SCHEMA be_bus AUTHORIZATION be_bus")
+        await conn.execute(f'GRANT CONNECT ON DATABASE "{c.database}" TO be_bus')
+    finally:
+        await conn.close()
+    host = f"be_bus:be_bus-pw@{admin.hostname}:{admin.port or 5432}"
+    url = f"pgqueue://{host}/{c.database}?schema=be_bus&sslmode=disable"
+    await pgqueue.migrate_bus(url, obs.new_logger(obs.Member("bus", "0"), "error", io.StringIO()))
+    (c.dir / ".secrets").mkdir(exist_ok=True)
+    (c.dir / ".secrets" / "bus").write_text(
+        f"pgqueue://be_bus:be_bus-pw@host.docker.internal:5432/{c.database}?schema=be_bus&sslmode=disable")
+
+
 def configs(c: Cell) -> None:
     cfg = c.dir / "config"
     # a bus URL may carry credentials, so the component declares it secret: it is delivered from a file
-    (c.dir / ".secrets" / "bus").write_text("nats://host.docker.internal:4222")
+    if c.bus == "jetstream":
+        (c.dir / ".secrets" / "bus").write_text("nats://host.docker.internal:4222")
     (cfg / "vars.yaml").write_text(HEADER.format(cell=c.name) + f"""PG_HOST: host.docker.internal
 PG_PORT: "5432"
 PG_DATABASE: {c.database}

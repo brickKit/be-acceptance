@@ -33,6 +33,19 @@ class Window:
                 return
             await asyncio.sleep(min(self.interval, left))
 
+    async def run_until(self, stop: asyncio.Event, pg_dsn: str | None = None) -> None:
+        """Samples until stop is set (always at least two samples)."""
+        while True:
+            self.samples.append(self.read())
+            if pg_dsn:
+                self.connections.append(await connections(pg_dsn))
+            if stop.is_set() and len(self.samples) >= 2:
+                return
+            try:
+                await asyncio.wait_for(stop.wait(), self.interval)
+            except TimeoutError:
+                pass
+
     def read(self) -> dict:
         out = {"t": time.monotonic(), "containers": {}, "platform": {}}
         for name in [*self.containers, *BASE]:

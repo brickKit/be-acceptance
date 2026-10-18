@@ -55,6 +55,7 @@ type Sample struct {
 	Service time.Duration // from the actual send to the answer
 	HopUS   int64         // call: the hop as the caller measured it
 	ID      string        // write: the record's identity
+	Done    time.Time     // when the answer (or the failure) came
 	Status  int           // 0: no answer (transport error or overload)
 	Error   string
 }
@@ -105,7 +106,7 @@ func Run(ctx context.Context, client *http.Client, p Plan) []Sample {
 		if inFlight.Load() >= int64(p.MaxInFlight) {
 			if measured { // the driver itself is saturated: counted, never silently skipped
 				mu.Lock()
-				samples = append(samples, Sample{Due: due, Latency: time.Since(due), Error: "driver overloaded"})
+				samples = append(samples, Sample{Due: due, Latency: time.Since(due), Done: time.Now(), Error: "driver overloaded"})
 				mu.Unlock()
 			}
 			continue
@@ -136,12 +137,12 @@ func send(ctx context.Context, client *http.Client, url string, body []byte, due
 	resp, err := client.Do(req)
 	s := Sample{Due: due}
 	if err != nil {
-		s.Latency, s.Service, s.Error = time.Since(due), time.Since(sent), err.Error()
+		s.Latency, s.Service, s.Done, s.Error = time.Since(due), time.Since(sent), time.Now(), err.Error()
 		return s
 	}
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	_ = resp.Body.Close()
-	s.Latency, s.Service, s.Status = time.Since(due), time.Since(sent), resp.StatusCode
+	s.Latency, s.Service, s.Done, s.Status = time.Since(due), time.Since(sent), time.Now(), resp.StatusCode
 	var answer struct {
 		ElapsedUS int64  `json:"elapsed_us"`
 		ID        string `json:"id"`
