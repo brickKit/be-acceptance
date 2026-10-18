@@ -28,9 +28,11 @@ FIXED = {"50": 50.0, "200": 200.0}
 LIMITS = {"echo-1k-grpc": 10, "echo-1k-http": 10, "echo-60k-grpc": 25, "echo-60k-http": 25, "work-grpc": 30,
           "work-http": 30, "write": 30, "relay": 30, "big-event": 60}
 ARRIVAL_P99 = 2000
-# A relay is the event's arrival plus a work item and one call: tens of milliseconds. The relay's p50 sat at 250 ms
-# in every cell (a worker polling every 500 ms without a wake, P7.21) while only the arrival was checked.
-RELAYED_P50 = 60
+# A relay is the event's arrival plus a work item and one call; what the relay adds past the arrival is a few
+# milliseconds. It sat at about 250 ms in every cell (a worker polling every 500 ms without a wake, P7.21) while only
+# the arrival was checked. The arrival itself is checked on its own (on the PostgreSQL queue it includes the
+# subscriber's poll), so the relay's own part is the difference of the two p50s.
+RELAY_ADDED_P50 = 60
 LIMIT_ERRORS = ("OUTBOUND_LIMIT", "SERVICE_BUSY", "DEADLINE_EXCEEDED")
 
 
@@ -91,8 +93,11 @@ def anomalies(o: dict, load: str, earlier: list[dict], op: str = "") -> list[str
         relayed = comp.get("relayed") or {}
         if relayed.get("p99_ms") is not None and relayed["p99_ms"] > ARRIVAL_P99:
             out.append(f"relays complete with p99 {relayed['p99_ms']:.0f} ms at a fixed rate")
-        if op == "relay" and relayed.get("p50_ms") is not None and relayed["p50_ms"] > RELAYED_P50:
-            out.append(f"relays complete with p50 {relayed['p50_ms']:.0f} ms, above the plausible {RELAYED_P50} ms")
+        received = (comp.get("received") or {}).get("p50_ms")
+        if op == "relay" and relayed.get("p50_ms") is not None and received is not None \
+                and relayed["p50_ms"] - received > RELAY_ADDED_P50:
+            out.append(f"relays complete {relayed['p50_ms'] - received:.0f} ms after their events arrive (p50), "
+                       f"above the plausible {RELAY_ADDED_P50} ms")
     now = figures(o)
     for name, worse in (("p99", lambda a, b: a > 3 * b and a - b > 20), ("p50", lambda a, b: a > 2 * b and a - b > 5),
                         ("sustained", lambda a, b: a < 0.5 * b)):

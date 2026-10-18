@@ -36,7 +36,12 @@ def test_a_relay_waiting_for_a_poll_is_named_although_its_events_arrive_fast():
     relay = {"driver": {"latency_ms": {"P50": 4.0, "P99": 6.0}, "error_rate": 0, "throughput": 50.0},
              "completion": {"received": {"n": 10, "p50_ms": 4.0, "p99_ms": 8.0},
                             "relayed": {"n": 10, "p50_ms": 250.0, "p99_ms": 500.0}}}
-    assert "relays complete with p50 250 ms" in watch.anomalies(relay, "50", [], "relay")[0]
+    assert "relays complete 246 ms after their events arrive" in watch.anomalies(relay, "50", [], "relay")[0]
+    # on the PostgreSQL queue the arrival includes the subscriber's poll; only what the relay adds is judged
+    relay["completion"]["received"] = {"n": 10, "p50_ms": 56.0, "p99_ms": 111.0}
+    relay["completion"]["relayed"] = {"n": 10, "p50_ms": 61.0, "p99_ms": 116.0}
+    assert watch.anomalies(relay, "50", [], "relay") == []
+    relay["completion"]["received"] = {"n": 10, "p50_ms": 4.0, "p99_ms": 8.0}
     relay["completion"]["relayed"] = {"n": 10, "p50_ms": 9.0, "p99_ms": 2500.0}
     assert "relays complete with p99 2500 ms" in watch.anomalies(relay, "50", [], "relay")[0]
     relay["completion"]["relayed"]["p99_ms"] = 20.0
