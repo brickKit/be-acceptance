@@ -12,7 +12,10 @@ PROBE_PORTS = {"test/probe-go": (8600, 9600), "test/probe-go2": (8602, 9602), "t
                "test/probe-go4": (8604, 9604), "test/probe-py": (8601, 9601), "test/probe-py2": (8605, 9605)}
 SHELL_ROLES = {"be/go-core": "shell_go_core", "be/go-infra": "shell_go_infra", "be/py-render": "shell_py_render"}
 SHELL_PORTS = {"be/go-core": 8090, "be/go-infra": 8224, "be/py-render": 8402}
-HOST_BAND = 30000  # cells expose every port at 30000 + port: a band of their own, clear of the registry's 2xxxx
+# cells expose every port at 10000 + port (18090-18605): below Linux's ephemeral range (32768-60999), where any
+# outgoing connection or test listener may take a port at random (a cell once failed to start on 38090, 2026-10-18),
+# and clear of the registry's ports
+HOST_BAND = 10000
 
 
 def schema_of(component_id: str) -> str:
