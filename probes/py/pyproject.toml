@@ -1,12 +1,12 @@
 [project]
 name = "be-test-probe-py"
-version = "3.2.0"
+version = "3.2.1"
 description = "The acceptance suite's Python probe (test/probe-py)"
 requires-python = ">=3.14"
 dependencies = ["be-sdk"]
 
 [tool.uv.sources]
-be-sdk = { git = "https://github.com/brickKit/be-sdk-python", tag = "v3.0.0a2" }
+be-sdk = { git = "https://github.com/brickKit/be-sdk-python", tag = "v3.0.0a3" }
 
 [build-system]
 requires = ["hatchling"]

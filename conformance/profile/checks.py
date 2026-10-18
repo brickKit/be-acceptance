@@ -204,7 +204,8 @@ def judge_log_lines(obs: dict) -> list[str]:
             p.append(f"line {i + 1}: time {r.get('time')!r} is not RFC 3339 UTC to the millisecond")
         if r.get("level") not in ("DEBUG", "INFO", "WARN", "ERROR"):
             p.append(f"line {i + 1}: level {r.get('level')!r}")
-        if not r.get("msg") or r.get("component") != obs["component"] or not r.get("version"):
+        allowed = {obs["component"], *obs.get("members", [])}  # a shell's output carries its members' lines too
+        if not r.get("msg") or r.get("component") not in allowed or not r.get("version"):
             p.append(f"line {i + 1}: msg, component or version missing")
         if "request_id" in r and not TRACE.fullmatch(str(r.get("trace_id", ""))):
             p.append(f"line {i + 1}: a request line without a valid trace_id")
@@ -293,6 +294,54 @@ CORE = [
     Check("CK-OBS-04", "指标", ("P10.5", "P10.6"), ("metrics",), judge_metrics,
           lambda o: mutated(o, lambda x: x.update(metrics=x["metrics"].replace("be_outbound_breaker_open",
                                                                                "be_outbound_breaker_state")))),
-    Check("CK-OBS-05", "外壳的指标带成员标签", ("P10.7",), ("shell_metrics",), lambda o: [],
-          lambda o: o, applies=lambda o: "" if o.get("shell") else "单跑，不是外壳"),
+]
+
+
+def judge_shell_metrics(obs: dict) -> list[str]:
+    try:
+        families = list(text_string_to_metric_families(obs["shell_metrics"]))
+    except Exception as e:  # noqa: BLE001
+        return [f"the shell's /metrics is not Prometheus text: {e}"]
+    p, members = [], set(obs["members"])
+    for fam in families:
+        for s in fam.samples:
+            if s.labels.get("component") not in members:
+                p.append(f"{s.name} has component {s.labels.get('component')!r}, not a hosted member")
+                break
+    seen = {s.labels.get("component") for f in families if f.name == "be_http_server_duration_seconds" for s in f.samples}
+    p += [f"no request metrics of {m}" for m in sorted(members - seen)]
+    return p[:20]
+
+
+def judge_shell_endpoints(obs: dict) -> list[str]:
+    p, h = [], obs["health"]
+    if h["get"][0] != 200 or h["head"][0] != 200:
+        p.append(f"/healthz answered {h['get'][0]}/{h['head'][0]}")
+    if obs["ready"][0] != 200:
+        p.append(f"/readyz answered {obs['ready'][0]} with every member ready")
+    d = obs["describe"]
+    if d.get("component_id") != obs["component"]:
+        p.append(f"component_id is {d.get('component_id')!r}")
+    hosted = sorted(m.get("component_id") for m in d.get("members") or [])
+    if hosted != sorted(obs["members"]):
+        p.append(f"the description lists members {hosted}")
+    return p
+
+
+def judge_shell_stop(obs: dict) -> list[str]:
+    return [] if obs["stop_exit"] == 0 else [f"a graceful stop exited {obs['stop_exit']}"]
+
+
+CORE.append(Check("CK-OBS-05", "外壳的指标带成员标签", ("P10.7",), ("shell_metrics",), judge_shell_metrics,
+                  lambda o: mutated(o, lambda x: x.update(shell_metrics=x["shell_metrics"].replace("component=", "c="))),
+                  applies=lambda o: "" if o.get("shell") else "只对外壳（见外壳的报告）"))
+
+SHELL = [
+    Check("CK-LC-05/06/08", "外壳的健康、就绪与自描述", ("P1.5", "P1.6", "P1.8"), ("health", "ready", "describe"),
+          judge_shell_endpoints, lambda o: mutated(o, lambda x: x["describe"].update(members=[]))),
+    Check("CK-LC-12", "外壳体面停止", ("P1.15", "P1.17"), ("stop_exit",), judge_shell_stop,
+          lambda o: mutated(o, lambda x: x.update(stop_exit=1))),
+    Check("CK-OBS-01", "外壳输出的日志行结构", ("P10.1", "P10.2"), ("logs",), judge_log_lines,
+          lambda o: mutated(o, _break_log)),
+    CORE[-1],
 ]
