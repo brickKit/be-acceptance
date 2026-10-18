@@ -28,6 +28,9 @@ FIXED = {"50": 50.0, "200": 200.0}
 LIMITS = {"echo-1k-grpc": 10, "echo-1k-http": 10, "echo-60k-grpc": 25, "echo-60k-http": 25, "work-grpc": 30,
           "work-http": 30, "write": 30, "relay": 30, "big-event": 60}
 ARRIVAL_P99 = 2000
+# A relay is the event's arrival plus a work item and one call: tens of milliseconds. The relay's p50 sat at 250 ms
+# in every cell (a worker polling every 500 ms without a wake, P7.21) while only the arrival was checked.
+RELAYED_P50 = 60
 LIMIT_ERRORS = ("OUTBOUND_LIMIT", "SERVICE_BUSY", "DEADLINE_EXCEEDED")
 
 
@@ -81,9 +84,15 @@ def anomalies(o: dict, load: str, earlier: list[dict], op: str = "") -> list[str
         p50 = (d.get("hop_ms") or d.get("latency_ms") or {}).get("P50")
         if op in LIMITS and p50 is not None and p50 > LIMITS[op]:
             out.append(f"p50 {p50:.1f} ms at a fixed rate, above the plausible {LIMITS[op]} ms for {op}")
-        arrival = ((o.get("completion") or {}).get("received") or {}).get("p99_ms")
+        comp = o.get("completion") or {}
+        arrival = (comp.get("received") or {}).get("p99_ms")
         if arrival is not None and arrival > ARRIVAL_P99:
             out.append(f"events arrive with p99 {arrival:.0f} ms at a fixed rate")
+        relayed = comp.get("relayed") or {}
+        if relayed.get("p99_ms") is not None and relayed["p99_ms"] > ARRIVAL_P99:
+            out.append(f"relays complete with p99 {relayed['p99_ms']:.0f} ms at a fixed rate")
+        if op == "relay" and relayed.get("p50_ms") is not None and relayed["p50_ms"] > RELAYED_P50:
+            out.append(f"relays complete with p50 {relayed['p50_ms']:.0f} ms, above the plausible {RELAYED_P50} ms")
     now = figures(o)
     for name, worse in (("p99", lambda a, b: a > 3 * b and a - b > 20), ("p50", lambda a, b: a > 2 * b and a - b > 5),
                         ("sustained", lambda a, b: a < 0.5 * b)):
@@ -103,7 +112,7 @@ def expected_limit(o: dict, load: str, problems: list[str], fine_at_50: bool) ->
                 default=0)
     if cores >= 0.9 and all(any(e in k for e in LIMIT_ERRORS) for k in errors):
         return "CPU saturated"
-    if not errors and fine_at_50 and all(x.startswith("events arrive") for x in problems):
+    if not errors and fine_at_50 and all(x.startswith(("events arrive", "relays complete")) for x in problems):
         return "subscription one at a time"
     return ""
 
