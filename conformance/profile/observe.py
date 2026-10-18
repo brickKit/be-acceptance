@@ -67,15 +67,27 @@ def _free() -> int:
         return s.getsockname()[1]
 
 
+async def kept_alive(c: httpx.AsyncClient, n: int = 20) -> list[float]:
+    """Milliseconds of n requests one after another on one kept-alive connection (P1.19): the self-description, a
+    response long enough to leave in more than one write."""
+    took = []
+    for _ in range(n):
+        started = time.perf_counter()
+        await c.get("/.well-known/be-component")
+        took.append(round((time.perf_counter() - started) * 1000, 3))
+    return took
+
+
 async def endpoints(r: Running) -> dict:
     async with httpx.AsyncClient(base_url=r.url, timeout=10) as c:
         get, head = await c.get("/healthz"), await c.head("/healthz")
         ready, describe = await c.get("/readyz"), await c.get("/.well-known/be-component")
+        sequential = await kept_alive(c)
     with socket.socket() as s:
         listening = s.connect_ex(("127.0.0.1", r.spec.grpc_port)) == 0
     return {"health": {"get": [get.status_code, get.text], "head": [head.status_code, head.text]},
             "ready": [ready.status_code, ready.text], "describe": describe.json() if describe.status_code == 200 else {},
-            "grpc_listening": listening}
+            "grpc_listening": listening, "kept_alive_ms": sequential}
 
 
 async def traffic(d: Deployment, r: Running, caller: str, token: str) -> None:

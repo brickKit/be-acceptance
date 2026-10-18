@@ -72,6 +72,14 @@ def judge_endpoints(obs: dict) -> list[str]:
     return p
 
 
+def judge_nodelay(obs: dict) -> list[str]:
+    took = sorted(obs["kept_alive_ms"])
+    median = took[len(took) // 2]
+    # Nagle with a delayed ACK costs about 40 ms per response; without it these answers take a few milliseconds
+    return [] if median < 15 else [f"requests on a kept-alive connection take {median} ms (median of {len(took)}): "
+                                   "the second write of each response waits for the delayed ACK (TCP_NODELAY off?)"]
+
+
 def judge_describe(obs: dict) -> list[str]:
     d, p = obs["describe"], []
     if d.get("component_id") != obs["component"]:
@@ -275,6 +283,8 @@ CORE = [
           lambda o: mutated(o, lambda x: x["bad_config"].update(code=1))),
     Check("CK-LC-04/05/06", "健康、就绪与端口", ("P1.4", "P1.5", "P1.6"), ("health", "ready", "grpc_listening"),
           judge_endpoints, lambda o: mutated(o, lambda x: x.update(grpc_listening=False))),
+    Check("CK-LC-14", "保持连接上的回答不被扣住", ("P1.19",), ("kept_alive_ms",), judge_nodelay,
+          lambda o: mutated(o, lambda x: x.update(kept_alive_ms=[41.0] * 20))),
     Check("CK-LC-08", "自描述", ("P1.8",), ("describe",), judge_describe,
           lambda o: mutated(o, lambda x: x["describe"].pop("protocol", None))),
     Check("CK-LC-10", "就绪日志", ("P1.12",), ("logs",), judge_ready_line,
@@ -343,5 +353,6 @@ SHELL = [
           lambda o: mutated(o, lambda x: x.update(stop_exit=1))),
     Check("CK-OBS-01", "外壳输出的日志行结构", ("P10.1", "P10.2"), ("logs",), judge_log_lines,
           lambda o: mutated(o, _break_log)),
+    CORE[3],
     CORE[-1],
 ]

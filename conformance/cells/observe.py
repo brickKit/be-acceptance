@@ -47,8 +47,10 @@ async def endpoints(c: Cell, component: str) -> dict:
     async with httpx.AsyncClient(base_url=base, timeout=10) as h:
         get, head = await h.get("/healthz"), await h.head("/healthz")
         ready, describe = await h.get("/readyz"), await h.get("/.well-known/be-component")
+        sequential = await po.kept_alive(h)
     out = {"health": {"get": [get.status_code, get.text], "head": [head.status_code, head.text]},
-           "ready": [ready.status_code, ready.text], "describe": describe.json() if describe.status_code == 200 else {}}
+           "ready": [ready.status_code, ready.text], "describe": describe.json() if describe.status_code == 200 else {},
+           "kept_alive_ms": sequential}
     if component in PROBE_PORTS:
         code, _ = run(["docker", "exec", c.container_of(component), "nc", "-z", "127.0.0.1",
                        str(PROBE_PORTS[component][1])])
