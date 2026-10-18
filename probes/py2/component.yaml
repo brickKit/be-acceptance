@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-py2
   name: Python probe (py2)
-  version: 3.2.8
+  version: 3.2.9
   description: "A variant of test/probe-py: the same code under its own component ID, ports and event stream"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -57,6 +57,9 @@ configSchema:
     PROBE_GUARD:
       type: boolean
       description: "true: the user routes need a credential and their operation instead of being public; SDK default false"
+    PROBE_SUB_CONCURRENCY:
+      type: integer
+      description: "how many messages of the peer's stream one instance handles at once; SDK default 1"
     LOG_LEVEL:
       type: string
       enum: [debug, info, warn, error]

@@ -11,7 +11,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.8"
+	Version     = "3.2.9"
 	WrittenType = "test.probe.written.v1"
 	RelayBytes  = 1024
 	MaxWorkMS   = 1000
@@ -56,6 +56,7 @@ func Keys() []config.Key {
 		{Name: "PROBE_NEXT_GRPC_URL", Type: config.String}, // its system surface ($endpoint:<id>:grpc)
 		{Name: "PROBE_PEER_STREAM", Type: config.String},   // the peer's event stream to consume; empty: none
 		{Name: "PROBE_GUARD", Type: config.Boolean, Default: false},
+		{Name: "PROBE_SUB_CONCURRENCY", Type: config.Integer, Default: int64(1)}, // the peer subscription's messages at once
 	}
 }
 
