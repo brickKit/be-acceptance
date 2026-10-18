@@ -49,6 +49,7 @@ class Probe:
                                    "No next probe is configured")
         self.next = rt.config.string("PROBE_NEXT")
         self._tasks: list[asyncio.Task] = []
+        self._relay_ready = asyncio.Event()  # set after a commit that queued a relay
 
     # ------------------------------------------------------------------ user surface
 
@@ -157,6 +158,7 @@ class Probe:
         if w.get("relay"):
             # the call to the next probe leaves the transaction through the relay queue (no network call inside it)
             await tx.execute("INSERT INTO probe_relay (event_id) VALUES ($1)", uuid.UUID(e.id))
+            tx.after_commit(self._relay_ready.set)  # claim at once, not on the next poll (as P7.21 for work items)
 
     async def start(self) -> None:
         self._tasks.append(asyncio.create_task(self._relay_loop()))
@@ -167,7 +169,10 @@ class Probe:
         await asyncio.gather(*self._tasks, return_exceptions=True)
 
     async def _relay_loop(self) -> None:
+        """Relays on a commit's wake and every RELAY_POLL for other replicas' rows and retries; cleared before each
+        claim, so a commit during the claim is not lost."""
         while True:
+            self._relay_ready.clear()
             try:
                 n = await self._relay_once()
             except asyncio.CancelledError:
@@ -176,7 +181,10 @@ class Probe:
                 self.rt.logger.warn("the relay failed; it is retried", error=str(e))
                 n = 0
             if n == 0:
-                await asyncio.sleep(RELAY_POLL)
+                try:
+                    await asyncio.wait_for(self._relay_ready.wait(), RELAY_POLL)
+                except TimeoutError:
+                    pass
 
     async def _relay_once(self) -> int:
         rows = await self.rt.db.background_tx(lambda tx: tx.fetch(
