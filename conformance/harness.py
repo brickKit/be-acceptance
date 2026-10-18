@@ -192,6 +192,25 @@ async def ensure_bucket(name: str = "be-acceptance") -> None:
             await s3.create_bucket(Bucket=name)
 
 
+async def empty_prefixes(prefixes: list[str], name: str = "be-acceptance") -> int:
+    """Deletes every object under the given prefixes, so a measurement starts from the same object store whatever ran
+    before: claims are kept for the transport retention (7 days), and a bucket that grew by tens of thousands of
+    objects between cells made the later cells' uploads dearer (the D-row check, 2026-10-18). Returns how many went."""
+    import aioboto3
+
+    gone = 0
+    async with aioboto3.Session().client("s3", endpoint_url=need("BE_ACC_S3_URL"), region_name="us-east-1",
+                                         aws_access_key_id=need("BE_ACC_S3_ACCESS_KEY"),
+                                         aws_secret_access_key=need("BE_ACC_S3_SECRET_KEY")) as s3:
+        for prefix in prefixes:
+            async for page in s3.get_paginator("list_objects_v2").paginate(Bucket=name, Prefix=prefix):
+                keys = [{"Key": o["Key"]} for o in page.get("Contents", [])]
+                if keys:
+                    await s3.delete_objects(Bucket=name, Delete={"Objects": keys, "Quiet": True})
+                    gone += len(keys)
+    return gone
+
+
 def manifest_version(kind: str) -> str:
     import yaml
 

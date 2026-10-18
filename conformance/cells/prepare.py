@@ -14,7 +14,7 @@ import asyncpg
 
 from besdk import testing
 from cells.spec import SHELL_ROLES, Cell, file_of, schema_of, stream_of
-from harness import ensure_bucket, need
+from harness import empty_prefixes, ensure_bucket, need
 
 HEADER = "# Written by be-acceptance/conformance/cells/prepare.py for cell {cell}; regenerate instead of editing.\n"
 
@@ -146,6 +146,7 @@ async def prepare(directory: str | pathlib.Path) -> Cell:
     await databases(c)
     certificates(c)
     await ensure_bucket()
+    await empty_prefixes([schema_of(p) + "/" for p in c.probes])  # the prefixes configs() gives the probes
     await clean_bus(c)
     configs(c)
     return c
