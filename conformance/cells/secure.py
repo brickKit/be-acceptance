@@ -21,7 +21,7 @@ import re
 import httpx
 
 from cells.create import brickkit
-from cells.prepare import PROBE_OPS, probe_prefix
+from cells.prepare import MDM_KEYS, PROBE_OPS, probe_prefix
 from cells.spec import Cell, file_of
 from harness import need
 
@@ -81,6 +81,10 @@ async def secure(directory: str | pathlib.Path) -> dict:
         start = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         segments = [{"resource_type": probe_prefix(p), "operation": f"{probe_prefix(p)}.{op}", "atoms": {}, "read_fields": [],
                      "valid": {"from": start}} for p in c.probes for op in PROBE_OPS]
+        # the master data components' operations too: the seed data goes through their user surfaces
+        segments += [{"resource_type": op.rsplit(".", 1)[0], "operation": op, "atoms": {}, "read_fields": [],
+                      "valid": {"from": start}} for comp in c.mdm for op in MDM_KEYS[comp]["permission"]
+                     if not op.endswith(".system.read")]
         r = await h.post("/api/authz/changes", json={"change_key": "cell-load-user", "action": "grant.create", "unit": root,
                                                      "grantee": user, "segments": segments})
         if r.status_code != 200:

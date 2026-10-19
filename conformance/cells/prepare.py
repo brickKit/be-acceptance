@@ -25,6 +25,22 @@ INFRA_KEYS = {
                     "permission": ["infra.audit.record.read", "infra.audit.intake.read", "infra.audit.intake.submit",
                                    "infra.audit.intake.watermark"]},
 }
+# The master data components' resource types and operations (their definition.go), for the registry and the grants.
+MDM_KEYS = {
+    "mdm/org": {"resource_type": ["mdm.legal_entity", "mdm.org_unit", "mdm.org.system"],
+                "permission": ["mdm.legal_entity.read", "mdm.legal_entity.manage", "mdm.org_unit.read",
+                               "mdm.org_unit.manage", "mdm.org.system.read"]},
+    "mdm/currency": {"resource_type": ["mdm.currency", "mdm.exchange_rate", "mdm.currency.system"],
+                     "permission": ["mdm.currency.read", "mdm.currency.manage", "mdm.exchange_rate.read",
+                                    "mdm.exchange_rate.maintain", "mdm.currency.system.read"]},
+    "mdm/partner": {"resource_type": ["mdm.partner", "mdm.partner_role", "mdm.partner.system"],
+                    "permission": ["mdm.partner.read", "mdm.partner.create", "mdm.partner.edit", "mdm.partner.merge",
+                                   "mdm.partner_role.read", "mdm.partner_role.manage", "mdm.partner.system.read"]},
+    "mdm/product": {"resource_type": ["mdm.product", "mdm.product_category", "mdm.product.system"],
+                    "permission": ["mdm.product.read", "mdm.product.edit", "mdm.product_category.read",
+                                   "mdm.product_category.manage", "mdm.product.system.read"]},
+}
+# each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
 PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the probes' operations (probe/defs.go, probe_py)
 
 
@@ -88,7 +104,7 @@ async def clean_bus(c: Cell) -> None:
 
     tr = await jetstream.Transport.connect(need("BE_ACC_NATS_URL"), "cell-prepare")
     try:
-        for probe in c.probes:
+        for probe in [*c.probes, *c.mdm]:
             try:
                 await tr.delete_stream(stream_of(probe))
             except Exception:  # noqa: BLE001 - not there
@@ -125,7 +141,7 @@ async def pg_bus(c: Cell) -> None:
 def registry(c: Cell) -> str:
     """The registry's owners of every resource type and permission key the cell's components define (TSV)."""
     rows = ["kind\tkey\towner_component"]
-    for comp, keys in INFRA_KEYS.items():
+    for comp, keys in {**INFRA_KEYS, **MDM_KEYS}.items():
         if comp in c.placed:
             rows += [f"{kind}\t{k}\t{comp}" for kind, ks in keys.items() for k in ks]
     for probe in c.probes:
@@ -180,6 +196,11 @@ def security_configs(c: Cell) -> None:
                         "AUTHZ_REGISTRY: file://.secrets/authz-registry.tsv"],
         "infra/audit": [*common, *db("infra/audit"), *guarded("infra/audit")],
     }
+    for comp in c.mdm:  # the master data components: a database, the bus, a service identity, guarded routes
+        files[comp] = [*common, *db(comp), *guarded(comp), "BUS_URL: file://.secrets/bus",
+                       f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"]
+    if "mdm/org" in files:
+        files["mdm/org"].append("DEFAULT_LEGAL_ENTITY_TIMEZONE: Asia/Shanghai")
     for comp, lines in files.items():
         if comp in c.placed:
             (cfg / f"{file_of(comp)}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
