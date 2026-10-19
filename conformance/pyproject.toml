@@ -9,7 +9,7 @@ dependencies = ["be-sdk", "pytest", "pytest-asyncio", "httpx", "asyncpg", "pyyam
 package = false
 
 [tool.uv.sources]
-be-sdk = { git = "https://github.com/brickKit/be-sdk-python", tag = "v3.0.0a16" }
+be-sdk = { git = "https://github.com/brickKit/be-sdk-python", tag = "v3.0.0a17" }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
