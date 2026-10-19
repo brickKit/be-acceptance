@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-go
   name: Go probe
-  version: 3.2.16
+  version: 3.2.17
   description: "The acceptance suite's Go probe: communication only (echo, CPU work, a write with its event, relay), for measuring paths"
   repository: https://github.com/brickKit/be-acceptance
 

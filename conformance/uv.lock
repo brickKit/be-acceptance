@@ -219,7 +219,7 @@ dependencies = [
 requires-dist = [
     { name = "aioboto3" },
     { name = "asyncpg" },
-    { name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a17" },
+    { name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a18" },
     { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -228,8 +228,8 @@ requires-dist = [
 
 [[package]]
 name = "be-sdk"
-version = "3.0.0a17"
-source = { git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a17#26a8e027ed80ebbe2f5ac4084a4e579a94dfd0f7" }
+version = "3.0.0a18"
+source = { git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a18#0ab11a53634e31e5f0b5b0434896a88b2e5459df" }
 dependencies = [
     { name = "aiohttp" },
     { name = "asyncpg" },
