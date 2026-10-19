@@ -15,8 +15,15 @@ def access(component):
                        "version": "1.0.0", "route": "/x", "status": 200})
 
 
-def test_a_member_nobody_called_needs_no_request_series():
-    obs = {"shell_metrics": METRICS, "members": ["test/probe-go", "infra/audit"], "logs": access("test/probe-go")}
+def grpc_access(component):
+    return json.dumps({"time": "2026-10-19T00:00:00.000Z", "level": "INFO", "msg": "access", "component": component,
+                       "version": "1.0.0", "method": "/be.audit.v3.IntakeService/Submit", "code": "OK"})
+
+
+def test_a_member_nobody_called_on_its_user_surface_needs_no_request_series():
+    # the audit member in D5-H: called only on its system surface, which has no HTTP series
+    logs = "\n".join([access("test/probe-go"), grpc_access("infra/audit")])
+    obs = {"shell_metrics": METRICS, "members": ["test/probe-go", "infra/audit"], "logs": logs}
     assert judge_shell_metrics(obs) == []
 
 

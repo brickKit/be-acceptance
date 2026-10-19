@@ -324,9 +324,10 @@ def judge_shell_metrics(obs: dict) -> list[str]:
 
 
 def served(obs: dict, members: set[str]) -> set[str]:
-    """The hosted members that served a user-surface request during the observation: those with an access line in the
-    shell's output (read after the metrics). A member nobody called has no request series yet (an audit member whose
-    sources send nothing). Without the output, every member."""
+    """The hosted members that served a user-surface request during the observation: those with an HTTP access line
+    (one with a route; a system-surface line has a gRPC method instead) in the shell's output, read after the metrics.
+    A member whose user surface nobody called has no request series yet (the audit member, called only on its system
+    surface). Without the output, every member."""
     lines = obs.get("logs")
     if not lines:
         return members
@@ -336,7 +337,7 @@ def served(obs: dict, members: set[str]) -> set[str]:
             d = json.loads(line)
         except (ValueError, TypeError):
             continue
-        if isinstance(d, dict) and d.get("msg") == "access" and d.get("component") in members:
+        if isinstance(d, dict) and d.get("msg") == "access" and d.get("route") and d.get("component") in members:
             out.add(d["component"])
     return out
 
