@@ -11,7 +11,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.14"
+	Version     = "3.2.15"
 	WrittenType = "test.probe.written.v1"
 	RelayBytes  = 1024
 	MaxWorkMS   = 1000
