@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import statistics
 import subprocess
 import sys
@@ -20,6 +21,7 @@ import time
 import yaml
 
 POLL, SUMMARY, STALL = 30, 300, 900
+CELL_CONTAINER = re.compile(r"brickkit-d\d*-")  # every cell's containers (D-*, D5-*, ...)
 FIXED = {"50": 50.0, "200": 200.0}
 # Plausible upper bounds at a fixed rate on one machine, per operation: the p50 of the hop the caller measures (calls)
 # or of the request (writes, ms), and the p99 of the event's arrival (ms). Far above what the trials read (hop 1-7 ms,
@@ -180,7 +182,7 @@ def watch(out: str, spec_file: str, from_now: bool = False) -> int:
             return 0
         if now - last_progress > STALL:
             ps = subprocess.run(["docker", "ps", "--format", "{{.Names}} {{.Status}}"], capture_output=True, text=True)
-            cells = [x for x in ps.stdout.splitlines() if x.startswith("brickkit-d-")]
+            cells = [x for x in ps.stdout.splitlines() if CELL_CONTAINER.match(x)]
             print(f"STALL: no progress for {int((now - last_progress) / 60)} min; containers {cells}", flush=True)
             last_progress = now  # said again after another stall period, not every poll
         if now - last_summary > SUMMARY:

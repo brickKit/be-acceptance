@@ -8,6 +8,7 @@ import asyncio
 import datetime as dt
 import json
 import pathlib
+import re
 import subprocess
 import traceback
 
@@ -23,12 +24,15 @@ def brickkit(d: pathlib.Path, *args: str, timeout: int = 1800) -> None:
         raise RuntimeError(f"brickkit {' '.join(args)}: {r.stdout[-2000:]}{r.stderr[-2000:]}")
 
 
+CELL_PROJECT = re.compile(r"brickkit-d\d*-")
+
+
 def clear_other_cells() -> list[str]:
     """Experiment cells share host ports: any other cell still running (left by an interrupted run) is taken down
-    first. Only compose projects named brickkit-d-* (cells) are touched."""
+    first. Only compose projects named after cells (brickkit-d-*, brickkit-d5-*, ...) are touched."""
     r = subprocess.run(["docker", "ps", "--format", '{{.Label "com.docker.compose.project"}}'], capture_output=True,
                        text=True)
-    projects = sorted({p for p in r.stdout.split() if p.startswith("brickkit-d-")})
+    projects = sorted({p for p in r.stdout.split() if CELL_PROJECT.match(p)})
     for p in projects:
         subprocess.run(["docker", "compose", "-p", p, "down", "--remove-orphans"], capture_output=True, timeout=300)
     return projects
