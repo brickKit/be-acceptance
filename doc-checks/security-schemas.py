@@ -25,7 +25,7 @@ SCHEMA_ID = "https://github.com/brickKit/be-protocol/schemas/security/"
 
 # Record types that carry the record envelope (09a, 记录封装): definitions, the view and the security records.
 ENVELOPED = {"be.security.resource_definition", "be.security.operation_definition", "be.security.view",
-             "be.security.security_disposition"}
+             "be.security.security_disposition", "be.security.account_status"}
 ENVELOPE_ON_WIRE_WITHOUT = {"digest"}  # the digest travels in the envelope, computed over these bytes
 ALIASES = {"Segment": "be.security.segment"}
 HEADERS = {"记录封装": "Envelope", "通用部分": "SecurityRecordCommon"}
