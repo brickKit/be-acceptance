@@ -42,7 +42,7 @@ class Cell:
     deployment: str = "0190f3a1-0000-7000-8000-00000000e001"
     shells: dict[str, list[str]] = field(default_factory=dict)  # shell -> hosted members
     alone: list[str] = field(default_factory=list)  # probes running alone
-    concurrency: int = 1  # messages each probe's subscription handles at once (PROBE_SUB_CONCURRENCY)
+    concurrency: int = 1  # messages each probe's subscription handles at once (BUS_SUBSCRIPTION_CONCURRENCY, P6.31)
 
     @staticmethod
     def load(directory: str | pathlib.Path) -> Cell:

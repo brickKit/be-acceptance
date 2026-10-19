@@ -9,7 +9,7 @@ from besdk.component import Definition
 from besdk.config import Key, Type
 from besdk.events.core import Stream
 
-VERSION, WRITTEN_TYPE = "3.2.11", "test.probe.written.v1"
+VERSION, WRITTEN_TYPE = "3.2.12", "test.probe.written.v1"
 RELAY_BYTES, MAX_WORK_MS, MAX_BYTES = 1024, 1000, 512 << 10
 
 
@@ -52,8 +52,7 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
         Key("PROBE_NEXT_URL", Type.STRING),  # its user surface ($endpoint:<id>), protocol P4.26
         Key("PROBE_NEXT_GRPC_URL", Type.STRING),  # its system surface ($endpoint:<id>:grpc)
         Key("PROBE_PEER_STREAM", Type.STRING),  # the peer's event stream to consume; empty: none
-        Key("PROBE_GUARD", Type.BOOLEAN, default=False),
-        Key("PROBE_SUB_CONCURRENCY", Type.INTEGER, default=1)],  # the peer subscription's messages at once
+        Key("PROBE_GUARD", Type.BOOLEAN, default=False)],
         migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4)],
         subscribes=True, authz=authz(v.id))
 

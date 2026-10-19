@@ -268,8 +268,7 @@ func (p *Probe) Subscriptions(s *events.Subscriptions) error {
 	if peer == "" {
 		return nil
 	}
-	s.Add(events.Sub{Name: "peer", Streams: []string{peer}, Types: []string{WrittenType}, Handle: p.received,
-		Concurrency: int(p.rt.Config.Int("PROBE_SUB_CONCURRENCY"))})
+	s.Add(events.Sub{Name: "peer", Streams: []string{peer}, Types: []string{WrittenType}, Handle: p.received})
 	return nil
 }
 

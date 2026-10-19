@@ -17,8 +17,7 @@ OWN = {"PROBE_NEXT": "the component ID of the probe that call and relay go to; u
        "PROBE_PEER_STREAM": "the peer probe's event stream to consume (test.probe_go, test.probe_py); unset: none",
        "PROBE_NEXT_URL": "the next probe's user surface: $endpoint:<its ID> (protocol P4.26); unset: no HTTP calls",
        "PROBE_NEXT_GRPC_URL": "the next probe's system surface: $endpoint:<its ID>:grpc (protocol P4.26); unset: no gRPC calls",
-       "PROBE_GUARD": "true: the user routes need a credential and their operation instead of being public",
-       "PROBE_SUB_CONCURRENCY": "how many messages of the peer's stream one instance handles at once"}
+       "PROBE_GUARD": "true: the user routes need a credential and their operation instead of being public"}
 
 
 def describe(k: Key) -> str:

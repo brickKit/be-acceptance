@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-go
   name: Go probe
-  version: 3.2.11
+  version: 3.2.12
   description: "The acceptance suite's Go probe: communication only (echo, CPU work, a write with its event, relay), for measuring paths"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -57,9 +57,6 @@ configSchema:
     PROBE_GUARD:
       type: boolean
       description: "true: the user routes need a credential and their operation instead of being public; SDK default false"
-    PROBE_SUB_CONCURRENCY:
-      type: integer
-      description: "how many messages of the peer's stream one instance handles at once; SDK default 1"
     LOG_LEVEL:
       type: string
       enum: [debug, info, warn, error]
@@ -155,6 +152,8 @@ configSchema:
     OBJECT_STORE_SECRET_KEY:
       type: string
       secret: true
+    BUS_SUBSCRIPTION_CONCURRENCY:
+      type: integer
     PG_MIGRATION_HOST:
       type: string
     PG_MIGRATION_PORT:

@@ -139,7 +139,7 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
         if prev := c.previous_of(probe):
             lines.append(f"PROBE_PEER_STREAM: {stream_of(prev)}")
         if c.concurrency != 1:
-            lines.append(f"PROBE_SUB_CONCURRENCY: {c.concurrency}")
+            lines.append(f"BUS_SUBSCRIPTION_CONCURRENCY: {c.concurrency}")
         (cfg / f"{f}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
 
 

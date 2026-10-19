@@ -149,8 +149,7 @@ class Probe:
 
     def subscriptions(self, s) -> None:
         if peer := self.rt.config.string("PROBE_PEER_STREAM"):
-            s.add(Sub("peer", [peer], self.received, types=[WRITTEN_TYPE],
-                      concurrency=self.rt.config.int("PROBE_SUB_CONCURRENCY")))
+            s.add(Sub("peer", [peer], self.received, types=[WRITTEN_TYPE]))
 
     async def received(self, tx, e: Received) -> None:
         w = e.decode()
