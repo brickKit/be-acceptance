@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-go2
   name: Go probe (go2)
-  version: 3.2.18
+  version: 3.2.19
   description: "A variant of test/probe-go: the same code under its own component ID, ports and event stream"
   repository: https://github.com/brickKit/be-acceptance
 
