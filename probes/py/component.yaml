@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-py
   name: Python probe
-  version: 3.2.12
+  version: 3.2.13
   description: "The acceptance suite's Python probe: the same contract as the Go probe, for measuring paths"
   repository: https://github.com/brickKit/be-acceptance
 
