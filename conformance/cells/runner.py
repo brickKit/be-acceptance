@@ -120,7 +120,8 @@ async def measure(c: Cell, binary: pathlib.Path, caller: str, callee: str, op: s
     flags = [*OPS[op], *LOADS[load], "-warmup", f"{warmup}s", "-duration", f"{seconds}s", "-step-time", f"{seconds // 3}s"]
     containers = sorted({c.container_of(caller), c.container_of(callee)})
     w, stop = Window(containers), asyncio.Event()
-    proc = await asyncio.create_subprocess_exec(str(binary), "-target", target, *flags, "-out", str(out / "driver.json"))
+    creds = ["-credentials", str(c.dir / ".secrets" / "load-user.json")] if c.secured else []
+    proc = await asyncio.create_subprocess_exec(str(binary), "-target", target, *flags, *creds, "-out", str(out / "driver.json"))
     await asyncio.sleep(warmup)
     sampler = asyncio.create_task(w.run_until(stop, db_dsn(c)))
     await proc.wait()

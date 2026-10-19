@@ -129,6 +129,13 @@ async def stop(c: Cell, containers: list[str], probes: list[str]) -> dict:
 async def observe(c: Cell, admin_db: str) -> dict:
     """Observations for every probe and shell of a running cell; the cell is stopped at the end."""
     token = "sentinel-" + uuid.uuid4().hex
+    if c.secured:  # a real token: the probes check it; the logs must not show it either
+        import json as _json
+
+        from cells.secure import token as dev_token
+
+        creds = _json.loads((c.dir / ".secrets" / "load-user.json").read_text())
+        token, _ = await dev_token(creds["token_url"].rsplit("/api/", 1)[0], creds["username"], creds["password"])
     obs: dict[str, dict] = {}
     for p in c.probes:
         s = schema_of(p)

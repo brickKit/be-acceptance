@@ -11,7 +11,7 @@ import subprocess
 
 import yaml
 
-from cells.spec import HOST_BAND, PROBE_PORTS, SHELL_PORTS
+from cells.spec import HOST_BAND, PORTS, SHELL_PORTS
 
 SOURCES = """  - name: acceptance        # the probes (one repository, tags test-probe-<variant>/<version>)
     type: git
@@ -39,10 +39,10 @@ def deploy_file(name: str, shells: dict[str, list[str]], alone: list[str], extra
             out.append("    members:")
             for m in hosted:
                 out.append(f"      - id: {m}")
-                if m in PROBE_PORTS:
-                    out += ["        expose: true", f"        exposePort: {HOST_BAND + PROBE_PORTS[m][0]}"]
+                if m in PORTS:
+                    out += ["        expose: true", f"        exposePort: {HOST_BAND + PORTS[m][0]}"]
     for p in alone:
-        out += [f"  - id: {p}", "    expose: true", f"    exposePort: {HOST_BAND + PROBE_PORTS[p][0]}"]
+        out += [f"  - id: {p}", "    expose: true", f"    exposePort: {HOST_BAND + PORTS[p][0]}"]
     return "\n".join(out) + "\n"
 
 

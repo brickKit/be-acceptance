@@ -37,6 +37,8 @@ func main() {
 	flag.DurationVar(&r.P99Limit, "p99-limit", 10*time.Second, "ramp: stop when p99 passes it (the route deadline)")
 	flag.Float64Var(&r.MaxErrorRate, "max-errors", 0.01, "ramp: stop when the error rate passes it")
 	flag.StringVar(&out, "out", "", "result file (JSON); empty: stdout")
+	var creds string
+	flag.StringVar(&creds, "credentials", "", "a JSON file with token_url, username, password: the probes need a token")
 	flag.Parse()
 	if p.Target == "" {
 		fmt.Fprintln(os.Stderr, "-target is required")
@@ -45,6 +47,12 @@ func main() {
 	client := &http.Client{Transport: &http.Transport{MaxIdleConns: 4096, MaxIdleConnsPerHost: 4096,
 		IdleConnTimeout: 90 * time.Second}}
 	ctx := context.Background()
+	if creds != "" {
+		if err := useCredentials(ctx, client, creds); err != nil {
+			fmt.Fprintln(os.Stderr, "no token:", err)
+			os.Exit(1)
+		}
+	}
 	var result any
 	if ramp {
 		w := p

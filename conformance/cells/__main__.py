@@ -1,4 +1,7 @@
-"""python -m cells <create|prepare|profile|run> <cell directory> [options]
+"""python -m cells <create|prepare|secure|profile|run> <cell directory> [options]
+
+secure, after `brickkit up` of a cell that runs the security members: the install claim, the load user's grants and
+the driver's credentials (cells/secure.py).
 
 profile observes a running cell, stops it and writes the reports to <cell>/reports/.
 run <cell> <output> [--ops a,b] [--loads 50,200,ramp] [--idle 600] [--warmup 10] [--seconds 60] measures a running
@@ -34,6 +37,11 @@ def main() -> int:
         a.add_argument("--seconds", type=int, default=60)
         o = a.parse_args(sys.argv[2:])
         asyncio.run(runner.run(o.cell, o.out, o.ops.split(","), o.loads.split(","), o.idle, o.warmup, o.seconds))
+        return 0
+    if sys.argv[1:2] == ["secure"] and len(sys.argv) == 3:
+        from cells import secure
+
+        print(asyncio.run(secure.secure(sys.argv[2])))
         return 0
     if len(sys.argv) != 3 or sys.argv[1] not in ("create", "prepare", "profile"):
         print(__doc__, file=sys.stderr)

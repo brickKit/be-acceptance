@@ -14,6 +14,7 @@ import traceback
 import yaml
 
 from cells import create, prepare, runner
+from cells.spec import Cell
 
 
 def brickkit(d: pathlib.Path, *args: str, timeout: int = 1800) -> None:
@@ -42,6 +43,10 @@ async def one(cells_root: pathlib.Path, entry: dict, out: pathlib.Path) -> None:
     brickkit(d, "build")
     brickkit(d, "up")
     try:
+        if Cell.load(d).secured:
+            from cells import secure
+
+            await secure.secure(d)
         await runner.run(str(d), str(out), entry.get("ops") or ([] if entry.get("idle_only") else list(runner.OPS)),
                          [str(x) for x in entry.get("loads", ["50", "200", "ramp"])], entry.get("idle", 600),
                          entry.get("warmup", 10), entry.get("seconds", 60))

@@ -133,6 +133,9 @@ func send(ctx context.Context, client *http.Client, url string, body []byte, due
 	defer cancel()
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	if b := bearer.Load().(string); b != "" {
+		req.Header.Set("Authorization", b)
+	}
 	sent := time.Now()
 	resp, err := client.Do(req)
 	s := Sample{Due: due}

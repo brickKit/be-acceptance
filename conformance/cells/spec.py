@@ -10,6 +10,9 @@ import yaml
 
 PROBE_PORTS = {"test/probe-go": (8600, 9600), "test/probe-go2": (8602, 9602), "test/probe-go3": (8603, 9603),
                "test/probe-go4": (8604, 9604), "test/probe-py": (8601, 9601), "test/probe-py2": (8605, 9605)}
+# the security members a cell may run (alone or in a shell): their user port and system port (0: none)
+INFRA_PORTS = {"infra/iam-casdoor": (8200, 0), "infra/authz": (8223, 9223), "infra/audit": (8206, 9206)}
+PORTS = {**PROBE_PORTS, **INFRA_PORTS}
 SHELL_ROLES = {"be/go-core": "shell_go_core", "be/go-infra": "shell_go_infra", "be/py-render": "shell_py_render"}
 SHELL_PORTS = {"be/go-core": 8090, "be/go-infra": 8224, "be/py-render": 8402}
 # cells expose every port at 10000 + port (18090-18605): below Linux's ephemeral range (32768-60999), where any
@@ -58,8 +61,22 @@ class Cell:
         return c
 
     @property
-    def probes(self) -> list[str]:
+    def placed(self) -> list[str]:
+        """Every component the cell runs: alone or as a shell's member."""
         return self.alone + [m for ms in self.shells.values() for m in ms]
+
+    @property
+    def probes(self) -> list[str]:
+        return [p for p in self.placed if p in PROBE_PORTS]
+
+    @property
+    def infra(self) -> list[str]:
+        """The security members the cell runs; with them the probes' routes need a token (PROBE_GUARD)."""
+        return [p for p in self.placed if p in INFRA_PORTS]
+
+    @property
+    def secured(self) -> bool:
+        return set(self.infra) == set(INFRA_PORTS)
 
     def next_of(self, probe: str) -> str | None:
         if probe not in self.chain or len(self.chain) < 2:
@@ -72,8 +89,8 @@ class Cell:
         return self.chain[self.chain.index(probe) - 1]
 
     def host_port(self, component: str) -> int:
-        """The host port a probe's user surface or a shell's own port is exposed on."""
-        return HOST_BAND + (PROBE_PORTS[component][0] if component in PROBE_PORTS else SHELL_PORTS[component])
+        """The host port a component's user surface or a shell's own port is exposed on."""
+        return HOST_BAND + (PORTS[component][0] if component in PORTS else SHELL_PORTS[component])
 
     def container_of(self, component: str) -> str:
         """The container a probe runs in (its shell's, or its own) or a shell's."""
