@@ -12,7 +12,8 @@ import asyncpg
 
 from measure import readings
 
-BASE = ("be-postgres", "be-nats", "be-rustfs")
+# the base resources read when they run; object storage is RustFS by default or SeaweedFS in its place
+BASE = ("be-postgres", "be-nats", "be-rustfs", "be-seaweedfs")
 
 
 @dataclass
