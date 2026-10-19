@@ -319,8 +319,26 @@ def judge_shell_metrics(obs: dict) -> list[str]:
                 p.append(f"{s.name} has component {s.labels.get('component')!r}, not a hosted member")
                 break
     seen = {s.labels.get("component") for f in families if f.name == "be_http_server_duration_seconds" for s in f.samples}
-    p += [f"no request metrics of {m}" for m in sorted(members - seen)]
+    p += [f"no request metrics of {m}" for m in sorted(served(obs, members) - seen)]
     return p[:20]
+
+
+def served(obs: dict, members: set[str]) -> set[str]:
+    """The hosted members that served a user-surface request during the observation: those with an access line in the
+    shell's output (read after the metrics). A member nobody called has no request series yet (an audit member whose
+    sources send nothing). Without the output, every member."""
+    lines = obs.get("logs")
+    if not lines:
+        return members
+    out = set()
+    for line in (lines.splitlines() if isinstance(lines, str) else lines):
+        try:
+            d = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(d, dict) and d.get("msg") == "access" and d.get("component") in members:
+            out.add(d["component"])
+    return out
 
 
 def judge_shell_endpoints(obs: dict) -> list[str]:
