@@ -5,7 +5,9 @@
 2. the authorization member's install claim names the administrator (AUTHZ_BOOTSTRAP_ADMIN), and `brickkit up`
    restarts it with that;
 3. the administrator grants the load user every operation of every probe, through the effect point;
-4. once a probe takes the load user's token, the driver's credentials are written to .secrets/load-user.json.
+4. once every probe and master data component takes the load user's token, the driver's credentials are written to
+   .secrets/load-user.json (a seed run straight after would otherwise meet 404 from a member whose view has not got
+   the grant yet).
 
 The install claim needs a principal, and the identity member binds one only at the first login: hence the two-step
 start (step 5's finding; security 08's claim by the external identity would remove it). Needs
@@ -26,6 +28,11 @@ from cells.spec import Cell, file_of
 from harness import need
 
 ADMIN, LOAD_USER = "test.alice", "test.bob"
+# a write route of each master data component, sent an empty body: 404 while the grant has not reached the
+# component's view (not visible), 400 once it has (the operation is checked before the body). A read does not tell:
+# a list answers 200 with nothing in it to a user without the read operation.
+MDM_WRITE = {"mdm/org": ("POST", "/api/org/legal-entities"), "mdm/currency": ("PUT", "/api/currency/rate-types/x"),
+             "mdm/partner": ("POST", "/api/partner/partners"), "mdm/product": ("POST", "/api/product/products")}
 
 
 async def ready(base: str, limit: float = 120) -> None:
@@ -104,4 +111,15 @@ async def secure(directory: str | pathlib.Path) -> dict:
                 await asyncio.sleep(0.5)
             if r.status_code != 200:
                 raise RuntimeError(f"{p} does not take the load user's token: {r.status_code} {r.text[:200]}")
+        for m in c.mdm:
+            base = f"http://127.0.0.1:{c.host_port(m)}"
+            await ready(base)
+            method, path = MDM_WRITE[m]
+            for _ in range(60):
+                r = await h.request(method, base + path, json={})
+                if r.status_code == 400:
+                    break
+                await asyncio.sleep(0.5)
+            if r.status_code != 400:
+                raise RuntimeError(f"{m} does not take the load user's token: {r.status_code} {r.text[:200]}")
     return {"admin": admin, "load_user": user, "credentials": str(path)}
