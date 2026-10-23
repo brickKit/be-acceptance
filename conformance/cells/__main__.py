@@ -7,6 +7,7 @@ profile observes a running cell, stops it and writes the reports to <cell>/repor
 run <cell> <output> [--ops a,b] [--loads 50,200,ramp] [--idle 600] [--warmup 10] [--seconds 60] measures a running
 cell: idle, then every edge of its chain at every operation and load.
 campaign <campaign.yaml> <output> runs every cell of the campaign, every repetition, unattended (resumable).
+world <cell> <file> writes the load driver's world for business chains (load -flow) from a seeded cell.
 tables <output> prints the record's tables from a campaign's results."""
 import asyncio
 import sys
@@ -37,6 +38,11 @@ def main() -> int:
         a.add_argument("--seconds", type=int, default=60)
         o = a.parse_args(sys.argv[2:])
         asyncio.run(runner.run(o.cell, o.out, o.ops.split(","), o.loads.split(","), o.idle, o.warmup, o.seconds))
+        return 0
+    if sys.argv[1:2] == ["world"] and len(sys.argv) == 4:
+        from cells import world
+
+        print(world.world(sys.argv[2], sys.argv[3]))
         return 0
     if sys.argv[1:2] == ["secure"] and len(sys.argv) == 3:
         from cells import secure

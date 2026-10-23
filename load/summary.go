@@ -8,20 +8,22 @@ import (
 
 // Summary is what one constant-rate run reports.
 type Summary struct {
-	Target       string         `json:"target"`
-	Op           Op             `json:"op"`
-	Rate         float64        `json:"rate"`
-	Seconds      float64        `json:"seconds"`
-	Sent         int            `json:"sent"`
-	OK           int            `json:"ok"`
-	Errors       map[string]int `json:"errors"`
-	ErrorRate    float64        `json:"error_rate"`
-	Throughput   float64        `json:"throughput"` // answered without error within the measured window, per second
-	Latency      Percentiles    `json:"latency_ms"` // from when each request was due
-	Service      Percentiles    `json:"service_ms"` // from when each request was actually sent
-	Hop          *Percentiles   `json:"hop_ms,omitempty"`
-	Writes       []Write        `json:"writes,omitempty"`
-	DriverIssues int            `json:"driver_overloaded"`
+	Target       string                 `json:"target"`
+	Op           Op                     `json:"op"`
+	Rate         float64                `json:"rate"`
+	Seconds      float64                `json:"seconds"`
+	Sent         int                    `json:"sent"`
+	OK           int                    `json:"ok"`
+	Errors       map[string]int         `json:"errors"`
+	ErrorRate    float64                `json:"error_rate"`
+	Throughput   float64                `json:"throughput"` // answered without error within the measured window, per second
+	Latency      Percentiles            `json:"latency_ms"` // from when each request was due
+	Service      Percentiles            `json:"service_ms"` // from when each request was actually sent
+	Hop          *Percentiles           `json:"hop_ms,omitempty"`
+	Writes       []Write                `json:"writes,omitempty"`
+	DriverIssues int                    `json:"driver_overloaded"`
+	Flow         string                 `json:"flow,omitempty"`  // a business chain: its flow
+	Steps        map[string]StepSummary `json:"steps,omitempty"` // and each of its requests
 }
 
 // Write is a write's identity and when it was due, for its completion time taken from the database afterwards.
@@ -74,6 +76,9 @@ func summarize(p Plan, samples []Sample) Summary {
 	if len(hop) > 0 {
 		h := percentiles(hop)
 		s.Hop = &h
+	}
+	if p.Chain != nil {
+		s.Flow, s.Steps, s.Writes = p.Chain.Flow, stepSummaries(samples), nil
 	}
 	return s
 }

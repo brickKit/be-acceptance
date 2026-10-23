@@ -58,6 +58,7 @@ type Sample struct {
 	Done    time.Time     // when the answer (or the failure) came
 	Status  int           // 0: no answer (transport error or overload)
 	Error   string
+	Steps   []Step // a business chain: each request of the iteration
 }
 
 // Plan is one constant-rate run.
@@ -69,6 +70,7 @@ type Plan struct {
 	Duration    time.Duration
 	MaxInFlight int
 	Timeout     time.Duration
+	Chain       *Chain // instead of Op: a business flow per iteration (business.go)
 }
 
 // Run drives the plan and returns the samples of the measured part (after the warmup).
@@ -113,16 +115,21 @@ func Run(ctx context.Context, client *http.Client, p Plan) []Sample {
 		}
 		inFlight.Add(1)
 		wg.Add(1)
-		go func() {
+		go func(n int) {
 			defer wg.Done()
 			defer inFlight.Add(-1)
-			s := send(ctx, client, url, body, due, p.Timeout)
+			var s Sample
+			if p.Chain != nil {
+				s = p.Chain.run(ctx, client, due, n, p.Timeout)
+			} else {
+				s = send(ctx, client, url, body, due, p.Timeout)
+			}
 			if measured {
 				mu.Lock()
 				samples = append(samples, s)
 				mu.Unlock()
 			}
-		}()
+		}(i)
 	}
 	wg.Wait()
 	return samples

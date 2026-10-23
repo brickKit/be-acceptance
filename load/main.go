@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -37,9 +38,24 @@ func main() {
 	flag.DurationVar(&r.P99Limit, "p99-limit", 10*time.Second, "ramp: stop when p99 passes it (the route deadline)")
 	flag.Float64Var(&r.MaxErrorRate, "max-errors", 0.01, "ramp: stop when the error rate passes it")
 	flag.StringVar(&out, "out", "", "result file (JSON); empty: stdout")
-	var creds string
+	var creds, flow, world string
 	flag.StringVar(&creds, "credentials", "", "a JSON file with token_url, username, password: the probes need a token")
+	flag.StringVar(&flow, "flow", "", "instead of -op: a business chain per iteration, confirm, deliver or bill (needs -world)")
+	flag.StringVar(&world, "world", "", "flow: the cell's world file (conformance: python -m cells world <cell> <file>)")
 	flag.Parse()
+	if flow != "" {
+		if _, ok := flows[flow]; !ok {
+			fmt.Fprintln(os.Stderr, "-flow is confirm, deliver or bill")
+			os.Exit(64)
+		}
+		w, err := readWorld(world)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "-world:", err)
+			os.Exit(64)
+		}
+		p.Chain = &Chain{Flow: flow, World: w, RunID: strconv.FormatInt(time.Now().UnixNano(), 36)}
+		p.Target, p.Op = w.Sales, Op{Kind: "chain"}
+	}
 	if p.Target == "" {
 		fmt.Fprintln(os.Stderr, "-target is required")
 		os.Exit(64)
