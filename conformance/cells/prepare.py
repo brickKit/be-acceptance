@@ -40,6 +40,42 @@ MDM_KEYS = {
                     "permission": ["mdm.product.read", "mdm.product.edit", "mdm.product_category.read",
                                    "mdm.product_category.manage", "mdm.product.system.read"]},
 }
+# The business components' and the print component's resource types, operations and each resource type's dimensions
+# (their definition.go and infra_print/__init__.py): for the registry, the grants and the segments' atoms.
+ERP_KEYS = {
+    "erp/inventory": {"resource_type": ["erp.inventory.warehouse", "erp.inventory.stock", "erp.inventory.movement",
+                                        "erp.inventory.system"],
+                      "permission": ["erp.inventory.warehouse.read", "erp.inventory.warehouse.manage",
+                                     "erp.inventory.stock.read", "erp.inventory.movement.read",
+                                     "erp.inventory.movement.create", "erp.inventory.adjustment.create",
+                                     "erp.inventory.system.read", "erp.inventory.system.reserve",
+                                     "erp.inventory.system.issue"]},
+    "erp/credit": {"resource_type": ["erp.credit.limit", "erp.credit.policy", "erp.credit.system"],
+                   "permission": ["erp.credit.limit.read", "erp.credit.limit.manage", "erp.credit.limit.request",
+                                  "erp.credit.policy.read", "erp.credit.policy.manage", "erp.credit.system.read",
+                                  "erp.credit.system.reserve"]},
+    "erp/sales": {"resource_type": ["erp.sales.quotation", "erp.sales.order", "erp.sales.delivery", "erp.sales.price_list",
+                                    "erp.sales.return", "erp.sales.system"],
+                  "permission": ["erp.sales.quotation.read", "erp.sales.quotation.edit", "erp.sales.order.read",
+                                 "erp.sales.order.edit", "erp.sales.order.confirm", "erp.sales.order.cancel",
+                                 "erp.sales.delivery.read", "erp.sales.delivery.create", "erp.sales.price_list.read",
+                                 "erp.sales.price_list.manage", "erp.sales.return.read", "erp.sales.return.edit",
+                                 "erp.sales.system.read", "erp.sales.system.billing"]},
+    "erp/billing": {"resource_type": ["erp.billing.invoice", "erp.billing.system"],
+                    "permission": ["erp.billing.invoice.read", "erp.billing.invoice.draft", "erp.billing.invoice.issue",
+                                   "erp.billing.invoice.print", "erp.billing.system.read"]},
+    "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
+                    "permission": ["infra.print.template.read", "infra.print.template.preview",
+                                   "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render"]},
+}
+SALES_DOCUMENT = ["legal_entity", "department", "owner"]
+DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inventory.stock": ["legal_entity", "warehouse"],
+              "erp.inventory.movement": ["legal_entity", "warehouse"], "erp.credit.limit": ["legal_entity"],
+              "erp.credit.policy": ["legal_entity"], "erp.sales.quotation": SALES_DOCUMENT,
+              "erp.sales.order": SALES_DOCUMENT, "erp.sales.delivery": SALES_DOCUMENT, "erp.sales.return": SALES_DOCUMENT,
+              "erp.sales.price_list": ["legal_entity"], "erp.billing.invoice": ["legal_entity"]}
+# the components whose events go through the bus (infra/print publishes none and declares no bus)
+PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing"}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
 PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the probes' operations (probe/defs.go, probe_py)
 
@@ -104,7 +140,7 @@ async def clean_bus(c: Cell) -> None:
 
     tr = await jetstream.Transport.connect(need("BE_ACC_NATS_URL"), "cell-prepare")
     try:
-        for probe in [*c.probes, *c.mdm]:
+        for probe in [*c.probes, *c.mdm, *(e for e in c.erp if e in PRODUCERS)]:
             try:
                 await tr.delete_stream(stream_of(probe))
             except Exception:  # noqa: BLE001 - not there
@@ -141,7 +177,7 @@ async def pg_bus(c: Cell) -> None:
 def registry(c: Cell) -> str:
     """The registry's owners of every resource type and permission key the cell's components define (TSV)."""
     rows = ["kind\tkey\towner_component"]
-    for comp, keys in {**INFRA_KEYS, **MDM_KEYS}.items():
+    for comp, keys in {**INFRA_KEYS, **MDM_KEYS, **ERP_KEYS}.items():
         if comp in c.placed:
             rows += [f"{kind}\t{k}\t{comp}" for kind, ks in keys.items() for k in ks]
     for probe in c.probes:
@@ -199,6 +235,10 @@ def security_configs(c: Cell) -> None:
     for comp in c.mdm:  # the master data components: a database, the bus, a service identity, guarded routes
         files[comp] = [*common, *db(comp), *guarded(comp), "BUS_URL: file://.secrets/bus",
                        f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"]
+    for comp in c.erp:  # the business components and print: a database, a service identity, guarded routes
+        files[comp] = [*common, *db(comp), *guarded(comp)]
+        if comp in PRODUCERS:
+            files[comp] += ["BUS_URL: file://.secrets/bus", f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"]
     if "mdm/org" in files:
         files["mdm/org"].append("DEFAULT_LEGAL_ENTITY_TIMEZONE: Asia/Shanghai")
     for comp, lines in files.items():

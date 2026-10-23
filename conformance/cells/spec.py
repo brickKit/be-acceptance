@@ -14,7 +14,10 @@ PROBE_PORTS = {"test/probe-go": (8600, 9600), "test/probe-go2": (8602, 9602), "t
 INFRA_PORTS = {"infra/iam-casdoor": (8200, 0), "infra/authz": (8223, 9223), "infra/audit": (8206, 9206)}
 # the master data components (step 6), with the security members always
 MDM_PORTS = {"mdm/org": (8083, 9093), "mdm/currency": (8226, 9226), "mdm/partner": (8225, 9225), "mdm/product": (8082, 9092)}
-PORTS = {**PROBE_PORTS, **INFRA_PORTS, **MDM_PORTS}
+# the business components of step 7 (the trading chain) and the print component
+ERP_PORTS = {"erp/inventory": (8086, 9096), "erp/credit": (8088, 9088), "erp/sales": (8084, 9094),
+             "erp/billing": (8089, 9089), "infra/print": (8400, 9400)}
+PORTS = {**PROBE_PORTS, **INFRA_PORTS, **MDM_PORTS, **ERP_PORTS}
 SHELL_ROLES = {"be/go-core": "shell_go_core", "be/go-infra": "shell_go_infra", "be/py-render": "shell_py_render"}
 SHELL_PORTS = {"be/go-core": 8090, "be/go-infra": 8224, "be/py-render": 8402}
 # cells expose every port at 10000 + port (18090-18605): below Linux's ephemeral range (32768-60999), where any
@@ -80,6 +83,11 @@ class Cell:
     def mdm(self) -> list[str]:
         """The master data components the cell runs (they need the security members)."""
         return [p for p in self.placed if p in MDM_PORTS]
+
+    @property
+    def erp(self) -> list[str]:
+        """The business components and the print component the cell runs (they need the security members)."""
+        return [p for p in self.placed if p in ERP_PORTS]
 
     @property
     def secured(self) -> bool:

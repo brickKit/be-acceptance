@@ -23,7 +23,7 @@ import re
 import httpx
 
 from cells.create import brickkit
-from cells.prepare import MDM_KEYS, PROBE_OPS, probe_prefix
+from cells.prepare import DIMENSIONS, ERP_KEYS, MDM_KEYS, PROBE_OPS, probe_prefix
 from cells.spec import Cell, file_of
 from harness import need
 
@@ -92,6 +92,16 @@ async def secure(directory: str | pathlib.Path) -> dict:
         segments += [{"resource_type": op.rsplit(".", 1)[0], "operation": op, "atoms": {}, "read_fields": [],
                       "valid": {"from": start}} for comp in c.mdm for op in MDM_KEYS[comp]["permission"]
                      if not op.endswith(".system.read")]
+        # the business components' user operations, every dimension open: the L3 scenario and the seed data go
+        # through their user surfaces (system operations are for services; adjustments are not in this version)
+        for comp in c.erp:
+            for op in ERP_KEYS[comp]["permission"]:
+                if ".system." in op or op == "erp.inventory.adjustment.create":
+                    continue
+                rt = op.rsplit(".", 1)[0]
+                segments.append({"resource_type": rt, "operation": op,
+                                 "atoms": {d: {"kind": "all"} for d in DIMENSIONS.get(rt, [])}, "read_fields": [],
+                                 "valid": {"from": start}})
         r = await h.post("/api/authz/changes", json={"change_key": "cell-load-user", "action": "grant.create", "unit": root,
                                                      "grantee": user, "segments": segments})
         if r.status_code != 200:
@@ -122,4 +132,19 @@ async def secure(directory: str | pathlib.Path) -> dict:
                 await asyncio.sleep(0.5)
             if r.status_code != 400:
                 raise RuntimeError(f"{m} does not take the load user's token: {r.status_code} {r.text[:200]}")
+        if "infra/print" in c.erp:  # its edit route decides the operation before anything: 501 once granted
+            base = f"http://127.0.0.1:{c.host_port('infra/print')}"
+            await ready(base)
+            for _ in range(60):
+                r = await h.post(base + "/api/print/templates/invoice/versions", json={})
+                if r.status_code == 501:
+                    break
+                await asyncio.sleep(0.5)
+            if r.status_code != 501:
+                raise RuntimeError(f"infra/print does not take the load user's token: {r.status_code} {r.text[:200]}")
+        for m in c.erp:
+            await ready(f"http://127.0.0.1:{c.host_port(m)}")
+        # The Go business members check the body before the operation, so no route tells when the grant arrived; each
+        # member verifies its view every 2.5 s, so after two periods every one of them has it.
+        await asyncio.sleep(5)
     return {"admin": admin, "load_user": user, "credentials": str(path)}
