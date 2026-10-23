@@ -1,7 +1,7 @@
 PROJECT ?= ../..
 PYTHON ?= python3
 
-.PHONY: models doc-checks probes help
+.PHONY: models doc-checks probes scenarios help
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "%-12s %s\n", $$1, $$2}'
@@ -15,4 +15,7 @@ doc-checks:  ## Run the document checks against PROJECT (default: the assembly p
 	@$(PYTHON) doc-checks/links.py $(PROJECT)
 
 probes:  ## Run both probes alone and together (needs BE_ACC_PG_ADMIN, BE_ACC_NATS_URL, BE_ACC_S3_URL, BE_ACC_S3_ACCESS_KEY, BE_ACC_S3_SECRET_KEY)
-	@cd conformance && uv run pytest -q
+	@cd conformance && uv run pytest -q tests
+
+scenarios:  ## L3 business chains against a running, seeded cell (needs BE_ACC_CELL, BE_ACC_IAM_TEST_PASSWORD)
+	@cd conformance && uv run pytest -q scenarios
