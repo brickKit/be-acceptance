@@ -52,10 +52,22 @@ async def endpoints(c: Cell, component: str) -> dict:
            "ready": [ready.status_code, ready.text], "describe": describe.json() if describe.status_code == 200 else {},
            "kept_alive_ms": sequential}
     if component in PROBE_PORTS:
-        code, _ = run(["docker", "exec", c.container_of(component), "nc", "-z", "127.0.0.1",
-                       str(PROBE_PORTS[component][1])])
-        out["grpc_listening"] = code == 0
+        out["grpc_listening"] = listening(c.container_of(component), PROBE_PORTS[component][1])
     return out
+
+
+# Inside the container, with what its image has: BusyBox nc on Alpine, Python on the Debian-based Python images (no
+# nc there); exit 3 when it has neither, so "cannot tell" is not reported as "not listening".
+LISTENING = ('if command -v nc >/dev/null; then nc -z 127.0.0.1 {port}; '
+             'elif command -v python3 >/dev/null; then python3 -c "import socket; socket.create_connection((\'127.0.0.1\', {port}), 2)"; '
+             'else exit 3; fi')
+
+
+def listening(container: str, port: int) -> bool:
+    code, out = run(["docker", "exec", container, "sh", "-c", LISTENING.format(port=port)])
+    if code == 3:
+        raise RuntimeError(f"{container} has neither nc nor python3: cannot tell whether port {port} listens")
+    return code == 0
 
 
 async def traffic(c: Cell, probe: str, token: str) -> int:
