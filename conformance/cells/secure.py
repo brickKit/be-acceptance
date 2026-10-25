@@ -73,7 +73,11 @@ async def secure(directory: str | pathlib.Path) -> dict:
     _, admin = await token(iam, ADMIN, password)
     _, user = await token(iam, LOAD_USER, password)
     claim(c, admin)
-    brickkit(c.dir, "up")  # the authorization member restarts with the claim
+    if c.row == "L":  # a new mode: local session: the processes restart with the claim
+        from cells import localrun
+        localrun.up(c.dir, c.dir / ".brickkit" / "local-session.log")
+    else:
+        brickkit(c.dir, "up")  # the authorization member restarts with the claim
     await ready(authz)
     admin_token, _ = await token(iam, ADMIN, password)
     headers = {"Authorization": "Bearer " + admin_token}

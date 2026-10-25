@@ -79,10 +79,6 @@ def host_ports() -> str:
     return ",".join(f"{10000 + p}:{30000 + p - 8000}" for p in sorted(set(ports)) if 8000 <= p < 10768)
 
 
-GO_RUN = re.compile(r"^go$")
-
-
 def local_units(c: Cell) -> dict:
-    """The local row: each component's or shell's process, found by the host port it listens on (10000 + port), with
-    its children; its parent `go run` and the `brickkit up` session are the platform of this row."""
-    raise NotImplementedError("local row: added at its smoke test")
+    from cells.localrun import local_units as units
+    return units(c)

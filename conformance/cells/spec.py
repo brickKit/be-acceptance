@@ -58,7 +58,8 @@ class Cell:
     @property
     def base_host(self) -> str:
         """How the components reach the base resources' host ports."""
-        return {"K": "host.minikube.internal", "L": "localhost"}.get(self.row, "host.docker.internal")
+        # a mode: local process gets host.docker.internal rewritten to localhost by BrickKit
+        return "host.minikube.internal" if self.row == "K" else "host.docker.internal"
 
     @property
     def target(self) -> str:
