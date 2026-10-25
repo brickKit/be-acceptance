@@ -137,3 +137,19 @@ def world(bob) -> World:
 
 def pytest_configure(config):
     os.environ.setdefault("NO_PROXY", "127.0.0.1")
+
+
+@pytest.fixture(scope="session")
+def second_goods(bob, world) -> dict:
+    """Another product in stock in Shanghai, priced and untracked, for orders with two goods (RS16)."""
+    le = world.le
+    priced = {i["product_id"] for pl in bob.get("erp/sales", f"/api/sales/price-lists?legal_entity_id={le}")["price_lists"]
+              if pl["currency"] == "CNY"
+              for i in bob.get("erp/sales", f"/api/sales/price-lists/{pl['id']}/items?on=2026-10-01&limit=200")["items"]}
+    stocked = bob.get("erp/inventory", f"/api/inventory/positions?limit=200&available_only=true&warehouse_id={world.shanghai}")["positions"]
+    for p in stocked:
+        if p["product_id"] != world.goods["id"] and p["product_id"] in priced and float(p["available"]) >= 50:
+            product = bob.get("mdm/product", f"/api/product/products/{p['product_id']}")
+            if product["tracking"] == "none":
+                return product
+    raise AssertionError("no second untracked product in stock in Shanghai: seed the cell first")

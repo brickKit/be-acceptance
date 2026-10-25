@@ -59,6 +59,12 @@ type Sample struct {
 	Status  int           // 0: no answer (transport error or overload)
 	Error   string
 	Steps   []Step // a business chain: each request of the iteration
+	// a mixed run (mix.go): the op done, the op wanted when its pool was empty, a confirmation's outcome when it was not
+	// “confirmed”, and for a bill the order whose invoice was issued (its completion is read from the database after)
+	Op       string
+	Fallback string
+	Outcome  string
+	Billed   string
 }
 
 // Plan is one constant-rate run.
@@ -71,6 +77,7 @@ type Plan struct {
 	MaxInFlight int
 	Timeout     time.Duration
 	Chain       *Chain // instead of Op: a business flow per iteration (business.go)
+	Mix         *Mix   // instead of Op: the representative mix of operations (mix.go)
 }
 
 // Run drives the plan and returns the samples of the measured part (after the warmup).
@@ -119,9 +126,12 @@ func Run(ctx context.Context, client *http.Client, p Plan) []Sample {
 			defer wg.Done()
 			defer inFlight.Add(-1)
 			var s Sample
-			if p.Chain != nil {
+			switch {
+			case p.Mix != nil:
+				s = p.Mix.run(ctx, client, due, n, p.Timeout)
+			case p.Chain != nil:
 				s = p.Chain.run(ctx, client, due, n, p.Timeout)
-			} else {
+			default:
 				s = send(ctx, client, url, body, due, p.Timeout)
 			}
 			if measured {

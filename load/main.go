@@ -38,7 +38,10 @@ func main() {
 	flag.DurationVar(&r.P99Limit, "p99-limit", 10*time.Second, "ramp: stop when p99 passes it (the route deadline)")
 	flag.Float64Var(&r.MaxErrorRate, "max-errors", 0.01, "ramp: stop when the error rate passes it")
 	flag.StringVar(&out, "out", "", "result file (JSON); empty: stdout")
-	var creds, flow, world string
+	var creds, flow, world, mix string
+	var users int
+	flag.StringVar(&mix, "mix", "", "instead of -op: the representative mix, its world file (conformance: python -m cells baseline <cell> <file>); the accounts' password from BE_LOAD_PASSWORD")
+	flag.IntVar(&users, "users", 20, "mix: virtual users")
 	flag.StringVar(&creds, "credentials", "", "a JSON file with token_url, username, password: the probes need a token")
 	flag.StringVar(&flow, "flow", "", "instead of -op: a business chain per iteration, confirm, deliver or bill (needs -world)")
 	flag.StringVar(&world, "world", "", "flow: the cell's world file (conformance: python -m cells world <cell> <file>)")
@@ -55,6 +58,20 @@ func main() {
 		}
 		p.Chain = &Chain{Flow: flow, World: w, RunID: strconv.FormatInt(time.Now().UnixNano(), 36)}
 		p.Target, p.Op = w.Sales, Op{Kind: "chain"}
+	}
+	if mix != "" {
+		w, err := readMixWorld(mix)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "-mix:", err)
+			os.Exit(64)
+		}
+		c := &http.Client{Timeout: 30 * time.Second}
+		m, err := NewMix(context.Background(), c, w, users, os.Getenv("BE_LOAD_PASSWORD"), strconv.FormatInt(time.Now().UnixNano(), 36))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "-mix:", err)
+			os.Exit(1)
+		}
+		p.Mix, p.Target, p.Op = m, w.Sales, Op{Kind: "mix"}
 	}
 	if p.Target == "" {
 		fmt.Fprintln(os.Stderr, "-target is required")

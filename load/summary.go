@@ -24,6 +24,7 @@ type Summary struct {
 	DriverIssues int                    `json:"driver_overloaded"`
 	Flow         string                 `json:"flow,omitempty"`  // a business chain: its flow
 	Steps        map[string]StepSummary `json:"steps,omitempty"` // and each of its requests
+	Mix          *MixSummary            `json:"mix,omitempty"`   // a mixed run: each op, fallbacks, confirm to billed
 }
 
 // Write is a write's identity and when it was due, for its completion time taken from the database afterwards.
@@ -79,6 +80,9 @@ func summarize(p Plan, samples []Sample) Summary {
 	}
 	if p.Chain != nil {
 		s.Flow, s.Steps, s.Writes = p.Chain.Flow, stepSummaries(samples), nil
+	}
+	if p.Mix != nil {
+		s.Flow, s.Steps, s.Writes, s.Mix = "mix", stepSummaries(samples), nil, mixSummary(p.Mix, samples)
 	}
 	return s
 }
