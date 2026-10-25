@@ -1,6 +1,7 @@
 """One reading of the machine: every process's resident memory and CPU time from /proc, every container's cgroup
 memory and CPU from /sys/fs/cgroup, and which processes are the container platform's. Readings are cumulative CPU and
-instantaneous memory; series.py turns a series of them into figures."""
+instantaneous memory; series.py turns a series of them into figures. A container is looked up in Docker, then in
+Podman (rootless, cgroup v2); its cgroup is the one its main process is in."""
 from __future__ import annotations
 
 import os
@@ -11,8 +12,14 @@ from dataclasses import dataclass, field
 
 TICK = os.sysconf("SC_CLK_TCK")
 CGROUP = pathlib.Path("/sys/fs/cgroup")
-# the processes of the Docker platform itself: daemons, one shim per container, one proxy per published port
-PLATFORM = re.compile(r"^(dockerd|containerd|containerd-shim(-runc-v2)?|docker-proxy)$")
+# the processes of each container platform itself. Docker: daemons, one shim per container, one proxy per published
+# port. Podman (rootless): one monitor per container, the user-mode network (pasta, or slirp4netns), the port
+# forwarder, the network and DNS helpers; podman itself only while a command runs.
+PLATFORMS = {
+    "docker": re.compile(r"^(dockerd|containerd|containerd-shim(-runc-v2)?|docker-proxy)$"),
+    "podman": re.compile(r"^(conmon|pasta(\.avx2)?|slirp4netns|rootlessport(-child)?|netavark|aardvark-dns|podman|catatonit)$"),
+}
+PLATFORM = PLATFORMS["docker"]
 
 
 @dataclass(frozen=True)
@@ -43,6 +50,9 @@ class Container:
     id: str
     memory: int  # cgroup memory.current, bytes (includes page cache)
     cpu: float  # cgroup cpu.stat usage, seconds
+    # cgroup memory.stat anon + shmem, bytes: the memory the processes hold (shared memory included: PostgreSQL's
+    # buffers are shmem), without the page cache that memory.current also counts
+    anon: int = 0
     procs: list[Proc] = field(default_factory=list)
 
     @property
@@ -54,26 +64,67 @@ class Container:
         return sum(p.cpu for p in self.procs)
 
 
-def container(name: str) -> Container | None:
-    r = subprocess.run(["docker", "inspect", "-f", "{{.Id}}", name], capture_output=True, text=True)
-    cid = r.stdout.strip()
-    if r.returncode != 0 or not cid:
+_found: dict[str, tuple[str, pathlib.Path]] = {}
+
+
+def cgroup_of(pid: int) -> pathlib.Path | None:
+    """The cgroup v2 directory a process is in; a container's processes may sit in a leaf below its scope (crun puts
+    them in "container"), so the scope is taken when the leaf has that name."""
+    try:
+        rel = pathlib.Path(f"/proc/{pid}/cgroup").read_text().strip().split("::", 1)[1]
+    except (FileNotFoundError, IndexError, ProcessLookupError):
         return None
-    d = CGROUP / "system.slice" / f"docker-{cid}.scope"
+    d = CGROUP / rel.lstrip("/")
+    return d.parent if d.name == "container" else d
+
+
+def find(name: str) -> tuple[str, pathlib.Path] | None:
+    """A container's ID and cgroup directory, from Docker or Podman; remembered while the container lives."""
+    if name in _found and _found[name][1].exists():
+        return _found[name]
+    for engine in ("docker", "podman"):
+        r = subprocess.run([engine, "inspect", "-f", "{{.Id}} {{.State.Pid}}", name], capture_output=True, text=True)
+        parts = r.stdout.split()
+        if r.returncode == 0 and len(parts) == 2 and parts[1] != "0":
+            d = CGROUP / "system.slice" / f"docker-{parts[0]}.scope" if engine == "docker" else cgroup_of(int(parts[1]))
+            if d and d.exists():
+                _found[name] = (parts[0], d)
+                return _found[name]
+    return None
+
+
+def cgroup(name: str, cid: str, d: pathlib.Path) -> Container | None:
     try:
         memory = int((d / "memory.current").read_text())
+        stat = (d / "memory.stat").read_text()
+        anon = sum(int(re.search(rf"^{k} (\d+)", stat, re.M).group(1)) for k in ("anon", "shmem"))
         usage = int(re.search(r"usage_usec (\d+)", (d / "cpu.stat").read_text()).group(1)) / 1e6
         pids = [int(x) for x in (d / "cgroup.procs").read_text().split()]
-    except FileNotFoundError:
+        for sub in d.iterdir():  # a scope's own leaves (Podman's "container")
+            if sub.is_dir() and (sub / "cgroup.procs").exists():
+                pids += [int(x) for x in (sub / "cgroup.procs").read_text().split()]
+    except (FileNotFoundError, AttributeError):
         return None
-    return Container(name, cid, memory, usage, [p for p in map(proc, pids) if p])
+    return Container(name, cid, memory, usage, anon, [p for p in map(proc, pids) if p])
 
 
-def platform() -> list[Proc]:
-    out = []
+def container(name: str) -> Container | None:
+    f = find(name)
+    return cgroup(name, *f) if f else None
+
+
+def platform(engine: str = "docker") -> list[Proc]:
+    return platforms()[engine]
+
+
+def platforms() -> dict[str, list[Proc]]:
+    """Each container platform's own processes, in one pass over /proc."""
+    out: dict[str, list[Proc]] = {k: [] for k in PLATFORMS}
     for entry in pathlib.Path("/proc").iterdir():
         if entry.name.isdigit():
             p = proc(int(entry.name))
-            if p and PLATFORM.match(p.name):
-                out.append(p)
+            if p:
+                for k, rx in PLATFORMS.items():
+                    if rx.match(p.name):
+                        out[k].append(p)
     return out

@@ -27,6 +27,18 @@ def containers(c: Cell) -> list[str]:
     return sorted({c.container_of(p) for p in c.placed} | ({"be-casdoor"} if "infra/iam-casdoor" in c.placed else set()))
 
 
+def window(c: Cell) -> Window:
+    """The sampler of a cell: its containers on Docker and Podman; on Kubernetes its pods and the minikube node, on
+    the local row its processes (cells/units.py), with Casdoor and the base resources as on every row."""
+    if c.row == "K":
+        from cells.units import kube_units
+        return Window(["be-casdoor"], units=kube_units(c))
+    if c.row == "L":
+        from cells.units import local_units
+        return Window(["be-casdoor"], units=local_units(c))
+    return Window(containers(c))
+
+
 async def leftovers(c: Cell) -> dict:
     """Unpublished outbox rows of every business component, and messages its consumers have not acknowledged."""
     out = {}
@@ -81,7 +93,7 @@ async def completions(c: Cell, orders: list[str]) -> dict:
 
 async def idle(c: Cell, out: pathlib.Path, seconds: int) -> dict:
     before = await quiet(c)
-    w = Window(containers(c))
+    w = window(c)
     await w.run(seconds, db_dsn(c))
     record = {"cell": c.name, "idle_seconds": seconds, "before": before, "resources": w.figures()}
     (out / "idle.json").write_text(json.dumps(record, indent=2))
@@ -91,7 +103,7 @@ async def idle(c: Cell, out: pathlib.Path, seconds: int) -> dict:
 async def mix(c: Cell, binary: pathlib.Path, world: str, out: pathlib.Path, rate: float, users: int, warmup: int,
               seconds: int) -> dict:
     before = await quiet(c)
-    w, stop = Window(containers(c)), asyncio.Event()
+    w, stop = window(c), asyncio.Event()
     flags = ["-mix", world, "-rate", str(rate), "-users", str(users), "-warmup", f"{warmup}s", "-duration", f"{seconds}s"]
     env = {**os.environ, "BE_LOAD_PASSWORD": need("BE_ACC_IAM_TEST_PASSWORD")}
     proc = await asyncio.create_subprocess_exec(str(binary), *flags, "-out", str(out / "driver.json"), env=env)

@@ -51,6 +51,18 @@ class Cell:
     shells: dict[str, list[str]] = field(default_factory=dict)  # shell -> hosted members
     alone: list[str] = field(default_factory=list)  # probes running alone
     concurrency: int = 1  # messages each probe's subscription handles at once (BUS_SUBSCRIPTION_CONCURRENCY, P6.31)
+    # the run form (experiment plan, suite A rows): D Docker, P Podman (rootless), K Kubernetes (minikube), L processes
+    # on this machine (mode: local); the base resources stay in Docker for every row (step 9 plan)
+    row: str = "D"
+
+    @property
+    def base_host(self) -> str:
+        """How the components reach the base resources' host ports."""
+        return {"K": "host.minikube.internal", "L": "localhost"}.get(self.row, "host.docker.internal")
+
+    @property
+    def target(self) -> str:
+        return {"P": "podman", "K": "k8s"}.get(self.row, "docker")
 
     @staticmethod
     def load(directory: str | pathlib.Path) -> Cell:
@@ -59,7 +71,8 @@ class Cell:
         shells = {k.split("@")[0]: list(v) for k, v in (spec.get("shells") or {}).items()}
         alone = [a.split("@")[0] for a in spec.get("alone") or []]
         c = Cell(d, spec["cell"], spec.get("chain") or [], spec.get("database", "be_experiment"), spec.get("bus", "jetstream"),
-                 shells=shells, alone=alone, concurrency=int(spec.get("subscription_concurrency", 1)))
+                 shells=shells, alone=alone, concurrency=int(spec.get("subscription_concurrency", 1)),
+                 row=spec.get("row", "D"))
         unknown = [p for p in c.chain if p not in c.probes]
         if unknown:
             raise ValueError(f"{c.name}: the chain names probes the cell does not run: {unknown}")

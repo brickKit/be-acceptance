@@ -171,7 +171,7 @@ async def pg_bus(c: Cell) -> None:
     await pgqueue.migrate_bus(url, obs.new_logger(obs.Member("bus", "0"), "error", io.StringIO()))
     (c.dir / ".secrets").mkdir(exist_ok=True)
     (c.dir / ".secrets" / "bus").write_text(
-        f"pgqueue://be_bus:be_bus-pw@host.docker.internal:5432/{c.database}?schema=be_bus&sslmode=disable")
+        f"pgqueue://be_bus:be_bus-pw@{c.base_host}:5432/{c.database}?schema=be_bus&sslmode=disable")
 
 
 def registry(c: Cell) -> str:
@@ -224,7 +224,7 @@ def security_configs(c: Cell) -> None:
         "infra/iam-casdoor": [*common, *db("infra/iam-casdoor"), "IAM_TOKEN_ISSUER: $var:IAM_ISSUER",
                               "IAM_SIGNING_KEY: file://.secrets/iam/signing-key.pem",
                               "IAM_CALLBACK_URL: http://localhost:8200/api/iam/callback", "IAM_COOKIE_SECURE: \"false\"",
-                              "CASDOOR_URL: http://host.docker.internal:8000", "CASDOOR_PUBLIC_URL: http://localhost:8000",
+                              f"CASDOOR_URL: http://{c.base_host}:8000", "CASDOOR_PUBLIC_URL: http://localhost:8000",
                               "CASDOOR_CLIENT_ID: be-iam-client", "CASDOOR_CLIENT_SECRET: ${BE_ACC_IAM_CLIENT_SECRET}",
                               "IAM_DEV_EXCHANGE: \"true\"", "IAM_DEV_CLIENT_ID: be-iam-dev-client",
                               "IAM_DEV_CLIENT_SECRET: ${BE_ACC_IAM_DEV_CLIENT_SECRET}"],
@@ -250,11 +250,11 @@ def configs(c: Cell) -> None:
     cfg = c.dir / "config"
     # a bus URL may carry credentials, so the component declares it secret: it is delivered from a file
     if c.bus == "jetstream":
-        (c.dir / ".secrets" / "bus").write_text("nats://host.docker.internal:4222")
-    (cfg / "vars.yaml").write_text(HEADER.format(cell=c.name) + f"""PG_HOST: host.docker.internal
+        (c.dir / ".secrets" / "bus").write_text(f"nats://{c.base_host}:4222")
+    (cfg / "vars.yaml").write_text(HEADER.format(cell=c.name) + f"""PG_HOST: {c.base_host}
 PG_PORT: "5432"
 PG_DATABASE: {c.database}
-OBJECT_STORE_URL: http://host.docker.internal:9000
+OBJECT_STORE_URL: http://{c.base_host}:9000
 OBJECT_STORE_BUCKET: be-acceptance
 DEPLOYMENT_ID: {c.deployment}
 """ + ("""IAM_ISSUER: $endpoint:infra/iam-casdoor
