@@ -1,7 +1,7 @@
 """Step 8 (T8.5): one business-chain cell's resources and performance (experiment plan, suite A item 2): an idle
 window, then the representative mix (load -mix) with the sampler running over its measured part. Every component
 container (alone or a shell) is sampled, with the base resources and the platform; the result goes to
-<out>/idle.json and <out>/mix.json."""
+<out>/idle.json and <out>/mix.json. A cell brought up without seed or baseline data (no world) is measured idle only."""
 from __future__ import annotations
 
 import asyncio
@@ -115,16 +115,17 @@ async def mix(c: Cell, binary: pathlib.Path, world: str, out: pathlib.Path, rate
     return record
 
 
-async def run(directory: str, out_dir: str, world: str, rate: float, users: int, idle_seconds: int, warmup: int,
+async def run(directory: str, out_dir: str, world: str | None, rate: float, users: int, idle_seconds: int, warmup: int,
               seconds: int) -> None:
     c = Cell.load(directory)
     out = pathlib.Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    binary = driver()
     if idle_seconds:
         i = await idle(c, out, idle_seconds)
         print(f"{c.name} idle {idle_seconds}s: platform {json.dumps(i['resources'].get('platform', {}))}", flush=True)
-    m = await mix(c, binary, world, out, rate, users, warmup, seconds)
+    if world is None:  # no seed or baseline data: nothing for the mix to work on
+        return
+    m = await mix(c, driver(), world, out, rate, users, warmup, seconds)
     d = m["driver"]
     print(f"{c.name} mix {rate}/s x {seconds}s: sent {d['sent']} ok {d['ok']} p95 {d['latency_ms']['P95']} ms; "
           f"issue to completed {m['completion']}", flush=True)

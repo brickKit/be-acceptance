@@ -9,7 +9,8 @@ cell: idle, then every edge of its chain at every operation and load.
 campaign <campaign.yaml> <output> runs every cell of the campaign, every repetition, unattended (resumable).
 world <cell> <file> writes the load driver's world for business chains (load -flow) from a seeded cell.
 digest <cell> <file> writes the cell's result digest once it has settled; compare <a> <b> lists what differs.
-chain <cell> <out> --world <file> [--rate 7] [--users 20] [--idle 600] [--warmup 300] [--seconds 900] measures a business-chain cell: idle, then the mix.
+chain <cell> <out> [--world <file>] [--rate 7] [--users 20] [--idle 600] [--warmup 300] [--seconds 900] measures a business-chain cell:
+idle, then the mix; without --world (a cell without seed or baseline data) only idle.
 baseline <cell> <file> builds the step 8 baseline data in a seeded cell and writes the mixed load's world (load -mix).
 tables <output> prints the record's tables from a campaign's results."""
 import asyncio
@@ -53,7 +54,7 @@ def main() -> int:
         from cells import chainrun
 
         a = argparse.ArgumentParser()
-        a.add_argument("cell"), a.add_argument("out"), a.add_argument("--world", required=True)
+        a.add_argument("cell"), a.add_argument("out"), a.add_argument("--world")
         a.add_argument("--rate", type=float, default=7), a.add_argument("--users", type=int, default=20)
         a.add_argument("--idle", type=int, default=600), a.add_argument("--warmup", type=int, default=300)
         a.add_argument("--seconds", type=int, default=900)
