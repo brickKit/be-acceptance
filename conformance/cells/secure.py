@@ -107,13 +107,12 @@ async def secure(directory: str | pathlib.Path) -> dict:
                                  "atoms": {d: {"kind": "all"} for d in DIMENSIONS.get(rt, [])}, "read_fields": [],
                                  "valid": {"from": start}})
         # every member is ready before its definitions are accepted (P8.24): one that started while the authorization
-        # member was unreachable submits them again within 30 s (and the claim above restarted that member), so until
-        # then its resource types are not defined. That refusal is final and binds its change key (security 08), so
-        # each attempt carries a new key.
-        for attempt in range(120):
-            r = await h.post("/api/authz/changes", json={"change_key": f"cell-load-user-{attempt}", "action": "grant.create",
+        # member was unreachable submits them again within 30 s (and the claim above restarted that member); until
+        # then the grant answers DEFINITION_PENDING, which leaves the change key free, so the same key is sent again
+        for _ in range(120):
+            r = await h.post("/api/authz/changes", json={"change_key": "cell-load-user", "action": "grant.create",
                                                          "unit": root, "grantee": user, "segments": segments})
-            if r.status_code != 400 or "is not defined" not in r.text:
+            if r.status_code != 503 or "DEFINITION_PENDING" not in r.text:
                 break
             await asyncio.sleep(1)
         if r.status_code != 200:
