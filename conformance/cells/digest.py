@@ -46,8 +46,10 @@ async def read(c: Cell) -> dict:
         await conn.close()
 
 
-async def settled(directory: str | pathlib.Path, every: float = 10, limit: float = 600) -> dict:
-    """The digest once two readings `every` seconds apart are the same (the work behind the last writes has run)."""
+async def settled(directory: str | pathlib.Path, every: float = 10, limit: float = 1800) -> dict:
+    """The digest once two readings `every` seconds apart are the same (the work behind the last writes has run). The
+    audit records of the baseline arrive in batches for several minutes (step 8: 376 to 588 s), so the limit is wide;
+    the items still changing are printed at each reading."""
     c = Cell.load(directory)
     last, waited = await read(c), 0.0
     while waited < limit:
@@ -55,7 +57,9 @@ async def settled(directory: str | pathlib.Path, every: float = 10, limit: float
         waited += every
         now = await read(c)
         if now == last:
+            print(f"settled after {waited:.0f} s", flush=True)
             return now
+        print(f"{waited:.0f} s: still changing: {', '.join(compare(last, now))}", flush=True)
         last = now
     raise RuntimeError(f"{c.name}: the digest kept changing for {limit:.0f} s")
 
