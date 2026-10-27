@@ -70,9 +70,8 @@ _found: dict[str, tuple[str, pathlib.Path]] = {}
 def cgroup_of(pid: int) -> pathlib.Path | None:
     """The cgroup v2 directory a process is in; a container's processes may sit in a leaf below its scope (crun puts
     them in "container"), so the scope is taken when the leaf has that name."""
-    try:
-        rel = pathlib.Path(f"/proc/{pid}/cgroup").read_text().strip().split("::", 1)[1]
-    except (FileNotFoundError, IndexError, ProcessLookupError):
+    rel = cgroup_path(pid)
+    if not rel:
         return None
     d = CGROUP / rel.lstrip("/")
     return d.parent if d.name == "container" else d
@@ -113,18 +112,35 @@ def container(name: str) -> Container | None:
     return cgroup(name, *f) if f else None
 
 
+IN_CONTAINER = re.compile(r"/(docker|libpod)-[0-9a-f]{64}\.scope(/|$)|/kubepods")
+
+
+def on_host(cgroup_path: str) -> bool:
+    """Whether a process with this cgroup path is the host's own, not inside a container: a minikube node runs its
+    own dockerd, containerd and shims under the node's scope, already counted with the node (Podman's conmon sits in
+    libpod-conmon-<id>.scope, on the host)."""
+    return not IN_CONTAINER.search(cgroup_path)
+
+
 def platform(engine: str = "docker") -> list[Proc]:
     return platforms()[engine]
 
 
 def platforms() -> dict[str, list[Proc]]:
-    """Each container platform's own processes, in one pass over /proc."""
+    """Each container platform's own processes on the host, in one pass over /proc."""
     out: dict[str, list[Proc]] = {k: [] for k in PLATFORMS}
     for entry in pathlib.Path("/proc").iterdir():
         if entry.name.isdigit():
             p = proc(int(entry.name))
             if p:
                 for k, rx in PLATFORMS.items():
-                    if rx.match(p.name):
+                    if rx.match(p.name) and on_host(cgroup_path(p.pid)):
                         out[k].append(p)
     return out
+
+
+def cgroup_path(pid: int) -> str:
+    try:
+        return pathlib.Path(f"/proc/{pid}/cgroup").read_text().strip().split("::", 1)[1]
+    except (FileNotFoundError, IndexError, ProcessLookupError):
+        return ""

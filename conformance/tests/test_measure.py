@@ -83,3 +83,16 @@ async def test_backlog_counts_what_no_one_acknowledged():
     finally:
         await tr.delete_stream(stream)
         await tr.close()
+
+
+def test_a_platform_counts_only_the_hosts_own_processes():
+    """A container platform's processes are the host's own; the same names inside a container (a minikube node runs
+    its own dockerd, containerd and shims) are that container's, counted with it, never twice (step 9, 9-01)."""
+    from measure.readings import on_host
+    node = "/system.slice/docker-" + "a" * 64 + ".scope"
+    assert on_host("/system.slice/docker.service")
+    assert on_host("/system.slice/containerd.service")
+    assert on_host("/user.slice/user-1000.slice/user@1000.service/user.slice/libpod-conmon-" + "b" * 64 + ".scope")
+    assert not on_host(node + "/system.slice/docker.service"), "the node's own dockerd"
+    assert not on_host(node + "/kubepods/burstable/pod1/" + "c" * 64), "a pod's process"
+    assert not on_host("/user.slice/user-1000.slice/user@1000.service/user.slice/libpod-" + "d" * 64 + ".scope/container")
