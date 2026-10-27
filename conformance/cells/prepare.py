@@ -257,7 +257,9 @@ PG_DATABASE: {c.database}
 OBJECT_STORE_URL: http://{c.base_host}:9000
 OBJECT_STORE_BUCKET: be-acceptance
 DEPLOYMENT_ID: {c.deployment}
-""" + ("""IAM_ISSUER: $endpoint:infra/iam-casdoor
+""" + ("""# the tokens' iss is an identifier, the same string for every component wherever it runs: a $endpoint resolves
+# per caller (a service name in a container, localhost:port on this machine), so LD and LP would refuse the tokens
+IAM_ISSUER: https://iam.be-acceptance.invalid
 IAM_JWKS_URL: $endpoint:infra/iam-casdoor/api/iam/jwks
 AUTHZ_GRPC_URL: $endpoint:infra/authz:grpc
 AUDIT_GRPC_URL: $endpoint:infra/audit:grpc

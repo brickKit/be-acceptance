@@ -30,36 +30,37 @@ def brickkit(d: pathlib.Path, *args: str, stdin: str = "") -> str:
 
 
 def deploy_file(name: str, shells: dict[str, list[str]], alone: list[str], extra: list[str] = (),
-                kept: list[str] = (), row: str = "D") -> str:
+                kept: list[str] = (), row: str = "D", local: frozenset[str] = frozenset()) -> str:
     """The cell's deploy file; kept are the versions brickkit.yaml keeps for a dependent (id@version, requiredBy):
     each needs its own entry, run alone and not exposed. The row picks the target: Docker and Podman map each
     component's user surface to host port 10000 + its port; Kubernetes exposes nothing (the cell adds NodePort
-    Services that the minikube node publishes on the same host ports, cells/kube.py); processes on this machine (L)
-    listen on those host ports themselves."""
-    target = {"P": "podman", "K": "k8s"}.get(row, "docker")
+    Services that the minikube node publishes on the same host ports, cells/kube.py); what runs on this machine (local:
+    every shell and component in the L row, the named ones in LD and LP) listens on its own port, and
+    cells/localrun.py forwards the host port to it."""
+    target = {"P": "podman", "LP": "podman", "K": "k8s"}.get(row, "docker")
     out = [f"# deploy.yaml — cell {name}; written by be-acceptance/conformance/cells/create.py from cell.yaml",
            f"target: {target}"]
     if row == "K":
         out += ["k8s:", "  context: bek", f"  namespace: {name.lower()}", "  createNamespace: true"]
     out += ["", "components:"]
 
-    def place(port: int, indent: str) -> list[str]:
+    def place(what: str, port: int, indent: str) -> list[str]:
         if row == "K":
             return []
-        if row == "L":  # on its own port; cells/localrun.py forwards 10000 + port to it, as Docker's proxy does
+        if what in local:  # on its own port; cells/localrun.py forwards 10000 + port to it, as Docker's proxy does
             return [f"{indent}mode: local"]
         return [f"{indent}expose: true", f"{indent}exposePort: {HOST_BAND + port}"]
     for shell, members in shells.items():
-        out += [f"  - id: {shell}", *place(SHELL_PORTS[shell], "    ")]
+        out += [f"  - id: {shell}", *place(shell, SHELL_PORTS[shell], "    ")]
         hosted = [*members, *(extra if shell == next(iter(shells)) else [])]
         if hosted:
             out.append("    members:")
             for m in hosted:
                 out.append(f"      - id: {m}")
-                if m in PORTS and row not in ("K", "L"):
-                    out += place(PORTS[m][0], "        ")
+                if m in PORTS and row != "K" and shell not in local:  # a member of a local shell: in its process
+                    out += place(m, PORTS[m][0], "        ")
     for p in alone:
-        out += [f"  - id: {p}", *place(PORTS[p][0], "    ")]
+        out += [f"  - id: {p}", *place(p, PORTS[p][0], "    ")]
     out += [f"  - id: {k}" for k in kept]
     return "\n".join(out) + "\n"
 
@@ -89,24 +90,23 @@ def create(directory: str | pathlib.Path) -> None:
     unhosted = [c for c in added if c not in placed]
     # a project lists exactly what its deploy file runs: compiled-in members this cell does not host are removed
     row = spec.get("row", "D")
-    (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, [a.split("@")[0] for a in alone], unhosted, kept,
-                                               row))
+    ids = [a.split("@")[0] for a in alone]
+    local = frozenset([*shells, *ids] if row == "L" else [x.split("@")[0] for x in spec.get("local") or []])
+    (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, unhosted, kept, row, local))
     for c in unhosted:
         brickkit(d, "remove", c)
-    (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, [a.split("@")[0] for a in alone], kept=kept,
-                                               row=row))
-    if row == "L":  # mode: local runs from source: clone each component at its version into components/
+    (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, kept=kept, row=row, local=local))
+    if local:  # mode: local runs from source: clone each local shell and component at its version into components/
         for comp in yaml.safe_load(bk.read_text())["components"]:
-            brickkit(d, "add", f"{comp['id']}@{comp['version']}", "--yes", "--repo")
+            if comp["id"] in local:
+                brickkit(d, "add", f"{comp['id']}@{comp['version']}", "--yes", "--repo")
         # adding a shell's source brings its compiled-in members back: the ones this cell does not host go again
         back = [c["id"] for c in yaml.safe_load(bk.read_text())["components"] if c["id"] in unhosted]
         if back:
-            (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, [a.split("@")[0] for a in alone], back,
-                                                       kept, row))
+            (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, back, kept, row, local))
             for c in back:
                 brickkit(d, "remove", c)
-            (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, [a.split("@")[0] for a in alone],
-                                                       kept=kept, row=row))
+            (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, kept=kept, row=row, local=local))
     gi = d / ".gitignore"
     gi.write_text(gi.read_text() + "\n# Generated by cells/create.py from cell.yaml: only cell.yaml is the cell's source\n"
                   "AGENTS.md\nCLAUDE.md\nshell/\n")

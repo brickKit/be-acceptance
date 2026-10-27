@@ -1,5 +1,6 @@
-"""The local row (L, step 9): every component and shell runs as a process on this machine (BrickKit's mode: local),
-started from its cloned source and watched by a `brickkit up` session in the foreground. This module starts that
+"""Processes on this machine (step 9): in the L row every component and shell, in the LD and LP rows the named ones
+(the rest in Docker or Podman), run as processes from their cloned source (BrickKit's mode: local), watched by a
+`brickkit up` session in the foreground, which starts the containers too. This module starts that
 session in the background and waits for the processes, stops it (SIGINT, as Ctrl+C), forwards the host ports the
 other rows use (10000 + port, where Docker's own proxy sits) to the processes' own ports, and finds each process for
 the sampler.
@@ -38,10 +39,11 @@ def sessions() -> list[int]:
 
 
 def ports(c: Cell) -> dict[str, int]:
-    """Each process's own port: a shell's, or a component's when it runs alone (members listen in their shell's
-    process on their own ports too)."""
-    out = {s: SHELL_PORTS[s] for s in c.shells}
-    out |= {p: PORTS[p][0] for p in c.placed}
+    """Each process on this machine and its own port: a local shell's, or a component's when it runs alone (members
+    listen in their shell's process on their own ports too). The rest of an LD or LP cell is in containers."""
+    out = {s: SHELL_PORTS[s] for s in c.shells if s in c.local}
+    out |= {m: PORTS[m][0] for s in out.copy() for m in c.shells[s]}
+    out |= {p: PORTS[p][0] for p in c.alone if p in c.local}
     return out
 
 
@@ -72,7 +74,8 @@ def up(directory: str | pathlib.Path, log: str | pathlib.Path, timeout: float = 
         subprocess.Popen(["brickkit", "up"], cwd=c.dir, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                          start_new_session=True)
     end = time.monotonic() + timeout
-    want = ports(c)
+    # the processes on their own ports; in LD and LP the containers too, on their host ports
+    want = ports(c) | {x: c.host_port(x) for x in [*c.shells, *c.alone] if x not in c.local}
     while time.monotonic() < end:
         if not sessions():
             raise RuntimeError(f"brickkit up ended before every process was healthy; see {log}")

@@ -73,7 +73,7 @@ async def secure(directory: str | pathlib.Path) -> dict:
     _, admin = await token(iam, ADMIN, password)
     _, user = await token(iam, LOAD_USER, password)
     claim(c, admin)
-    if c.row == "L":  # a new mode: local session: the processes restart with the claim
+    if c.has_local:  # a new mode: local session: the processes (and in LD, LP the containers) restart with the claim
         from cells import localrun
         localrun.up(c.dir, c.dir / ".brickkit" / "local-session.log")
     else:

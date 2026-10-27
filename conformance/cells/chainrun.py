@@ -24,18 +24,21 @@ STREAMED = ("mdm/org", "mdm/currency", "mdm/partner", "mdm/product", "erp/invent
 def containers(c: Cell) -> list[str]:
     """Every component container, and Casdoor behind the identity member: the whole deployment needs it, so it counts
     with the base resources (the sampler adds PostgreSQL, NATS and object storage itself)."""
-    return sorted({c.container_of(p) for p in c.placed} | ({"be-casdoor"} if "infra/iam-casdoor" in c.placed else set()))
+    hosts = {next((s for s, ms in c.shells.items() if p in ms), p) for p in c.placed}
+    return sorted({c.container_of(h) for h in hosts if h not in c.local}
+                  | ({"be-casdoor"} if "infra/iam-casdoor" in c.placed else set()))
 
 
 def window(c: Cell) -> Window:
-    """The sampler of a cell: its containers on Docker and Podman; on Kubernetes its pods and the minikube node, on
-    the local row its processes (cells/units.py), with Casdoor and the base resources as on every row."""
+    """The sampler of a cell: its containers on Docker and Podman; on Kubernetes its pods and the minikube node; its
+    processes on this machine (cells/units.py) in the L row, and in LD and LP next to its containers; with Casdoor
+    and the base resources as on every row."""
     if c.row == "K":
         from cells.units import kube_units
         return Window(["be-casdoor"], units=kube_units(c))
-    if c.row == "L":
+    if c.has_local:
         from cells.units import local_units
-        return Window(["be-casdoor"], units=local_units(c))
+        return Window(containers(c), units=local_units(c))
     return Window(containers(c))
 
 
