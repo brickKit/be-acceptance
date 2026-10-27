@@ -140,6 +140,16 @@ class Cell:
         version = self.versions[host]
         return f"brickkit-{self.project}-{host.replace('/', '-')}-{version.replace('.', '-')}-1"
 
+    def unit_of(self, component: str) -> str:
+        """The sampler's reading that holds a component (in its shell's process when it is a member): the container on
+        Docker and Podman, the pod on Kubernetes, the process on this machine (cells/units.py, cells/localrun.py)."""
+        host = next((s for s, ms in self.shells.items() if component in ms), component)
+        if host in self.local:
+            return f"proc:{host}"
+        if self.row == "K":
+            return f"pod:{host.replace('/', '-')}-{self.versions[host].replace('.', '-')}"
+        return self.container_of(host)
+
     @property
     def project(self) -> str:
         return self.name.lower()

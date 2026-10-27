@@ -21,26 +21,54 @@ def med(xs: list[float], unit: float = 1.0, digits: int = 1) -> str:
     return f"{m:.{digits}f} ({min(xs):.{digits}f}–{max(xs):.{digits}f})"
 
 
+PLATFORM_UNITS = ("minikube-node", "local-platform")
+
+
+def readings(res: dict) -> dict[str, dict]:
+    """Every component reading of a sample, by name: a container's process figures (D, P, and the containers of LD
+    and LP), a pod's cgroup (K), a process on this machine (L, and the local part of LD and LP); the base resources
+    (be-*) and the platforms' units are left out."""
+    out = {k: v["process"] for k, v in res.get("containers", {}).items() if not k.startswith("be-")}
+    out |= {k: v for k, v in (res.get("units") or {}).items() if k not in PLATFORM_UNITS}
+    return out
+
+
+def platform_of(row: str, res: dict) -> tuple[float, float]:
+    """The row's own platform (memory, cores): Docker's daemons (D, LD), Podman's helpers (P, LP), the minikube node
+    minus the pods (K), the go run / uv wrappers (L); the processes' readings, no page cache (cells/r9-summary.py in
+    the assembly project splits the same way)."""
+    plats, units = res.get("platforms") or {"docker": res["platform"]}, res.get("units") or {}
+    if row == "K":
+        pods = [v for k, v in units.items() if k.startswith("pod:")]
+        node = units["minikube-node"]
+        return (node["memory_median"] - sum(v["memory_median"] for v in pods),
+                node["cores"] - sum(v["cores"] for v in pods))
+    if row == "L":
+        u = units["local-platform"]
+        return (u["memory_median"], u["cores"])
+    v = plats["podman" if row in ("P", "LP") else "docker"]
+    return (v["memory_median"], v["cores"])
+
+
 def runs(root: pathlib.Path) -> list[pathlib.Path]:
     return sorted(p for p in root.iterdir() if p.is_dir() and p.name.startswith("run"))
 
 
 def base_costs(root: pathlib.Path) -> str:
     rows, shells = [], {}
-    cells = sorted({c.name for r in runs(root) for c in r.iterdir() if c.name.startswith("D-base")})
+    cells = sorted({c.name for r in runs(root) for c in r.iterdir() if "-base-" in c.name})
     for cell in cells:
         per: dict[str, dict[str, list[float]]] = {}
         for r in runs(root):
             f = r / cell / "idle.json"
             if not f.exists():
                 continue
-            for name, v in json.loads(f.read_text())["resources"]["containers"].items():
-                if name.startswith("be-"):
-                    continue  # base resources: reported with the whole stack
+            res = json.loads(f.read_text())["resources"]
+            for name, v in readings(res).items():  # base resources: reported with the whole stack
                 d = per.setdefault(name, {"rss": [], "cores": [], "cg": []})
-                d["rss"].append(v["process"]["memory_median"])
-                d["cores"].append(v["process"]["cores"])
-                d["cg"].append(v["cgroup"]["memory_median"])
+                d["rss"].append(v["memory_median"])
+                d["cores"].append(v["cores"])
+                d["cg"].append(res["containers"][name]["cgroup"]["memory_median"] if name in res["containers"] else None)
         for name, d in per.items():
             rows.append(f"| {cell} | `{name}` | {med(d['rss'], MIB)} | {med(d['cg'], MIB)} | {med(d['cores'], 1, 3)} |")
             if "shell" in cell:
@@ -53,7 +81,7 @@ def base_costs(root: pathlib.Path) -> str:
             prev = None
             for n in sorted(by):
                 inc = "—" if prev is None else f"{(by[n] - by[prev]) / (n - prev):.1f}"
-                out.append(f"| {kind.replace('D-base-', '')} | {n} | {by[n]:.1f} | {inc} |")
+                out.append(f"| {kind.replace('-base-', ' ')} | {n} | {by[n]:.1f} | {inc} |")
                 prev = n
     return "\n".join(out)
 
@@ -75,12 +103,12 @@ def paths(root: pathlib.Path) -> str:
                 elif drv.get("hop_ms"):
                     d["p50"].append(drv["hop_ms"]["P50"]), d["p99"].append(drv["hop_ms"]["P99"])
                 d["thr"].append(drv.get("throughput")), d["err"].append(drv.get("error_rate"))
-            res, where = o["resources"]["containers"], o["containers"]
+            res, where = readings(o["resources"]), o["containers"]
             # in one process (both in one shell) the CPU cannot be split: it is reported once, as the caller's
             for role, comp in (("cpu_caller", o["caller"]), ("cpu_callee", o["callee"])):
                 ct = next(c for c, ms in where.items() if comp in ms)
                 if ct in res and (role == "cpu_caller" or len(where) == 2):
-                    d[role].append(res[ct]["process"].get("cpu_seconds_per_1000"))
+                    d[role].append(res[ct].get("cpu_seconds_per_1000"))
     out = ["| 格 | 路径 | 操作 | 负载 | p50 ms | p99 ms | 吞吐 /s | 持续速率 /s | 每千次 CPU 秒（调用方 / 被调方） | 错误率 |",
            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for (cell, caller, callee, op, load), d in sorted(table.items()):
@@ -102,12 +130,11 @@ def stack(root: pathlib.Path) -> str:
             if not f.exists():
                 continue
             res = json.loads(f.read_text())["resources"]
-            cs = res["containers"]
-            comp.append((sum(v["process"]["memory_median"] for k, v in cs.items() if not k.startswith("be-")),
-                         sum(v["process"]["cores"] for k, v in cs.items() if not k.startswith("be-"))))
+            cs, mine = res["containers"], readings(res).values()
+            comp.append((sum(v["memory_median"] for v in mine), sum(v["cores"] for v in mine)))
             base.append((sum(v["cgroup"]["memory_median"] for k, v in cs.items() if k.startswith("be-")),
                          sum(v["cgroup"]["cores"] for k, v in cs.items() if k.startswith("be-"))))
-            plat.append((res["platform"]["memory_median"], res["platform"]["cores"]))
+            plat.append(platform_of(json.loads(f.read_text()).get("row", "D"), res))
             conns.append(sum(v["peak"] for k, v in (res.get("db_connections") or {}).items() if k != "postgres"))
         if comp:
             fmt = lambda xs: f"{med([x[0] for x in xs], MIB, 0)} / {med([x[1] for x in xs], 1, 3)}"  # noqa: E731

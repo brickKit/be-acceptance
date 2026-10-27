@@ -113,13 +113,19 @@ async def leftovers(c: Cell) -> dict:
     return out
 
 
+def window_of(c: Cell) -> Window:
+    from cells.chainrun import window
+    return window(c)
+
+
 async def measure(c: Cell, binary: pathlib.Path, caller: str, callee: str, op: str, load: str, out: pathlib.Path,
                   warmup: int, seconds: int) -> dict:
     settled = await quiet(c)
     target = f"http://127.0.0.1:{c.host_port(caller)}"
     flags = [*OPS[op], *LOADS[load], "-warmup", f"{warmup}s", "-duration", f"{seconds}s", "-step-time", f"{seconds // 3}s"]
-    containers = sorted({c.container_of(caller), c.container_of(callee)})
-    w, stop = Window(containers), asyncio.Event()
+    # the whole cell, as on its row (containers, pods or processes); the tables read the caller's and callee's units
+    units = sorted({c.unit_of(caller), c.unit_of(callee)})
+    w, stop = window_of(c), asyncio.Event()
     creds = ["-credentials", str(c.dir / ".secrets" / "load-user.json")] if c.secured else []
     proc = await asyncio.create_subprocess_exec(str(binary), "-target", target, *flags, *creds, "-out", str(out / "driver.json"))
     await asyncio.sleep(warmup)
@@ -131,7 +137,7 @@ async def measure(c: Cell, binary: pathlib.Path, caller: str, callee: str, op: s
     sent = result.get("sent") or sum(s["sent"] for s in result.get("steps", []))
     record = {"cell": c.name, "caller": caller, "callee": callee, "op": op, "load": load, "flags": flags,
               "before": settled,
-              "containers": {x: [p for p in (caller, callee) if c.container_of(p) == x] for x in containers},
+              "containers": {x: [p for p in (caller, callee) if c.unit_of(p) == x] for x in units},
               "resources": w.figures(requests=sent), "driver": result}
     if OPS[op][1] == "write" and "writes" in result:
         await asyncio.sleep(5)  # forwarding, the claim check, the relay
@@ -146,10 +152,10 @@ async def measure(c: Cell, binary: pathlib.Path, caller: str, callee: str, op: s
 
 async def idle(c: Cell, out: pathlib.Path, seconds: int) -> dict:
     await quiet(c)
-    containers = sorted({c.container_of(p) for p in [*c.probes, *c.shells]})
-    w = Window(containers)
+    w = window_of(c)
     await w.run(seconds, db_dsn(c))
-    record = {"cell": c.name, "idle_seconds": seconds, "resources": w.figures()}
+    record = {"cell": c.name, "row": c.row, "idle_seconds": seconds, "resources": w.figures(),
+              "units": {p: c.unit_of(p) for p in c.probes}}
     (out / "idle.json").write_text(json.dumps(record, indent=2))
     return record
 
