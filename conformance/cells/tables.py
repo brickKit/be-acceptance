@@ -66,17 +66,21 @@ def base_costs(root: pathlib.Path) -> str:
             res = json.loads(f.read_text())["resources"]
             for name, v in readings(res).items():  # base resources: reported with the whole stack
                 d = per.setdefault(name, {"rss": [], "cores": [], "cg": []})
-                d["rss"].append(v["memory_median"])
                 d["cores"].append(v["cores"])
-                d["cg"].append(res["containers"][name]["cgroup"]["memory_median"] if name in res["containers"] else None)
+                if name.startswith("pod:"):  # a pod is read as its cgroup: no process RSS of its own
+                    d["rss"].append(None), d["cg"].append(v["memory_median"])
+                else:
+                    d["rss"].append(v["memory_median"])
+                    d["cg"].append(res["containers"][name]["cgroup"]["memory_median"] if name in res["containers"] else None)
         for name, d in per.items():
             rows.append(f"| {cell} | `{name}` | {med(d['rss'], MIB)} | {med(d['cg'], MIB)} | {med(d['cores'], 1, 3)} |")
-            if "shell" in cell:
+            if "shell" in cell:  # per member: RSS, or a pod's cgroup where there is no RSS
                 kind, n = cell.rsplit("-", 1)
-                shells.setdefault(kind, {})[int(n)] = statistics.median(d["rss"]) / MIB
+                xs = [x for x in d["rss"] if x is not None] or [x for x in d["cg"] if x is not None]
+                shells.setdefault(kind, {})[int(n)] = statistics.median(xs) / MIB
     out = ["| 格 | 进程 | 常驻内存 MiB | cgroup 内存 MiB | 空闲 CPU 核 |", "| --- | --- | --- | --- | --- |", *rows]
     if shells:
-        out += ["", "| 外壳 | 承载 | 常驻内存 MiB | 比上一档每多一个成员 MiB |", "| --- | --- | --- | --- |"]
+        out += ["", "| 外壳 | 承载 | 内存 MiB（常驻；K 行是 Pod 的 cgroup） | 比上一档每多一个成员 MiB |", "| --- | --- | --- | --- |"]
         for kind, by in sorted(shells.items()):
             prev = None
             for n in sorted(by):
