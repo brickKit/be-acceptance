@@ -77,6 +77,15 @@ def cgroup_of(pid: int) -> pathlib.Path | None:
     return d.parent if d.name == "container" else d
 
 
+def scope_of(d: pathlib.Path | None, cid: str) -> pathlib.Path | None:
+    """The container's own scope (docker-<id>.scope, libpod-<id>.scope) at or above where its process is: a main
+    process may have moved itself below it (the minikube node's systemd sits in init.scope, its pods beside it)."""
+    for a in [d, *(d.parents if d else [])]:
+        if a is not None and cid in a.name:
+            return a
+    return d
+
+
 def find(name: str) -> tuple[str, pathlib.Path] | None:
     """A container's ID and cgroup directory, from Docker or Podman; remembered while the container lives. The
     directory is where the container's main process is, so a container under another slice than system.slice (Docker's
@@ -87,7 +96,7 @@ def find(name: str) -> tuple[str, pathlib.Path] | None:
         r = subprocess.run([engine, "inspect", "-f", "{{.Id}} {{.State.Pid}}", name], capture_output=True, text=True)
         parts = r.stdout.split()
         if r.returncode == 0 and len(parts) == 2 and parts[1] != "0":
-            d = cgroup_of(int(parts[1]))
+            d = scope_of(cgroup_of(int(parts[1])), parts[0])
             if d and d.exists():
                 _found[name] = (parts[0], d)
                 return _found[name]

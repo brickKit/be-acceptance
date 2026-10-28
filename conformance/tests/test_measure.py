@@ -115,3 +115,21 @@ def test_a_docker_container_is_found_where_its_process_is(tmp_path, monkeypatch)
         return subprocess.CompletedProcess(cmd, 0 if ok else 125, f"{cid} 4242\n" if ok else "", "")
     monkeypatch.setattr(readings.subprocess, "run", run)
     assert readings.find("be-postgres") == (cid, scope)
+
+
+def test_a_container_whose_init_moved_itself_is_found_at_its_scope(tmp_path, monkeypatch):
+    """The minikube node's main process is systemd, which moves itself into init.scope inside the container's cgroup;
+    the container is the docker-<id>.scope above it, where the node's pods are (step 10, B7 smoke)."""
+    from measure import readings
+    cid = "f" * 64
+    scope = tmp_path / "be.slice" / "be-cap.slice" / f"docker-{cid}.scope"
+    (scope / "init.scope").mkdir(parents=True)
+    monkeypatch.setattr(readings, "CGROUP", tmp_path)
+    monkeypatch.setattr(readings, "cgroup_path", lambda pid: f"/be.slice/be-cap.slice/docker-{cid}.scope/init.scope")
+    monkeypatch.setattr(readings, "_found", {})
+
+    def run(cmd, **kw):
+        ok = cmd[0] == "docker"
+        return subprocess.CompletedProcess(cmd, 0 if ok else 125, f"{cid} 4242\n" if ok else "", "")
+    monkeypatch.setattr(readings.subprocess, "run", run)
+    assert readings.find("bek") == (cid, scope)

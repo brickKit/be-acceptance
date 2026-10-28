@@ -61,11 +61,16 @@ class Cell:
     # connections go through it, the migrations straight to the database
     pooler: str = ""
     baseline_scale: int = 1  # the baseline data times this (step 10, B5: 2)
+    # where the base resources run: "" in Docker on this machine (every row), "cluster" in the K row's own cluster,
+    # namespace be-base, behind one Service (step 10, B7)
+    base: str = ""
 
     @property
     def base_host(self) -> str:
         """How the components reach the base resources' host ports."""
         # a mode: local process gets host.docker.internal rewritten to localhost by BrickKit
+        if self.base == "cluster":
+            return "base.be-base.svc.cluster.local"
         return "host.minikube.internal" if self.row == "K" else "host.docker.internal"
 
     @property
@@ -88,7 +93,9 @@ class Cell:
         c = Cell(d, spec["cell"], spec.get("chain") or [], spec.get("database", "be_experiment"), spec.get("bus", "jetstream"),
                  shells=shells, alone=alone, concurrency=int(spec.get("subscription_concurrency", 1)),
                  row=row, local=local, pooler=spec.get("pooler", ""),
-                 baseline_scale=int(spec.get("baseline_scale", 1)))
+                 baseline_scale=int(spec.get("baseline_scale", 1)), base=spec.get("base", ""))
+        if c.base not in ("", "cluster") or (c.base == "cluster" and c.row != "K"):
+            raise ValueError(f"{c.name}: base {c.base!r}: only the K row runs its base resources in the cluster")
         if c.pooler not in ("", "pgbouncer"):
             raise ValueError(f"{c.name}: unknown pooler {c.pooler!r} (pgbouncer or none)")
         stray = [x for x in c.local if x not in c.shells and x not in c.alone]

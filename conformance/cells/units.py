@@ -29,14 +29,9 @@ def node_scope() -> pathlib.Path | None:
     return f[1] if f else None
 
 
-def kube_units(c: Cell) -> dict:
-    """One unit per pod of the cell (named by its Deployment), and the node."""
-    node = node_scope()
-    if node is None:
-        raise RuntimeError("the minikube node (profile bek) is not running")
-    pods = json.loads(subprocess.run([*KUBE, "get", "pods", "-n", c.project, "-o", "json"], capture_output=True,
-                                     text=True, check=True).stdout)["items"]
-    units = {"minikube-node": CgroupUnit(node)}
+def pod_units(node: pathlib.Path, pods: list[dict], prefix: str) -> dict:
+    """One unit per running pod, named <prefix>:<its app label or Deployment>, read from its cgroup under the node."""
+    out = {}
     for p in pods:
         if p["status"].get("phase") != "Running":
             continue
@@ -45,7 +40,24 @@ def kube_units(c: Cell) -> dict:
         if found is None:
             raise RuntimeError(f"no cgroup for pod {p['metadata']['name']} under {node}")
         owner = p["metadata"].get("labels", {}).get("app") or p["metadata"]["name"].rsplit("-", 2)[0]
-        units[f"pod:{owner}"] = CgroupUnit(found)
+        out[f"{prefix}:{owner}"] = CgroupUnit(found)
+    return out
+
+
+def pods_in(namespace: str) -> list[dict]:
+    return json.loads(subprocess.run([*KUBE, "get", "pods", "-n", namespace, "-o", "json"], capture_output=True,
+                                     text=True, check=True).stdout)["items"]
+
+
+def kube_units(c: Cell) -> dict:
+    """One unit per pod of the cell (pod:<name>), the base resources' pods when they run in the cluster (base:<name>,
+    namespace be-base, step 10 B7), and the node."""
+    node = node_scope()
+    if node is None:
+        raise RuntimeError("the minikube node (profile bek) is not running")
+    units = {"minikube-node": CgroupUnit(node), **pod_units(node, pods_in(c.project), "pod")}
+    if c.base == "cluster":
+        units |= pod_units(node, pods_in("be-base"), "base")
     return units
 
 
