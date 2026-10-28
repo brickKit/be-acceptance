@@ -1,6 +1,7 @@
 """Step 8 (T8.2): the experiment plan's baseline data in a running, seeded cell, through the components' user surfaces
 — two legal entities (CN01, ES01), 500 customers, 2,000 products in stock, 20,000 historical orders spread over the
-year and over every state (draft, cancelled, confirmed, delivered, billed) — and the mixed load's world file.
+year and over every state (draft, cancelled, confirmed, delivered, billed) — and the mixed load's world file. A cell's
+baseline_scale multiplies every size (Sizes; step 10, B5).
 
 Every write has a fixed identity: products by code, the rest by idempotency key (baseline:...). A rerun finds what is
 there and makes only what is missing, so two runs end with the same rows; an interrupted run is picked up by the next.
@@ -21,6 +22,18 @@ import httpx
 from cells.spec import Cell
 
 ORDERS, GOODS, CUSTOMERS = 20_000, 2_000, {"CN01": 400, "ES01": 100}
+
+
+@dataclass(frozen=True)
+class Sizes:
+    """How much baseline data: the plan's sizes times the cell's baseline_scale (step 10, B5 doubles it)."""
+    orders: int
+    goods: int
+    customers: dict[str, int]
+
+    @staticmethod
+    def of(scale: int) -> Sizes:
+        return Sizes(ORDERS * scale, GOODS * scale, {le: n * scale for le, n in CUSTOMERS.items()})
 SHARE = {"CN01": 0.8, "ES01": 0.2}
 STATES = {"billed": 0.40, "confirmed": 0.25, "delivered": 0.10, "draft": 0.15, "cancelled": 0.10}
 CURRENCY = {"CN01": "CNY", "ES01": "EUR"}
@@ -47,17 +60,18 @@ class PlannedOrder:
     business_date: str
 
 
-def order_plan(customers: dict[str, int] = CUSTOMERS, goods: int = GOODS) -> list[PlannedOrder]:
-    """The 20,000 orders, fixed: legal entity by share, state by share (exact counts, shuffled with a fixed seed),
-    CN01 orders over the sales seed's department and owner pairs, 1-3 distinct goods, dates over 2026-01-01..10-24."""
+def order_plan(customers: dict[str, int] = CUSTOMERS, goods: int = GOODS, orders: int = ORDERS) -> list[PlannedOrder]:
+    """The orders (20,000 unscaled), fixed: legal entity by share, state by share (exact counts, shuffled with a fixed
+    seed), CN01 orders over the sales seed's department and owner pairs, 1-3 distinct goods, dates over
+    2026-01-01..10-24."""
     rng = random.Random(20261025)
-    states = [s for s, share in STATES.items() for _ in range(round(ORDERS * share))]
+    states = [s for s, share in STATES.items() for _ in range(round(orders * share))]
     rng.shuffle(states)
-    les = [le for le, share in SHARE.items() for _ in range(round(ORDERS * share))]
+    les = [le for le, share in SHARE.items() for _ in range(round(orders * share))]
     rng.shuffle(les)
     days = 297  # 2026-01-01 .. 2026-10-24
     out = []
-    for n in range(ORDERS):
+    for n in range(orders):
         le = les[n]
         dept, owner = CN_SLOTS[n % len(CN_SLOTS)] if le == "CN01" else ("", "es")
         lines = tuple(rng.sample(range(goods), 1 + n % 3))
@@ -90,6 +104,7 @@ class Session:
 class Baseline:
     def __init__(self, c: Cell, h: httpx.AsyncClient, bob: Session):
         self.c, self.h, self.bob = c, h, bob
+        self.sizes = Sizes.of(c.baseline_scale)
         self.failures: Counter = Counter()
         self.made: Counter = Counter()  # writes answered: made now, or found by their key from an earlier run
         self.gate = asyncio.Semaphore(CONCURRENCY)
@@ -156,8 +171,8 @@ class Baseline:
             if out:
                 have[code] = out
                 self.made["products"] += 1
-        await asyncio.gather(*(self.bounded(make(i)) for i in range(GOODS)))
-        mine = [have[f"BL-{i:04d}"] for i in range(GOODS) if f"BL-{i:04d}" in have]
+        await asyncio.gather(*(self.bounded(make(i)) for i in range(self.sizes.goods)))
+        mine = [have[f"BL-{i:04d}"] for i in range(self.sizes.goods) if f"BL-{i:04d}" in have]
 
         async def open_in(p: dict, le: str) -> None:
             if any(a["legal_entity_id"] == les[le] for a in p.get("availability") or []):
@@ -199,7 +214,7 @@ class Baseline:
         return whs
 
     async def customers(self, les: dict[str, str]) -> dict[str, list[str]]:
-        out: dict[str, list[str]] = {le: [None] * n for le, n in CUSTOMERS.items()}
+        out: dict[str, list[str]] = {le: [None] * n for le, n in self.sizes.customers.items()}
 
         async def make(le: str, i: int) -> None:
             country = le[:2]
@@ -217,7 +232,7 @@ class Baseline:
                     key=f"baseline:limit:{le}:{i}", what="credit limit") is None:
                 return
             out[le][i] = pid
-        await asyncio.gather(*(self.bounded(make(le, i)) for le, n in CUSTOMERS.items() for i in range(n)))
+        await asyncio.gather(*(self.bounded(make(le, i)) for le, n in self.sizes.customers.items() for i in range(n)))
         return out
 
     # --- orders ---------------------------------------------------------------------------------------------------
@@ -286,9 +301,9 @@ async def build(directory: str | pathlib.Path, world_out: str | pathlib.Path) ->
         whs = await b.stock(les, goods)
         customers = await b.customers(les)
         steps = {"master data": round(time.monotonic() - started)}
-        if len(goods) < GOODS or any(None in v for v in customers.values()):
+        if len(goods) < b.sizes.goods or any(None in v for v in customers.values()):
             raise RuntimeError(f"master data incomplete: {len(goods)} goods; failures {dict(b.failures)}")
-        await asyncio.gather(*(b.bounded(b.order(o, les, depts, owners, customers, goods, whs)) for o in order_plan()))
+        await asyncio.gather(*(b.bounded(b.order(o, les, depts, owners, customers, goods, whs)) for o in order_plan(b.sizes.customers, b.sizes.goods, b.sizes.orders)))
         steps["orders"] = round(time.monotonic() - started) - steps["master data"]
     world = {
         "sales": b.url("erp/sales", ""), "billing": b.url("erp/billing", ""), "token_url": creds["token_url"],

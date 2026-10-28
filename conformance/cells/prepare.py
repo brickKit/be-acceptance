@@ -207,7 +207,8 @@ def security_configs(c: Cell) -> None:
     signing_key(sec / "iam" / "signing-key.pem")
     (sec / "authz-registry.tsv").write_text(registry(c))
     (sec / "authz-registry.tsv").chmod(0o644)
-    common = ["PG_HOST: $var:PG_HOST", "PG_PORT: $var:PG_PORT", "PG_DATABASE: $var:PG_DATABASE", "DEPLOYMENT_ID: $var:DEPLOYMENT_ID"]
+    common = ["PG_HOST: $var:PG_HOST", "PG_PORT: $var:PG_PORT", "PG_DATABASE: $var:PG_DATABASE", "DEPLOYMENT_ID: $var:DEPLOYMENT_ID",
+              *migration(c)]
 
     def db(comp: str) -> list[str]:
         s = schema_of(comp)
@@ -246,15 +247,52 @@ def security_configs(c: Cell) -> None:
             (cfg / f"{file_of(comp)}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
 
 
+def migration(c: Cell) -> list[str]:
+    """Behind a pooler a component's migrations connect to the database itself (PG_MIGRATION_HOST, _PORT)."""
+    return ["PG_MIGRATION_HOST: $var:PG_MIGRATION_HOST", "PG_MIGRATION_PORT: $var:PG_MIGRATION_PORT"] if c.pooler else []
+
+
+def pgbouncer(c: Cell) -> None:
+    """PgBouncer in transaction mode in front of the experiment database (step 10, B1), as its container reads it:
+    every component logs in as its own role, which PgBouncer looks up with the admin (auth_query), one pool per role
+    of 5 server connections (about what a shell member uses, step 9); protocol-level prepared statements on, as pgx
+    needs (0-12)."""
+    admin = urlsplit(need("BE_ACC_PG_ADMIN"))
+    d = c.dir / ".secrets" / "pgbouncer"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "pgbouncer.ini").write_text(f"""[databases]
+{c.database} = host=be-postgres port=5432 dbname={c.database}
+
+[pgbouncer]
+listen_addr = 0.0.0.0
+listen_port = 6432
+auth_type = scram-sha-256
+auth_file = /etc/pgbouncer/userlist.txt
+auth_user = {admin.username}
+pool_mode = transaction
+default_pool_size = 5
+max_client_conn = 1000
+max_prepared_statements = 200
+ignore_startup_parameters = extra_float_digits
+""")
+    (d / "userlist.txt").write_text(f'"{admin.username}" "{admin.password}"\n')
+    for f in d.iterdir():
+        f.chmod(0o644)  # read by the container's own user
+
+
 def configs(c: Cell) -> None:
     cfg = c.dir / "config"
     # a bus URL may carry credentials, so the component declares it secret: it is delivered from a file
     if c.bus == "jetstream":
         (c.dir / ".secrets" / "bus").write_text(f"nats://{c.base_host}:4222")
+    if c.pooler:
+        pgbouncer(c)
     (cfg / "vars.yaml").write_text(HEADER.format(cell=c.name) + f"""PG_HOST: {c.base_host}
-PG_PORT: "5432"
+PG_PORT: "{6432 if c.pooler else 5432}"
 PG_DATABASE: {c.database}
-OBJECT_STORE_URL: http://{c.base_host}:9000
+""" + (f"""PG_MIGRATION_HOST: {c.base_host}
+PG_MIGRATION_PORT: "5432"
+""" if c.pooler else "") + f"""OBJECT_STORE_URL: http://{c.base_host}:9000
 OBJECT_STORE_BUCKET: be-acceptance
 DEPLOYMENT_ID: {c.deployment}
 """ + ("""# the tokens' iss is an identifier, the same string for every component wherever it runs: a $endpoint resolves
@@ -273,7 +311,7 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
 """)
     for probe in c.probes:
         s, f = schema_of(probe), file_of(probe)
-        lines = [f"PG_HOST: $var:PG_HOST", "PG_PORT: $var:PG_PORT", "PG_DATABASE: $var:PG_DATABASE",
+        lines = [f"PG_HOST: $var:PG_HOST", "PG_PORT: $var:PG_PORT", "PG_DATABASE: $var:PG_DATABASE", *migration(c),
                  f"PG_USER: {s}_rw", f"PG_PASSWORD: file://.secrets/db/{s}_rw", f"PG_SCHEMA: {s}",
                  f"PG_OWNER_USER: {s}_owner", f"PG_OWNER_PASSWORD: file://.secrets/db/{s}_owner",
                  "BUS_URL: file://.secrets/bus", f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}",

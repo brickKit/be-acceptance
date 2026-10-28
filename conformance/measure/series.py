@@ -12,8 +12,9 @@ import asyncpg
 
 from measure import readings
 
-# the base resources read when they run; object storage is RustFS by default or SeaweedFS in its place
-BASE = ("be-postgres", "be-nats", "be-rustfs", "be-seaweedfs")
+# the base resources read when they run; object storage is RustFS by default or SeaweedFS in its place; PgBouncer
+# only in the cells with a pooler (step 10, B1)
+BASE = ("be-postgres", "be-nats", "be-rustfs", "be-seaweedfs", "be-pgbouncer")
 
 
 @dataclass

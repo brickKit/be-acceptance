@@ -57,6 +57,10 @@ class Cell:
     row: str = "D"
     # what runs as a process on this machine: shells and components running alone (every one in the L row)
     local: list[str] = field(default_factory=list)
+    # a connection pooler in front of PostgreSQL (step 10, B1): "" none, or "pgbouncer" (transaction mode); the running
+    # connections go through it, the migrations straight to the database
+    pooler: str = ""
+    baseline_scale: int = 1  # the baseline data times this (step 10, B5: 2)
 
     @property
     def base_host(self) -> str:
@@ -83,7 +87,10 @@ class Cell:
         local = [*shells, *alone] if row == "L" else [x.split("@")[0] for x in spec.get("local") or []]
         c = Cell(d, spec["cell"], spec.get("chain") or [], spec.get("database", "be_experiment"), spec.get("bus", "jetstream"),
                  shells=shells, alone=alone, concurrency=int(spec.get("subscription_concurrency", 1)),
-                 row=row, local=local)
+                 row=row, local=local, pooler=spec.get("pooler", ""),
+                 baseline_scale=int(spec.get("baseline_scale", 1)))
+        if c.pooler not in ("", "pgbouncer"):
+            raise ValueError(f"{c.name}: unknown pooler {c.pooler!r} (pgbouncer or none)")
         stray = [x for x in c.local if x not in c.shells and x not in c.alone]
         if stray:
             raise ValueError(f"{c.name}: local names what is neither a shell nor a component running alone: {stray}")
