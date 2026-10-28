@@ -96,3 +96,22 @@ def test_a_platform_counts_only_the_hosts_own_processes():
     assert not on_host(node + "/system.slice/docker.service"), "the node's own dockerd"
     assert not on_host(node + "/kubepods/burstable/pod1/" + "c" * 64), "a pod's process"
     assert not on_host("/user.slice/user-1000.slice/user@1000.service/user.slice/libpod-" + "d" * 64 + ".scope/container")
+
+
+def test_a_docker_container_is_found_where_its_process_is(tmp_path, monkeypatch):
+    """Docker's containers may sit under another slice than system.slice: with the daemon's cgroup-parent set to
+    be-cap.slice (step 10, B3 and B4) they are under /be.slice/be-cap.slice; the scope comes from the main process's
+    own cgroup, not from a fixed path."""
+    from measure import readings
+    cid = "e" * 64
+    scope = tmp_path / "be.slice" / "be-cap.slice" / f"docker-{cid}.scope"
+    scope.mkdir(parents=True)
+    monkeypatch.setattr(readings, "CGROUP", tmp_path)
+    monkeypatch.setattr(readings, "cgroup_path", lambda pid: f"/be.slice/be-cap.slice/docker-{cid}.scope")
+    monkeypatch.setattr(readings, "_found", {})
+
+    def run(cmd, **kw):  # only Docker knows the container
+        ok = cmd[0] == "docker"
+        return subprocess.CompletedProcess(cmd, 0 if ok else 125, f"{cid} 4242\n" if ok else "", "")
+    monkeypatch.setattr(readings.subprocess, "run", run)
+    assert readings.find("be-postgres") == (cid, scope)

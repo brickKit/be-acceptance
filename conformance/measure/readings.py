@@ -78,14 +78,16 @@ def cgroup_of(pid: int) -> pathlib.Path | None:
 
 
 def find(name: str) -> tuple[str, pathlib.Path] | None:
-    """A container's ID and cgroup directory, from Docker or Podman; remembered while the container lives."""
+    """A container's ID and cgroup directory, from Docker or Podman; remembered while the container lives. The
+    directory is where the container's main process is, so a container under another slice than system.slice (Docker's
+    cgroup-parent, step 10 B3 and B4) is found as well."""
     if name in _found and _found[name][1].exists():
         return _found[name]
     for engine in ("docker", "podman"):
         r = subprocess.run([engine, "inspect", "-f", "{{.Id}} {{.State.Pid}}", name], capture_output=True, text=True)
         parts = r.stdout.split()
         if r.returncode == 0 and len(parts) == 2 and parts[1] != "0":
-            d = CGROUP / "system.slice" / f"docker-{parts[0]}.scope" if engine == "docker" else cgroup_of(int(parts[1]))
+            d = cgroup_of(int(parts[1]))
             if d and d.exists():
                 _found[name] = (parts[0], d)
                 return _found[name]
