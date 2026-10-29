@@ -175,7 +175,7 @@ dependencies = [
 
 [[package]]
 name = "be-test-probe-py"
-version = "3.2.19"
+version = "3.2.20"
 source = { editable = "." }
 dependencies = [
     { name = "be-sdk" },

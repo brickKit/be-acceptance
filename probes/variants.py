@@ -24,23 +24,27 @@ ENV PORT={port}
 EXPOSE {port} {grpc}
 ENTRYPOINT ["/probe-go"]
 """,
-    "py": """# The Python probe built at its release tag (the code lives in probes/py); COMPONENT_ID picks this variant.
-FROM python:3.15.0-alpine AS build
+    "py": """# The Python probe built at its release tag (the code lives in probes/py); COMPONENT_ID picks this variant. The same
+# slim base as probes/py; wget for the platform's health check; no PORT (BrickKit sets it, CLI 1.10.1+).
+FROM python:3.15.0-slim-trixie AS build
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/uv
-RUN apk add --no-cache git && git clone -q --depth 1 --branch test-probe-py/{version} https://github.com/brickKit/be-acceptance /src \\
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* \\
+    && git clone -q --depth 1 --branch test-probe-py/{version} https://github.com/brickKit/be-acceptance /src \\
     && mkdir -p /app && cp -r /src/probes/py/. /app
 WORKDIR /app
 RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.15.0-alpine
+FROM python:3.15.0-slim-trixie
+RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/.venv /app/.venv
-ENV PATH=/app/.venv/bin:$PATH PORT={port}
+ENV PATH=/app/.venv/bin:$PATH
 EXPOSE {port} {grpc}
 ENTRYPOINT ["python", "-m", "probe_py"]
 """,
 }
 
-LOCAL = {"go": ("[go, run, ../go]", "[go, run, ../go, migrate]"),
+# go refuses `go run ../go` outside a module (a variant's directory holds only its manifest): run inside ../go
+LOCAL = {"go": ("[go, -C, ../go, run, .]", "[go, -C, ../go, run, ., migrate]"),
          "py": ("[uv, run, --project, ../py, python, -m, probe_py]",
                 "[uv, run, --project, ../py, python, -m, probe_py, migrate]")}
 

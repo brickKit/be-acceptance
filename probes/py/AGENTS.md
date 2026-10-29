@@ -11,7 +11,7 @@
 | `probe_py/__main__.py` | 单跑入口（`serve`、`migrate`），按 `COMPONENT_ID` 选变体；外壳不加载它 |
 | `probe_py/migrations/` | 迁移 |
 | `scripts/config_schema.py` | 从 SDK 的键清单生成 `component.yaml` 的 `configSchema` |
-| `Dockerfile` | 镜像（与宿主机同版本的 Python，Alpine） |
+| `Dockerfile` | 镜像（与宿主机同版本的 Python，官方 slim：与项目的 Python 组件同一基础；wget 给平台的健康检查） |
 
 ## 构建与测试
 

@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-py2
   name: Python probe (py2)
-  version: 3.2.19
+  version: 3.2.20
   description: "A variant of test/probe-py: the same code under its own component ID, ports and event stream"
   repository: https://github.com/brickKit/be-acceptance
 
