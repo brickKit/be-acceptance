@@ -2,7 +2,12 @@
 whatever the fault was. The digest (digest.py) compares two cells; these compare a cell with itself: every confirmation
 process ended, orders and the participants' branches agree (protocol 04), the stock and credit reservations add up to
 their branches, invoices and the sales claims agree (protocol 05), every outbox row is published, no work item died.
-The SQL only reads facts; the judging is in plain functions, so the tests can feed them rows."""
+The SQL only reads facts; the judging is in plain functions, so the tests can feed them rows.
+
+The background load keeps running through the faults, so at any moment some orders are being confirmed, some events
+are on their way out: what is judged is what has stood still for longer than `age` seconds (a confirmation takes
+milliseconds, a recovery seconds), not what is merely in flight. The reservations and their sums are written in one
+transaction by their owner, so those are judged at once."""
 from __future__ import annotations
 
 import asyncio
@@ -19,9 +24,11 @@ OPEN = ("reserving", "committing", "rejecting", "cancelling")
 # a participant branch's states that hold stock or credit
 HOLDING = ("held", "committed")
 
+# $2 below: how many seconds a row must have stood still to be judged
 PROCESSES = "SELECT o.number, c.kind, c.state FROM erp_sales.confirmation c JOIN erp_sales.sales_order o ON o.id = c.order_id " \
-            "WHERE c.state = ANY($1::text[])"
-CONFIRMING = "SELECT number, state FROM erp_sales.sales_order WHERE state = 'confirming'"
+            "WHERE c.state = ANY($1::text[]) AND c.updated_at < now() - make_interval(secs => $2)"
+CONFIRMING = "SELECT number, state FROM erp_sales.sales_order WHERE state = 'confirming' " \
+             "AND updated_at < now() - make_interval(secs => $1)"
 # every branch of an order's current confirmation, with what the participant has under that ID (null: nothing)
 ORDER_BRANCHES = """
 SELECT o.number, o.state, cb.component, coalesce(ib.state, cr.state)
@@ -29,17 +36,21 @@ FROM erp_sales.sales_order o
 JOIN erp_sales.confirmation c ON c.id = o.confirmation_id
 JOIN erp_sales.confirmation_branch cb ON cb.confirmation_id = c.id
 LEFT JOIN erp_inventory.branch ib ON cb.component = 'erp/inventory' AND ib.id = cb.branch_id
-LEFT JOIN erp_credit.branch cr ON cb.component = 'erp/credit' AND cr.id = cb.branch_id"""
+LEFT JOIN erp_credit.branch cr ON cb.component = 'erp/credit' AND cr.id = cb.branch_id
+WHERE o.updated_at < now() - make_interval(secs => $1)
+  AND coalesce(ib.updated_at, cr.updated_at, '-infinity') < now() - make_interval(secs => $1)"""
 # participant branches that hold something, with the states of the orders whose processes carry their IDs (none: an
 # orphan the coordinator does not know)
 HOLDING_BRANCHES = """
 SELECT p.component, p.id::text, p.state, array_remove(array_agg(DISTINCT o.state), NULL)
-FROM (SELECT 'erp/inventory' AS component, id, state FROM erp_inventory.branch WHERE state = ANY($1::text[])
-      UNION ALL SELECT 'erp/credit', id, state FROM erp_credit.branch WHERE state = ANY($1::text[])) p
+FROM (SELECT 'erp/inventory' AS component, id, state, updated_at FROM erp_inventory.branch WHERE state = ANY($1::text[])
+      UNION ALL SELECT 'erp/credit', id, state, updated_at FROM erp_credit.branch WHERE state = ANY($1::text[])) p
 LEFT JOIN erp_sales.confirmation_branch cb ON cb.branch_id = p.id AND cb.component = p.component
 LEFT JOIN erp_sales.confirmation c ON c.id = cb.confirmation_id
 LEFT JOIN erp_sales.sales_order o ON o.id = c.order_id
-GROUP BY 1, 2, 3"""
+WHERE p.updated_at < now() - make_interval(secs => $2)
+GROUP BY 1, 2, 3
+HAVING max(o.updated_at) IS NULL OR max(o.updated_at) < now() - make_interval(secs => $2)"""
 STOCK = """
 WITH r AS (SELECT bl.product_id, bl.warehouse_id, sum(bl.quantity - bl.consumed) AS q FROM erp_inventory.branch b
            JOIN erp_inventory.branch_line bl ON bl.branch_id = b.id WHERE b.state = ANY($1::text[]) GROUP BY 1, 2)
@@ -53,12 +64,15 @@ FROM erp_credit.credit_limit l LEFT JOIN e ON e.limit_id = l.id WHERE l.order_ex
 # an invoice and the sales claim of the same ID (the claim's ID is the invoice's)
 BILLING = """
 SELECT coalesce(i.number, i.id::text, c.id::text), i.state, i.formalization, c.state
-FROM erp_billing.invoice i FULL JOIN erp_sales.billing_claim c ON c.id = i.id"""
+FROM erp_billing.invoice i FULL JOIN erp_sales.billing_claim c ON c.id = i.id
+WHERE greatest(i.updated_at, c.updated_at) < now() - make_interval(secs => $1)"""
 BILLED = """
 WITH b AS (SELECT il.source_line_id, sum(il.quantity) AS q FROM erp_billing.invoice_line il
            JOIN erp_billing.invoice i ON i.id = il.invoice_id WHERE i.state = 'issued' GROUP BY 1)
 SELECT l.id::text, l.billed_qty::text, coalesce(b.q, 0)::text FROM erp_sales.order_line l
-LEFT JOIN b ON b.source_line_id = l.id WHERE l.billed_qty <> coalesce(b.q, 0)"""
+JOIN erp_sales.sales_order o ON o.id = l.order_id
+LEFT JOIN b ON b.source_line_id = l.id WHERE l.billed_qty <> coalesce(b.q, 0)
+  AND o.updated_at < now() - make_interval(secs => $1)"""
 SCHEMAS = "SELECT table_schema FROM information_schema.tables WHERE table_name = $1 ORDER BY 1"
 
 
@@ -122,35 +136,37 @@ def judge_runtime(outbox: dict, work: dict) -> list[str]:
     return out
 
 
-async def read(c: Cell) -> dict[str, list[str]]:
+async def read(c: Cell, age: float = 120) -> dict[str, list[str]]:
     conn = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
     try:
         outbox, work = {}, {}
         for (s,) in await conn.fetch(SCHEMAS, "be_outbox"):
-            outbox[s] = await conn.fetchval(f'SELECT count(*) FROM "{s}".be_outbox WHERE seq IS NULL OR published_at IS NULL')
+            outbox[s] = await conn.fetchval(f'SELECT count(*) FROM "{s}".be_outbox WHERE (seq IS NULL OR published_at IS NULL) '
+                                            f'AND occurred_at < now() - make_interval(secs => $1)', age)
         for (s,) in await conn.fetch(SCHEMAS, "be_work_item"):
             work[s] = {st: n for st, n in await conn.fetch(
                 f"""SELECT CASE WHEN state IN ('dead', 'paused') THEN state
-                                WHEN kind <> 'singleton' AND state NOT IN ('done', 'resolved') THEN 'queued' ELSE state END,
-                           count(*) FROM "{s}".be_work_item GROUP BY 1""")}
+                                WHEN kind <> 'singleton' AND state NOT IN ('done', 'resolved')
+                                     AND run_at < now() - make_interval(secs => $1) THEN 'queued' ELSE state END,
+                           count(*) FROM "{s}".be_work_item GROUP BY 1""", age)}
         return {
-            "processes": judge_processes(await conn.fetch(PROCESSES, list(OPEN)), await conn.fetch(CONFIRMING)),
-            "orders": judge_orders(await conn.fetch(ORDER_BRANCHES), await conn.fetch(HOLDING_BRANCHES, list(HOLDING))),
+            "processes": judge_processes(await conn.fetch(PROCESSES, list(OPEN), age), await conn.fetch(CONFIRMING, age)),
+            "orders": judge_orders(await conn.fetch(ORDER_BRANCHES, age), await conn.fetch(HOLDING_BRANCHES, list(HOLDING), age)),
             "stock": judge_sums("stock", await conn.fetch(STOCK, list(HOLDING))),
             "credit": judge_sums("credit limit", await conn.fetch(CREDIT, list(HOLDING))),
-            "billing": judge_billing(await conn.fetch(BILLING), await conn.fetch(BILLED)),
+            "billing": judge_billing(await conn.fetch(BILLING, age), await conn.fetch(BILLED, age)),
             "runtime": judge_runtime(outbox, work),
         }
     finally:
         await conn.close()
 
 
-async def check(directory: str | pathlib.Path, wait: float = 0, every: float = 10) -> dict[str, list[str]]:
+async def check(directory: str | pathlib.Path, wait: float = 0, every: float = 10, age: float = 120) -> dict[str, list[str]]:
     """The cell's violations, waiting up to `wait` seconds for them to clear (the work behind a fault takes its
     time: a hold expires after five minutes, a work item backs off); each reading prints how many are left."""
     c, waited = Cell.load(directory), 0.0
     while True:
-        v = await read(c)
+        v = await read(c, age)
         left = sum(len(x) for x in v.values())
         if not left or waited >= wait:
             return v
