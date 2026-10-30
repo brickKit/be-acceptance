@@ -194,25 +194,30 @@ def test_rs18_confirming_while_the_bus_is_down(cell, bob, world):
 def test_authorization_goes_away(cell, bob, world):
     """R2, security 03: the authorization member stops (in a shell, the whole shell). Writes go on while the
     components' views are valid, then are refused; once it is back they are allowed again. Measures both times."""
-    def write() -> int:
-        return bob.call("POST", "erp/sales", "/api/sales/orders", {
+    def write() -> tuple[int, str]:
+        r = bob.call("POST", "erp/sales", "/api/sales/orders", {
             "legal_entity_id": world.le, "customer_id": world.large, "currency": "CNY", "owner_id": bob.principal,
             "lines": [{"product_id": world.service["id"], "quantity": "1", "unit": world.service["base_unit"],
-                       "tax_rate": "0.06"}]}).status_code
+                       "tax_rate": "0.06"}]})
+        try:
+            reason = r.json().get("reason", "") if r.status_code != 200 else ""
+        except ValueError:
+            reason = r.text[:80]
+        return r.status_code, reason
 
     t_stop = time.time()
     stopped = faults.stop(cell, "infra/authz")
     refused_after, refused_with = None, None
     try:
         while time.time() - t_stop < 600:
-            if (code := write()) != 200:
-                refused_after, refused_with = time.time() - t_stop, code
+            if (ans := write())[0] != 200:  # (status, reason): a shell takes its other members down with it
+                refused_after, refused_with = time.time() - t_stop, f"{ans[0]} {ans[1]}"
                 break
             time.sleep(1)
     finally:
         faults.stop(cell, "infra/authz", "start")
     t_start = time.time()
-    allowed = eventually(lambda: write() == 200 and time.time() - t_start, 300)
+    allowed = eventually(lambda: write()[0] == 200 and time.time() - t_start, 300)
     log(fault="authz", stopped=stopped, stop_at=t_stop, refused_after=refused_after and round(refused_after, 1),
         refused_with=refused_with, start_at=t_start, allowed_after=round(allowed, 1))
 
