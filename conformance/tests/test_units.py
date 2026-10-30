@@ -34,3 +34,39 @@ def test_pods_become_units_under_a_prefix(tmp_path):
                           "base")
     assert sorted(got) == ["base:be-nats", "base:be-postgres"]
     assert got["base:be-postgres"].path.name == "kubepods-burstable-pod1111_aa.slice"
+
+
+class Kube:
+    """kubectl as nodeports calls it: get svc answers with these Services; apply records each manifest."""
+    def __init__(self, services: list[dict]):
+        self.services, self.applied = services, []
+
+    def __call__(self, args, input=None, **_):
+        import json
+        import subprocess
+        if "get" in args:
+            return subprocess.CompletedProcess(args, 0, json.dumps({"items": self.services}), "")
+        self.applied.append(json.loads(input)["metadata"]["name"])
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+
+def service(name: str, port: int) -> dict:
+    return {"metadata": {"name": name}, "spec": {"selector": {"app": name}, "ports": [{"port": port}]}}
+
+
+def test_a_shell_whose_members_moved_out_gets_no_node_port(tmp_path, monkeypatch):
+    # R5 on an H cell: be/go-core's members run alone, the shell has left the project; cell.yaml still names it
+    (tmp_path / "cell.yaml").write_text("cell: T\nrow: K\nshells:\n  be/go-core@3.0.36: [erp/inventory, erp/credit]\nchain: []\n")
+    c = Cell.load(tmp_path)
+    kube = Kube([service("erp-inventory-3-0-8", units.PORTS["erp/inventory"][0]),
+                 service("erp-credit-3-0-8", units.PORTS["erp/credit"][0])])
+    monkeypatch.setattr(units.subprocess, "run", kube)
+    units.nodeports(c)
+    assert kube.applied == ["np-erp-inventory", "np-erp-credit"]
+
+
+def test_a_component_without_a_service_still_fails(tmp_path, monkeypatch):
+    (tmp_path / "cell.yaml").write_text("cell: T\nrow: K\nshells:\n  be/go-core@3.0.36: [erp/inventory, erp/credit]\nchain: []\n")
+    monkeypatch.setattr(units.subprocess, "run", Kube([service("erp-inventory-3-0-8", units.PORTS["erp/inventory"][0])]))
+    with pytest.raises(RuntimeError, match="erp/credit"):
+        units.nodeports(Cell.load(tmp_path))

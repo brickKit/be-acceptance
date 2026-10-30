@@ -64,7 +64,8 @@ def kube_units(c: Cell) -> dict:
 def nodeports(c: Cell) -> list[str]:
     """For every component the cell runs, a NodePort Service beside BrickKit's own (same selector and port) on node
     port 30000 + (port - 8000); the minikube node publishes those on host port 10000 + port, where the driver, the
-    seeds and the scenarios reach every row's components."""
+    seeds and the scenarios reach every row's components. A shell named in cell.yaml may not be running (R5 moved its
+    members out and it left the project): its members have their own Services either way, so it is skipped."""
     svcs = json.loads(subprocess.run([*KUBE, "get", "svc", "-n", c.project, "-o", "json"], capture_output=True,
                                      text=True, check=True).stdout)["items"]
     made = []
@@ -73,6 +74,8 @@ def nodeports(c: Cell) -> list[str]:
         name = comp.replace("/", "-")
         svc = next((s for s in svcs if s["metadata"]["name"].startswith(name) and not s["metadata"]["name"].startswith("np-")
                     and any(p["port"] == port for p in s["spec"].get("ports", []))), None)
+        if svc is None and comp in c.shells:
+            continue
         if svc is None:
             raise RuntimeError(f"no Service of {comp} on port {port} in namespace {c.project}")
         manifest = {"apiVersion": "v1", "kind": "Service",
