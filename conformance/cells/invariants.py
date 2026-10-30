@@ -163,12 +163,14 @@ async def read(c: Cell, age: float = 120) -> dict[str, list[str]]:
 
 async def check(directory: str | pathlib.Path, wait: float = 0, every: float = 10, age: float = 120) -> dict[str, list[str]]:
     """The cell's violations, waiting up to `wait` seconds for them to clear (the work behind a fault takes its
-    time: a hold expires after five minutes, a work item backs off); each reading prints how many are left."""
+    time: a hold expires after five minutes, a work item backs off); each reading prints how many are left. With a
+    wait, the verdict comes no sooner than `age` seconds: what a fault left behind is judged only once it has stood
+    still that long, so an earlier reading cannot see it yet."""
     c, waited = Cell.load(directory), 0.0
     while True:
         v = await read(c, age)
         left = sum(len(x) for x in v.values())
-        if not left or waited >= wait:
+        if (not left and (wait == 0 or waited >= min(age, wait))) or waited >= wait:
             return v
         print(f"{waited:.0f} s: {left} violations left ({', '.join(k for k, x in v.items() if x)})", flush=True)
         await asyncio.sleep(every)
