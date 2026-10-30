@@ -9,6 +9,8 @@ cell: idle, then every edge of its chain at every operation and load.
 campaign <campaign.yaml> <output> runs every cell of the campaign, every repetition, unattended (resumable).
 world <cell> <file> writes the load driver's world for business chains (load -flow) from a seeded cell.
 digest <cell> <file> writes the cell's result digest once it has settled; compare <a> <b> lists what differs.
+join-shell <cell> <shell> <member>... readies a shell's login role and config in a running cell, for members running
+alone to move into it (suite C, R5).
 invariants <cell> <file> [wait seconds] writes what must hold in the cell's data after a fault (suite C), waiting
 for the violations to clear; exits 1 when some remain.
 chain <cell> <out> [--world <file>] [--rate 7] [--users 20] [--idle 600] [--warmup 300] [--seconds 900] measures a business-chain cell:
@@ -68,6 +70,10 @@ def main() -> int:
 
         d = digest.write(sys.argv[2], sys.argv[3])
         print(f"digest of {sys.argv[2]}: {sum(len(v) for v in d.values())} items in {sys.argv[3]}")
+        return 0
+    if sys.argv[1:2] == ["join-shell"] and len(sys.argv) >= 5:
+        role = asyncio.run(prepare.join_shell(sys.argv[2], sys.argv[3], sys.argv[4:]))
+        print(f"{sys.argv[3]} in {sys.argv[2]}: login role {role} holds {', '.join(sys.argv[4:])}")
         return 0
     if sys.argv[1:2] == ["invariants"] and len(sys.argv) in (4, 5):
         from cells import invariants

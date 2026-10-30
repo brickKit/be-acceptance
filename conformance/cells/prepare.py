@@ -333,6 +333,30 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
         (cfg / f"{f}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
 
 
+async def join_shell(directory: str | pathlib.Path, shell: str, members: list[str]) -> str:
+    """Suite C, R5: components running alone in a running cell move into a shell. The shell's login role must exist
+    and hold each member's runtime role WITH INHERIT FALSE (switched per transaction), and the shell's config must name
+    it: what prepare() does when a cell is made, without touching any schema (the cell's data stays)."""
+    c = Cell.load(directory)
+    role = SHELL_ROLES[shell]
+    secrets = c.dir / ".secrets" / "db"
+    secrets.mkdir(parents=True, exist_ok=True)
+    conn = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
+    try:
+        if not await conn.fetchval("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)", role):
+            await conn.execute(f"CREATE ROLE {role} LOGIN")
+        await conn.execute(f"ALTER ROLE {role} LOGIN PASSWORD '{role}-pw'")
+        for m in members:
+            await conn.execute(f"GRANT {schema_of(m)}_rw TO {role} WITH INHERIT FALSE, SET TRUE")
+    finally:
+        await conn.close()
+    (secrets / role).write_text(f"{role}-pw")
+    (c.dir / "config" / f"{file_of(shell)}.yaml").write_text(HEADER.format(cell=c.name) + f"""PG_SHELL_USER: {role}
+PG_SHELL_PASSWORD: file://.secrets/db/{role}
+""")
+    return role
+
+
 async def prepare(directory: str | pathlib.Path) -> Cell:
     c = Cell.load(directory)
     await databases(c)
