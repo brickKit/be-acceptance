@@ -9,6 +9,8 @@ cell: idle, then every edge of its chain at every operation and load.
 campaign <campaign.yaml> <output> runs every cell of the campaign, every repetition, unattended (resumable).
 world <cell> <file> writes the load driver's world for business chains (load -flow) from a seeded cell.
 digest <cell> <file> writes the cell's result digest once it has settled; compare <a> <b> lists what differs.
+invariants <cell> <file> [wait seconds] writes what must hold in the cell's data after a fault (suite C), waiting
+for the violations to clear; exits 1 when some remain.
 chain <cell> <out> [--world <file>] [--rate 7] [--users 20] [--idle 600] [--warmup 300] [--seconds 900] measures a business-chain cell:
 idle, then the mix; without --world (a cell without seed or baseline data) only idle.
 baseline <cell> <file> builds the step 8 baseline data in a seeded cell and writes the mixed load's world (load -mix).
@@ -67,6 +69,10 @@ def main() -> int:
         d = digest.write(sys.argv[2], sys.argv[3])
         print(f"digest of {sys.argv[2]}: {sum(len(v) for v in d.values())} items in {sys.argv[3]}")
         return 0
+    if sys.argv[1:2] == ["invariants"] and len(sys.argv) in (4, 5):
+        from cells import invariants
+
+        return invariants.write(sys.argv[2], sys.argv[3], float(sys.argv[4]) if len(sys.argv) == 5 else 0)
     if sys.argv[1:2] == ["compare"] and len(sys.argv) == 4:
         import json
 

@@ -16,7 +16,7 @@ import (
 // as far as the flow goes, one request after another, as a salesperson and then a billing clerk would. The rate is
 // iterations per second; the iteration's latency runs from when it was due to its last answer.
 type Chain struct {
-	Flow  string // confirm: order and confirm; deliver: and deliver; bill: and draft and issue the invoice
+	Flow  string // confirm: order and confirm; deliver: and deliver; bill: and draft and issue the invoice; print: and print it
 	World World
 	RunID string // the idempotency keys are load:<RunID>:<n>:<step>, so a rerun never replays an earlier one
 }
@@ -53,6 +53,7 @@ var flows = map[string][]string{
 	"confirm": {"order", "confirm"},
 	"deliver": {"order", "confirm", "deliver"},
 	"bill":    {"order", "confirm", "deliver", "draft", "issue"},
+	"print":   {"order", "confirm", "deliver", "draft", "issue", "print"}, // suite C, R3: a burst of billing and printing
 }
 
 func readWorld(path string) (World, error) {
@@ -92,6 +93,8 @@ func (c *Chain) run(ctx context.Context, client *http.Client, due time.Time, n i
 			url, body = w.Billing+"/api/billing/invoices", map[string]any{"order_id": order}
 		case "issue":
 			url = w.Billing + "/api/billing/invoices/" + invoice + "/issue"
+		case "print":
+			url = w.Billing + "/api/billing/invoices/" + invoice + "/print"
 		}
 		st, out := post(ctx, client, url, fmt.Sprintf("load:%s:%d:%s", c.RunID, n, name), body)
 		st.Name = name

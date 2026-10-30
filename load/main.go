@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -38,17 +40,19 @@ func main() {
 	flag.DurationVar(&r.P99Limit, "p99-limit", 10*time.Second, "ramp: stop when p99 passes it (the route deadline)")
 	flag.Float64Var(&r.MaxErrorRate, "max-errors", 0.01, "ramp: stop when the error rate passes it")
 	flag.StringVar(&out, "out", "", "result file (JSON); empty: stdout")
+	var seriesOut string
+	flag.StringVar(&seriesOut, "series", "", "also write each second of the measured part (JSON): sent, ok, errors, latency; not with -ramp")
 	var creds, flow, world, mix string
 	var users int
 	flag.StringVar(&mix, "mix", "", "instead of -op: the representative mix, its world file (conformance: python -m cells baseline <cell> <file>); the accounts' password from BE_LOAD_PASSWORD")
 	flag.IntVar(&users, "users", 20, "mix: virtual users")
 	flag.StringVar(&creds, "credentials", "", "a JSON file with token_url, username, password: the probes need a token")
-	flag.StringVar(&flow, "flow", "", "instead of -op: a business chain per iteration, confirm, deliver or bill (needs -world)")
+	flag.StringVar(&flow, "flow", "", "instead of -op: a business chain per iteration, confirm, deliver, bill or print (needs -world)")
 	flag.StringVar(&world, "world", "", "flow: the cell's world file (conformance: python -m cells world <cell> <file>)")
 	flag.Parse()
 	if flow != "" {
 		if _, ok := flows[flow]; !ok {
-			fmt.Fprintln(os.Stderr, "-flow is confirm, deliver or bill")
+			fmt.Fprintln(os.Stderr, "-flow is confirm, deliver, bill or print")
 			os.Exit(64)
 		}
 		w, err := readWorld(world)
@@ -79,7 +83,10 @@ func main() {
 	}
 	client := &http.Client{Transport: &http.Transport{MaxIdleConns: 4096, MaxIdleConnsPerHost: 4096,
 		IdleConnTimeout: 90 * time.Second}}
-	ctx := context.Background()
+	// SIGINT or SIGTERM ends the run early and still writes what it measured (suite C stops the background load once
+	// its faults are done); the requests in flight then end as "context canceled"
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	if creds != "" {
 		if err := useCredentials(ctx, client, creds); err != nil {
 			fmt.Fprintln(os.Stderr, "no token:", err)
@@ -93,7 +100,15 @@ func main() {
 		Run(ctx, client, w) // warm the connections and the probe
 		result = rampRun(ctx, client, p, r)
 	} else {
-		result = summarize(p, Run(ctx, client, p))
+		samples := Run(ctx, client, p)
+		result = summarize(p, samples)
+		if seriesOut != "" {
+			b, _ := json.MarshalIndent(series(samples), "", "  ")
+			if err := os.WriteFile(seriesOut, b, 0o644); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+		}
 	}
 	b, _ := json.MarshalIndent(result, "", "  ")
 	if out == "" {
