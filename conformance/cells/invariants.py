@@ -1,8 +1,11 @@
 """Suite C (the deployment experiment's faults): what must hold in a cell's data once the work behind a fault has run,
 whatever the fault was. The digest (digest.py) compares two cells; these compare a cell with itself: every confirmation
 process ended, orders and the participants' branches agree (protocol 04), the stock and credit reservations add up to
-their branches, invoices and the sales claims agree (protocol 05), every outbox row is published, no work item died.
-The SQL only reads facts; the judging is in plain functions, so the tests can feed them rows.
+their branches, invoices and the sales claims agree (protocol 05), every outbox row is published, no work item died,
+erp/sales' department projection equals mdm/org, every order's last change is audited and every component's audit
+records reached infra/audit without a gap, and on JetStream every published outbox row is in its stream (duplicates,
+which the consumers' inbox absorbs (P6.10), are counted apart). The SQL only reads facts; the judging is in plain
+functions, so the tests can feed them rows.
 
 The background load keeps running through the faults, so at any moment some orders are being confirmed, some events
 are on their way out: what is judged is what has stood still for longer than `age` seconds (a confirmation takes
@@ -13,11 +16,12 @@ from __future__ import annotations
 import asyncio
 import json
 import pathlib
+from collections import Counter
 from urllib.parse import urlsplit
 
 import asyncpg
 
-from cells.spec import Cell
+from cells.spec import PORTS, Cell
 from harness import need
 
 OPEN = ("reserving", "committing", "rejecting", "cancelling")
@@ -74,6 +78,20 @@ JOIN erp_sales.sales_order o ON o.id = l.order_id
 LEFT JOIN b ON b.source_line_id = l.id WHERE l.billed_qty <> coalesce(b.q, 0)
   AND o.updated_at < now() - make_interval(secs => $1)"""
 SCHEMAS = "SELECT table_schema FROM information_schema.tables WHERE table_name = $1 ORDER BY 1"
+# every org unit next to erp/sales' projection of it (P9: projection org_units)
+PROJECTION = """
+SELECT u.code, u.version, u.name, u.path, p.version, p.state, p.data->>'name', p.data->>'path'
+FROM mdm_org.org_unit u
+LEFT JOIN erp_sales.be_projection p ON p.projection = 'org_units' AND p.record_id = u.id::text
+WHERE u.updated_at < now() - make_interval(secs => $1)"""
+# every order next to the version and state its last audit record (the highest version audited) has
+ORDER_AUDIT = """
+WITH a AS (SELECT DISTINCT ON (target->>'id') target->>'id' AS id, (changes->'after'->>'version')::bigint AS version,
+                  changes->'after'->>'state' AS state
+           FROM erp_sales.be_audit_log WHERE target->>'type' = 'erp.sales.order'
+           ORDER BY target->>'id', (changes->'after'->>'version')::bigint DESC)
+SELECT o.number, o.state, o.version, a.version, a.state FROM erp_sales.sales_order o LEFT JOIN a ON a.id = o.id::text
+WHERE o.updated_at < now() - make_interval(secs => $1)"""
 
 
 def judge_processes(processes: list, confirming: list) -> list[str]:
@@ -136,6 +154,53 @@ def judge_runtime(outbox: dict, work: dict) -> list[str]:
     return out
 
 
+def judge_projection(rows: list) -> list[str]:
+    """Rows (code, version, name, path in mdm/org; version, state, name, path in erp/sales' projection): the
+    projection has every unit at its version, complete, with the same name and path."""
+    out = []
+    for code, ver, name, path, pver, pstate, pname, ppath in rows:
+        if pver is None:
+            out.append(f"org unit {code}: missing in erp/sales")
+        elif pver != ver or pstate != "complete":
+            out.append(f"org unit {code}: mdm/org has version {ver}, erp/sales version {pver} ({pstate})")
+        elif (pname, ppath) != (name, path):
+            out.append(f"org unit {code}: version {ver} on both sides, but the name or path differs")
+    return out
+
+
+def judge_audit(orders: list, transfers: list) -> list[str]:
+    """Orders (number, state, version, last audited version, its state): each order's last change is audited.
+    Transfers (component, settled: its records up to this sequence number are older than the age, how many of those
+    are not marked received, how many of them infra/audit holds): every settled record reached infra/audit."""
+    out = []
+    for n, state, ver, aver, astate in orders:
+        if aver is None:
+            out.append(f"{n}: {state} version {ver} has no audit record")
+        elif (aver, astate) != (ver, state):
+            out.append(f"{n}: {state} version {ver}, last audited {astate} version {aver}")
+    for comp, upto, waiting, held in transfers:
+        if waiting:
+            out.append(f"{comp}: {waiting} of the first {upto} audit records not transferred")
+        if held != upto:
+            out.append(f"{comp}: infra/audit has {held} of the first {upto} records")
+    return out
+
+
+def judge_stream(published: dict[str, set], seen: dict[str, Counter]) -> list[str]:
+    """Every outbox row published (read before the stream) is in its JetStream stream (by its message ID, ce-id)."""
+    out = []
+    for stream, ids in sorted(published.items()):
+        missing = sorted(ids - set(seen.get(stream, ())))
+        if missing:
+            out.append(f"{stream}: {len(missing)} published events not in the stream ({', '.join(missing[:5])})")
+    return out
+
+
+def duplicates(seen: dict[str, Counter]) -> dict[str, int]:
+    """Per stream, the message IDs that are in the stream more than once."""
+    return {stream: sum(1 for n in ids.values() if n > 1) for stream, ids in sorted(seen.items())}
+
+
 async def read(c: Cell, age: float = 120) -> dict[str, list[str]]:
     conn = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
     try:
@@ -149,6 +214,10 @@ async def read(c: Cell, age: float = 120) -> dict[str, list[str]]:
                                 WHEN kind <> 'singleton' AND state NOT IN ('done', 'resolved')
                                      AND run_at < now() - make_interval(secs => $1) THEN 'queued' ELSE state END,
                            count(*) FROM "{s}".be_work_item GROUP BY 1""", age)}
+        projections = {s for (s,) in await conn.fetch(SCHEMAS, "be_projection")} if await conn.fetchval(
+            "SELECT to_regclass('mdm_org.org_unit') IS NOT NULL") else set()
+        audited = {s for (s,) in await conn.fetch(SCHEMAS, "be_audit_log") if component_of(s) in c.placed} if await conn.fetchval(
+            "SELECT to_regclass('infra_audit.audit_record') IS NOT NULL") else set()
         return {
             "processes": judge_processes(await conn.fetch(PROCESSES, list(OPEN), age), await conn.fetch(CONFIRMING, age)),
             "orders": judge_orders(await conn.fetch(ORDER_BRANCHES, age), await conn.fetch(HOLDING_BRANCHES, list(HOLDING), age)),
@@ -156,9 +225,84 @@ async def read(c: Cell, age: float = 120) -> dict[str, list[str]]:
             "credit": judge_sums("credit limit", await conn.fetch(CREDIT, list(HOLDING))),
             "billing": judge_billing(await conn.fetch(BILLING, age), await conn.fetch(BILLED, age)),
             "runtime": judge_runtime(outbox, work),
+            "projection": judge_projection(await conn.fetch(PROJECTION, age)) if "erp_sales" in projections else [],
+            "audit": judge_audit(await conn.fetch(ORDER_AUDIT, age) if "erp_sales" in audited else [],
+                                 await transfers(conn, audited, age)),
         }
     finally:
         await conn.close()
+
+
+def component_of(schema: str) -> str:
+    """The component ID whose schema this is (erp_sales: erp/sales, infra_iam_casdoor: infra/iam-casdoor)."""
+    return next((p for p in PORTS if p.replace("/", "_").replace("-", "_") == schema), schema)
+
+
+async def transfers(conn, schemas: set, age: float) -> list:
+    """Per component with an audit log: the records older than the age (up to their highest sequence number), how
+    many of them are not received, and how many infra/audit holds."""
+    out = []
+    for s in sorted(schemas):
+        upto = await conn.fetchval(f'SELECT max(seq) FROM "{s}".be_audit_log WHERE occurred_at < now() - make_interval(secs => $1)', age)
+        if not upto:
+            continue
+        waiting = await conn.fetchval(f"SELECT count(*) FROM \"{s}\".be_audit_log WHERE seq <= $1 AND transfer_state <> 'received'", upto)
+        held = await conn.fetchval("SELECT count(DISTINCT source_seq) FROM infra_audit.audit_record WHERE source = $1 AND source_seq <= $2",
+                                   component_of(s), upto)
+        out.append((component_of(s), upto, waiting, held))
+    return out
+
+
+async def stream_check(c: Cell) -> tuple[list[str], dict[str, int], dict[str, int]]:
+    """On JetStream: the published outbox rows of every producer the cell runs (read first) against the message IDs of its stream
+    (read after, headers only, from the start). Returns the violations, the duplicate IDs per stream and the
+    messages read per stream."""
+    if c.bus != "jetstream":
+        return [], {}, {}
+    import nats
+    from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
+    from nats.js.errors import NotFoundError
+
+    from besdk.events.core import jetstream_name
+
+    conn = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
+    published: dict[str, set] = {}
+    try:
+        for (s,) in await conn.fetch(SCHEMAS, "be_outbox"):
+            if component_of(s) not in c.placed:  # a schema an earlier experiment left in the database
+                continue
+            for stream, eid in await conn.fetch(f'SELECT stream, event_id::text FROM "{s}".be_outbox WHERE published_at IS NOT NULL'):
+                published.setdefault(stream, set()).add(eid)
+    finally:
+        await conn.close()
+    nc = await nats.connect(need("BE_ACC_NATS_URL"))
+    js, seen = nc.jetstream(), {}
+    try:
+        for stream in published:
+            name, ids = jetstream_name(stream), Counter()
+            try:
+                last = (await js.stream_info(name)).state.last_seq
+            except NotFoundError:
+                seen[stream] = ids
+                continue
+            sub = await js.pull_subscribe("", stream=name, config=ConsumerConfig(
+                headers_only=True, ack_policy=AckPolicy.NONE, deliver_policy=DeliverPolicy.ALL, inactive_threshold=60))
+            try:
+                got = 0
+                while got < last:
+                    try:
+                        msgs = await sub.fetch(1000, timeout=5)
+                    except asyncio.TimeoutError:
+                        break
+                    for m in msgs:
+                        got = m.metadata.sequence.stream
+                        ids[(m.headers or {}).get("ce-id", "")] += 1
+            finally:
+                await sub.unsubscribe()
+            seen[stream] = ids
+    finally:
+        await nc.close()
+    return judge_stream(published, seen), duplicates(seen), {s: sum(n.values()) for s, n in seen.items()}
 
 
 async def check(directory: str | pathlib.Path, wait: float = 0, every: float = 10, age: float = 120) -> dict[str, list[str]]:
@@ -179,9 +323,12 @@ async def check(directory: str | pathlib.Path, wait: float = 0, every: float = 1
 
 def write(directory: str, out: str, wait: float) -> int:
     v = asyncio.run(check(directory, wait))
-    pathlib.Path(out).write_text(json.dumps(v, indent=1) + "\n")
+    v["stream"], dups, read_ = asyncio.run(stream_check(Cell.load(directory)))
+    pathlib.Path(out).write_text(json.dumps({**v, "measured": {"stream_duplicates": dups, "stream_messages": read_}},
+                                            indent=1) + "\n")
     bad = {k: len(x) for k, x in v.items() if x}
     print(f"invariants of {directory}: " + (f"VIOLATED {bad}" if bad else "all hold") + f" ({out})")
+    print(f"  stream messages read {read_}, duplicate IDs {dups}")
     for k, x in v.items():
         for line in x[:5]:
             print(f"  {k}: {line}")

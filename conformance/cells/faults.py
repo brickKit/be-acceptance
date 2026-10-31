@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import threading
 import time
 from urllib.parse import urlsplit
 
@@ -120,6 +121,68 @@ def base(action: str, name: str) -> None:
     _run(["docker", action, name])
 
 
+def backlog_summary(samples: list[tuple[float, int]], stopped: float, started: float) -> dict:
+    """Samples (unix time, unpublished outbox rows) around a bus stop: the most in flight in the 10 s before the stop
+    (the load always has a few rows on their way out), the peak after it and when (seconds from the stop), and how
+    long after the start the backlog was back to that (None: never)."""
+    before = max((n for t, n in samples if stopped - 10 <= t < stopped), default=0)
+    after = [(t, n) for t, n in samples if t >= stopped]
+    peak_t, peak = max(after, key=lambda x: x[1], default=(stopped, 0))
+    drained = next((t for t, n in samples if t >= started and n <= before), None)
+    return {"before": before, "peak": peak, "peak_at": round(peak_t - stopped, 1),
+            "drained_after": None if drained is None else round(drained - started, 1)}
+
+
+async def _conn(c: Cell) -> asyncpg.Connection:
+    return await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
+
+
+async def outbox_backlog(c: Cell) -> int:
+    """Outbox rows not yet published, over every producer's schema."""
+    conn = await _conn(c)
+    try:
+        schemas = [s for (s,) in await conn.fetch(
+            "SELECT table_schema FROM information_schema.tables WHERE table_name = 'be_outbox'")]
+        return sum([await conn.fetchval(f'SELECT count(*) FROM "{s}".be_outbox WHERE published_at IS NULL') for s in schemas])
+    finally:
+        await conn.close()
+
+
+async def projected_version(c: Cell, projection: str, record_id: str) -> int | None:
+    """The version of a record in erp/sales' projection, once complete (None: not there or not complete)."""
+    conn = await _conn(c)
+    try:
+        return await conn.fetchval("SELECT version FROM erp_sales.be_projection WHERE projection = $1 AND record_id = $2 "
+                                   "AND state = 'complete'", projection, record_id)
+    finally:
+        await conn.close()
+
+
+class Backlog:
+    """Samples the outbox backlog once a second in a thread of its own, until stopped."""
+
+    def __init__(self, c: Cell):
+        self.c, self.samples, self._stop = c, [], threading.Event()
+        self._thread = threading.Thread(target=lambda: asyncio.run(self._run()), daemon=True)
+
+    async def _run(self) -> None:
+        while not self._stop.is_set():
+            t = time.time()
+            try:
+                self.samples.append((t, await outbox_backlog(self.c)))
+            except (OSError, asyncpg.PostgresError):
+                pass
+            await asyncio.sleep(max(0.0, 1 - (time.time() - t)))
+
+    def __enter__(self) -> "Backlog":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_) -> None:
+        self._stop.set()
+        self._thread.join()
+
+
 class Point:
     """A trigger that stops the coordinator's transaction for one order (POINTS) until released."""
 
@@ -131,7 +194,7 @@ class Point:
         self.schema = self.table.split(".")[0]
 
     async def _conn(self) -> asyncpg.Connection:
-        return await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + self.c.database).geturl())
+        return await _conn(self.c)
 
     async def arm(self, seconds: int = 900) -> None:
         conn = await self._conn()

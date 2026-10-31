@@ -11,12 +11,14 @@ import json
 import os
 import threading
 import time
+import uuid
 from decimal import Decimal
 
 import httpx
 import pytest
 
 from cells import faults
+from cells.faults import backlog_summary
 
 HOLD_TTL = 300  # erp/inventory and erp/credit: a hold expires after five minutes (protocol 04's starting value)
 
@@ -179,15 +181,32 @@ def test_a_process_crashes_under_load(cell, component):
 
 def test_rs18_confirming_while_the_bus_is_down(cell, bob, world):
     """Protocol 04 RS18, R2: NATS stops for two minutes; orders still confirm (their events wait in the outbox), and
-    once NATS is back the outbox drains (the runner's invariants check it)."""
-    t_stop = time.time()
-    faults.base("stop", "be-nats")
-    try:
-        ans = bob.post("erp/sales", f"/api/sales/orders/{order(bob, world)['id']}/confirm")
-        time.sleep(max(0.0, t_stop + 120 - time.time()))
-    finally:
-        faults.base("start", "be-nats")
-    log(fault="RS18", stop_at=t_stop, start_at=time.time(), outcome=ans["outcome"])
+    once NATS is back the outbox drains (the runner's invariants check it). Meanwhile a department of the test's own is
+    renamed in mdm/org: once NATS is back, erp/sales' projection of it catches up. The outbox backlog is sampled every
+    second: its peak, and how long after the start it was back to what was in flight before the stop."""
+    code = "RS18-" + uuid.uuid4().hex[:8].upper()
+    unit = bob.post("mdm/org", "/api/org/units", {"legal_entity_id": world.le, "parent_id": world.departments["SALES-EAST"],
+                                                   "code": code, "name": "「本地测试」RS18 " + code})
+    projected = lambda: asyncio.run(faults.projected_version(cell, "org_units", unit["id"])) or 0  # noqa: E731
+    eventually(lambda: projected() >= unit["version"], 60)
+    with faults.Backlog(cell) as backlog:
+        time.sleep(10)  # what is in flight before the stop
+        t_stop = time.time()
+        faults.base("stop", "be-nats")
+        try:
+            ans = bob.post("erp/sales", f"/api/sales/orders/{order(bob, world)['id']}/confirm")
+            renamed = bob.ok(bob.call("PATCH", "mdm/org", f"/api/org/units/{unit['id']}",
+                                      {"name": "「本地测试」RS18 " + code + " renamed", "version": unit["version"]}))
+            time.sleep(max(0.0, t_stop + 120 - time.time()))
+        finally:
+            faults.base("start", "be-nats")
+        t_start = time.time()
+        caught = eventually(lambda: projected() >= renamed["version"] and time.time(), 300)
+        eventually(lambda: backlog_summary(backlog.samples, t_stop, t_start)["drained_after"] is not None, 300)
+    b = backlog_summary(backlog.samples, t_stop, t_start)
+    log(fault="RS18", stop_at=t_stop, start_at=t_start, outcome=ans["outcome"], unit=code,
+        projection_after=round(caught - t_start, 1), backlog_before=b["before"], backlog_peak=b["peak"],
+        backlog_peak_at=b["peak_at"], drained_after=b["drained_after"])
     assert ans["outcome"] == "confirmed", ans
 
 
