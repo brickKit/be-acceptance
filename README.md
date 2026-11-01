@@ -21,3 +21,7 @@
 ## 要求
 
 参考模型与文档检查：Python 3.11 及以上，只用标准库（模型 08 用标准库的 `sqlite3`）。探针与 `conformance/`：Go 1.27、Python 3.15 与 `uv`，依赖锁在各自的 `uv.lock`、`go.sum`。模型 35 约需 13 分钟。
+
+## 发布
+
+工具本身打 `v<版本>` 的带注释标签；探针各自用 `brickkit release --notes-file` 发布（`probes/py`、`probes/py2` 与 Go 的变体）。**打 `v` 标签之前跑 `make check`**：不需要基础资源的单元测试（格工具、测量、剖面检查的自检）与探针变体是否最新。要动探针或格的行为时，再跑 `make probes`（需要基础资源）。1.0.18 只在真机上验证、没跑单元测试就发了，弄坏了 `test_units.py`。
