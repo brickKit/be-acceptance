@@ -32,21 +32,28 @@ def brickkit(d: pathlib.Path, *args: str, stdin: str = "") -> str:
 def remove_all(d: pathlib.Path, ids: list[str]) -> None:
     """Removes components brickkit.yaml lists but the cell does not run; brickkit refuses to remove one another still
     requires, so the ones refused go again after the rest, until a pass removes nothing (then the first error)."""
-    left = list(ids)
+    # a component brickkit.yaml lists at several versions (two shells of different versions compile in different ones)
+    # is removed version by version: brickkit asks which one
+    declared = yaml.safe_load((d / "brickkit.yaml").read_text())["components"]
+    left = []
+    for c in ids:
+        versions = [e["version"] for e in declared if e["id"] == c]
+        left += [f"{c}@{v}" for v in versions] if len(versions) > 1 else [c]
     while left:
         refused = []
         for c in left:
             try:
                 brickkit(d, "remove", c)
             except RuntimeError as e:
-                refused.append((c, e))
+                if "is not in the project" not in str(e):  # gone with another version that kept it (requiredBy)
+                    refused.append((c, e))
         if len(refused) == len(left):
             raise refused[0][1]
         left = [c for c, _ in refused]
 
 
 def deploy_file(name: str, shells: dict[str, list[str]], alone: list[str], extra: list[str] = (),
-                kept: list[str] = (), row: str = "D", local: frozenset[str] = frozenset()) -> str:
+                kept: list[str] = (), row: str = "D", local: frozenset[str] = frozenset(), also: list[str] = ()) -> str:
     """The cell's deploy file; kept are the versions brickkit.yaml keeps for a dependent (id@version, requiredBy):
     each needs its own entry, run alone and not exposed. The row picks the target: Docker and Podman map each
     component's user surface to host port 10000 + its port; Kubernetes exposes nothing (the cell adds NodePort
@@ -77,7 +84,10 @@ def deploy_file(name: str, shells: dict[str, list[str]], alone: list[str], extra
                     out += place(m, PORTS[m][0], "        ")
     for p in alone:
         out += [f"  - id: {p}", *place(p, PORTS[p][0], "    ")]
-    out += [f"  - id: {k}" for k in kept]
+    for k in kept:
+        out.append(f"  - id: {k}")
+        if k in also and row != "K":  # suite D's side-by-side version: reachable on its own host port
+            out += [f"    expose: true", f"    exposePort: {HOST_BAND + 10 + PORTS[k.split('@')[0]][0]}"]
     return "\n".join(out) + "\n"
 
 
@@ -99,18 +109,30 @@ def create(directory: str | pathlib.Path) -> None:
                                          "  # More sources: uncomment and fill in the address"))
     for ref in [*(spec.get("shells") or {}), *alone]:
         brickkit(d, "add", ref, "--yes")
+    also = list(spec.get("also") or [])
+    if also:  # older versions run beside the default one: compatibility versions for one of the cell's own components
+        doc = yaml.safe_load(bk.read_text())
+        for ref in also:
+            cid, version = ref.split("@")
+            other = next(a.split("@")[0] for a in alone if a.split("@")[0] != cid)
+            doc["components"].append({"id": cid, "version": version, "requiredBy": [other]})
+        bk.write_text(bk.read_text().split("components:")[0] + yaml.safe_dump({"components": doc["components"]},
+                                                                               sort_keys=False))
     declared = yaml.safe_load(bk.read_text())["components"]
     added = [c["id"] for c in declared]
     kept = [f"{c['id']}@{c['version']}" for c in declared if c.get("requiredBy")]
     placed = {m for ms in shells.values() for m in ms} | {a.split("@")[0] for a in alone} | set(shells)
-    unhosted = [c for c in added if c not in placed]
+    # two shells of different versions may bring two versions of one compiled-in member: one entry per ID
+    unhosted = list(dict.fromkeys(c for c in added if c not in placed))
     # a project lists exactly what its deploy file runs: compiled-in members this cell does not host are removed
     row = spec.get("row", "D")
     ids = [a.split("@")[0] for a in alone]
     local = frozenset([*shells, *ids] if row == "L" else [x.split("@")[0] for x in spec.get("local") or []])
-    (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, unhosted, kept, row, local))
+    (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, unhosted, kept, row, local, also))
     remove_all(d, unhosted)
-    (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, kept=kept, row=row, local=local))
+    # removing a member also removes the versions kept only for it (requiredBy): read what is kept again
+    kept = [f"{c['id']}@{c['version']}" for c in yaml.safe_load(bk.read_text())["components"] if c.get("requiredBy")]
+    (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, kept=kept, row=row, local=local, also=also))
     if local:  # mode: local runs from source: clone each local shell and component at its version into components/
         for comp in yaml.safe_load(bk.read_text())["components"]:
             if comp["id"] in local:
@@ -118,9 +140,11 @@ def create(directory: str | pathlib.Path) -> None:
         # adding a shell's source brings its compiled-in members back: the ones this cell does not host go again
         back = [c["id"] for c in yaml.safe_load(bk.read_text())["components"] if c["id"] in unhosted]
         if back:
-            (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, back, kept, row, local))
+            (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, back, kept, row, local, also))
             remove_all(d, back)
-            (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, kept=kept, row=row, local=local))
+            kept = [f"{c['id']}@{c['version']}" for c in yaml.safe_load(bk.read_text())["components"]
+                    if c.get("requiredBy")]
+            (d / "deploy.yaml").write_text(deploy_file(spec["cell"], shells, ids, kept=kept, row=row, local=local, also=also))
     gi = d / ".gitignore"
     gi.write_text(gi.read_text() + "\n# Generated by cells/create.py from cell.yaml: only cell.yaml is the cell's source\n"
                   "AGENTS.md\nCLAUDE.md\nshell/\n")

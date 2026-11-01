@@ -331,6 +331,9 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
             lines += ["PROBE_GUARD: \"true\"", "IAM_ISSUER: $var:IAM_ISSUER", "IAM_JWKS_URL: $var:IAM_JWKS_URL",
                       "AUTHZ_GRPC_URL: $var:AUTHZ_GRPC_URL", "AUDIT_GRPC_URL: $var:AUDIT_GRPC_URL"]
         (cfg / f"{f}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
+    for ref in c.also:  # an older version beside the default: the same targets, the same implementation instance
+        cid, version = ref.split("@")
+        (cfg / f"{file_of(cid)}@{version}.yaml").write_text((cfg / f"{file_of(cid)}.yaml").read_text())
 
 
 async def join_shell(directory: str | pathlib.Path, shell: str, members: list[str]) -> str:

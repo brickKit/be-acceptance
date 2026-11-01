@@ -64,6 +64,9 @@ class Cell:
     # where the base resources run: "" in Docker on this machine (every row), "cluster" in the K row's own cluster,
     # namespace be-base, behind one Service (step 10, B7)
     base: str = ""
+    # older versions of components the cell also runs side by side (id@version, suite D's V1): brickkit.yaml keeps
+    # each as a compatibility version, on the same schema and stream, its user surface on host port 10010 + its port
+    also: list[str] = field(default_factory=list)
 
     @property
     def base_host(self) -> str:
@@ -93,7 +96,8 @@ class Cell:
         c = Cell(d, spec["cell"], spec.get("chain") or [], spec.get("database", "be_experiment"), spec.get("bus", "jetstream"),
                  shells=shells, alone=alone, concurrency=int(spec.get("subscription_concurrency", 1)),
                  row=row, local=local, pooler=spec.get("pooler", ""),
-                 baseline_scale=int(spec.get("baseline_scale", 1)), base=spec.get("base", ""))
+                 baseline_scale=int(spec.get("baseline_scale", 1)), base=spec.get("base", ""),
+                 also=list(spec.get("also") or []))
         if c.base not in ("", "cluster") or (c.base == "cluster" and c.row != "K"):
             raise ValueError(f"{c.name}: base {c.base!r}: only the K row runs its base resources in the cluster")
         if c.pooler not in ("", "pgbouncer"):
@@ -147,6 +151,10 @@ class Cell:
     def host_port(self, component: str) -> int:
         """The host port a component's user surface or a shell's own port is exposed on."""
         return HOST_BAND + (PORTS[component][0] if component in PORTS else SHELL_PORTS[component])
+
+    def also_port(self, ref: str) -> int:
+        """The host port of an older version the cell also runs (id@version)."""
+        return HOST_BAND + 10 + PORTS[ref.split("@")[0]][0]
 
     def container_of(self, component: str) -> str:
         """The container a probe runs in (its shell's, or its own) or a shell's."""
