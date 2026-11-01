@@ -82,6 +82,18 @@ def test_v1_after_a_contract_migration_the_older_writer_is_refused(cell):
     assert o.json()["reason"] not in ("INTERNAL",), "refused as a version too old for the schema, not as a crash"
 
 
+@pytest.mark.skipif(PHASE != "again", reason="V1_PHASE=again")
+def test_v1_the_older_version_migrates_again_on_the_newer_schema(cell):
+    """P5.32: on an SDK that has it, the older version's migration, run again (as every deployment run and a restart
+    do), takes the schema the newer version migrated as done."""
+    ref = cell.also[0]
+    cid, version = ref.split("@")
+    name = f"brickkit-{cell.project}-{cid.replace('/', '-')}-{version.replace('.', '-')}-migration-1"
+    r = subprocess.run(["docker", "start", "-a", name], capture_output=True, text=True, timeout=120)
+    print("the older version's migration, run again:", r.returncode, (r.stdout + r.stderr)[-1500:])
+    assert r.returncode == 0, "the older version's migration refused a schema a newer version migrated"
+
+
 @pytest.mark.skipif(PHASE != "contract", reason="V1_PHASE=contract")
 def test_v1_the_older_version_does_not_start_again_on_the_newer_schema(cell):
     """Its migration, run again (as a restart would), meets a database migrated past the files it knows."""

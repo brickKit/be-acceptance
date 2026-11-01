@@ -20,6 +20,8 @@ from cells.spec import Cell  # noqa: E402
 
 # the first version of each probe with the additive contract (Note, a write's label, test.probe.noted.v1)
 ADDITIVE = {"go": (3, 2, 23), "py": (3, 2, 22)}
+# the first version of each probe on an SDK with P3.10 (an unknown route answers CAPABILITY_UNSUPPORTED itself)
+P3_10 = {"go": (3, 2, 25), "py": (3, 2, 24)}
 
 
 @pytest.fixture(scope="module")
@@ -44,9 +46,13 @@ def seen(c: Cell, component: str) -> dict:
     return httpx.get(url(c, component, "/api/probe/seen"), timeout=30).json()
 
 
-def additive(c: Cell, component: str) -> bool:
+def at_least(c: Cell, component: str, first: dict) -> bool:
     lang = "py" if "-py" in component else "go"
-    return tuple(int(x) for x in c.versions_of_probes[component].split(".")) >= ADDITIVE[lang]
+    return tuple(int(x) for x in c.versions_of_probes[component].split(".")) >= first[lang]
+
+
+def additive(c: Cell, component: str) -> bool:
+    return at_least(c, component, ADDITIVE)
 
 
 def eventually(fn, within: float = 30.0):
@@ -131,9 +137,13 @@ def pair_by_contract(c: Cell) -> tuple[str, str]:
 
 
 @pytest.mark.parametrize("surface", ["grpc", "http"])
-def test_v2_a_new_caller_gets_capability_unsupported_from_an_old_callee(cell, surface):
-    """V2: an operation the callee's version does not have is refused explicitly, never a silent success."""
+def test_v2_a_new_caller_gets_capability_unsupported_from_an_old_callee(cell, surface, request):
+    """V2: an operation the callee's version does not have is refused explicitly, never a silent success. Over the
+    user surface a callee before P3.10 answers 404 NOT_FOUND, which a caller cannot tell from a record out of sight, so
+    it is not mapped (P4.29): expected to fail until the callee runs an SDK with P3.10."""
     new, old = pair_by_contract(cell)
+    if surface == "http" and not at_least(cell, old, P3_10):
+        request.applymarker(pytest.mark.xfail(strict=True, reason="P4.29: an old callee's 404 NOT_FOUND is not mapped"))
     r = post(cell, new, "/api/probe/call", {"op": "note", "surface": surface})
     assert r.status_code != 200, r.text
     assert r.json()["reason"] == "CAPABILITY_UNSUPPORTED", r.text
