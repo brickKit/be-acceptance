@@ -40,7 +40,7 @@ async def test_each_probe_alone(kind, specs, world, tmp_path):
     try:
         p = await d.start(spec, await d.env(spec, {}))
         await operations_alone(p)
-        assert (await p.get("/api/probe/seen")).json() == {"count": 0, "big": 0, "relayed": 0}
+        assert (await p.get("/api/probe/seen")).json() == {"count": 0, "big": 0, "relayed": 0, "noted": 0}
     finally:
         await d.stop()
 
@@ -68,7 +68,34 @@ async def test_the_probes_call_each_other_and_exchange_events(bus, specs, world,
         # each probe saw the other's six events, one over 64 KiB, and relayed three of them back as calls
         for consumer in (g, p):
             await eventually(lambda c=consumer: _seen(c),
-                             {"count": 6, "big": 1, "relayed": 3})
+                             {"count": 6, "big": 1, "relayed": 3, "noted": 0})
+    finally:
+        await d.stop()
+
+
+async def test_the_additions_of_go_3_2_23_and_py_3_2_22(specs, world, tmp_path):
+    """The contract's additions (suite D): the Note method on both surfaces in both directions, a write's label read
+    back, a write asked as noted sent as test.probe.noted.v1 and counted by the peer."""
+    go, py = specs["go"], specs["py"]
+    d = Deployment(world, await fresh_bus("jetstream", [go.stream, py.stream]), tmp_path)
+    try:
+        gport, pport = free_port(), free_port()
+        g = await d.start(go, await d.env(go, {"PROBE_PEER_STREAM": py.stream, **address(py, pport)}), gport)
+        p = await d.start(py, await d.env(py, {"PROBE_PEER_STREAM": go.stream, **address(go, gport)}), pport)
+        for caller in (g, p):
+            assert (await caller.post("/api/probe/note", {"payload": "x"})).json() == {"payload": "noted:x"}
+            for surface in ("grpc", "http"):
+                r = await caller.post("/api/probe/call", {"op": "note", "surface": surface})
+                assert r.status_code == 200, (caller.spec.id, surface, r.text, caller.logs()[-2000:])
+            labelled = (await caller.post("/api/probe/write", {"bytes": 3, "label": "v"})).json()["id"]
+            plain = (await caller.post("/api/probe/write", {"bytes": 4, "event": "noted"})).json()["id"]
+            assert (await caller.get(f"/api/probe/written/{labelled}")).json() == {"id": labelled, "bytes": 3, "label": "v"}
+            assert (await caller.get(f"/api/probe/written/{plain}")).json() == {"id": plain, "bytes": 4, "label": None}
+            assert (await caller.get("/api/probe/written/00000000-0000-7000-8000-000000000000")).status_code == 404
+            r = await caller.post("/api/probe/write", {"bytes": 1, "label": "x" * 65})
+            assert r.status_code == 400 and r.json()["reason"] == "REQUEST_INVALID", r.text
+        for consumer in (g, p):
+            await eventually(lambda c=consumer: _seen(c), {"count": 2, "big": 0, "relayed": 0, "noted": 1})
     finally:
         await d.stop()
 

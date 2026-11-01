@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-go3
   name: Go probe (go3)
-  version: 3.2.22
+  version: 3.2.23
   description: "A variant of test/probe-go: the same code under its own component ID, ports and event stream"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -35,8 +35,8 @@ local:
   migrationCommand: [go, -C, ../go, run, ., migrate]
 
 events:
-  publishes: [test.probe.written.v1]
-  subscribes: [test.probe.written.v1]
+  publishes: [test.probe.written.v1, test.probe.noted.v1]
+  subscribes: [test.probe.written.v1, test.probe.noted.v1]
 
 configSchema:
   type: object

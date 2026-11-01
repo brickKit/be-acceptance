@@ -7,16 +7,19 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// The system surface: /test.probe.v1.Probe/Echo (BytesValue) and /Work (UInt32Value, milliseconds of CPU). Written
-// by hand so the probe needs no generated code; the Python probe registers the same methods.
+// The system surface: /test.probe.v1.Probe/Echo (BytesValue), /Work (UInt32Value, milliseconds of CPU) and, since
+// 3.2.23, /Note (BytesValue, answered with "noted:" before it). Written by hand so the probe needs no generated code;
+// the Python probe registers the same methods.
 const (
 	EchoMethod = "/test.probe.v1.Probe/Echo"
 	WorkMethod = "/test.probe.v1.Probe/Work"
+	NoteMethod = "/test.probe.v1.Probe/Note"
 )
 
 type server interface {
 	Echo(context.Context, *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error)
 	Work(context.Context, *wrapperspb.UInt32Value) (*wrapperspb.UInt32Value, error)
+	Note(context.Context, *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error)
 }
 
 func handler[In any, Out any](full string, call func(server, context.Context, *In) (*Out, error)) grpc.MethodHandler {
@@ -39,5 +42,8 @@ var desc = grpc.ServiceDesc{ServiceName: "test.probe.v1.Probe", HandlerType: (*s
 	})},
 	{MethodName: "Work", Handler: handler(WorkMethod, func(s server, ctx context.Context, in *wrapperspb.UInt32Value) (*wrapperspb.UInt32Value, error) {
 		return s.Work(ctx, in)
+	})},
+	{MethodName: "Note", Handler: handler(NoteMethod, func(s server, ctx context.Context, in *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error) {
+		return s.Note(ctx, in)
 	})},
 }}

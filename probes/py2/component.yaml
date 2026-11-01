@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-py2
   name: Python probe (py2)
-  version: 3.2.21
+  version: 3.2.22
   description: "A variant of test/probe-py: the same code under its own component ID, ports and event stream"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -35,8 +35,8 @@ local:
   migrationCommand: [uv, run, --project, ../py, python, -m, probe_py, migrate]
 
 events:
-  publishes: [test.probe.written.v1]
-  subscribes: [test.probe.written.v1]
+  publishes: [test.probe.written.v1, test.probe.noted.v1]
+  subscribes: [test.probe.written.v1, test.probe.noted.v1]
 
 configSchema:
   type: object

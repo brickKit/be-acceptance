@@ -9,8 +9,9 @@ from besdk.component import Definition
 from besdk.config import Key, Type
 from besdk.events.core import Stream
 
-VERSION, WRITTEN_TYPE = "3.2.21", "test.probe.written.v1"
-RELAY_BYTES, MAX_WORK_MS, MAX_BYTES = 1024, 1000, 512 << 10
+VERSION, WRITTEN_TYPE = "3.2.22", "test.probe.written.v1"
+NOTED_TYPE = "test.probe.noted.v1"  # since 3.2.22: a write asked as "noted" (suite D, V3)
+RELAY_BYTES, MAX_WORK_MS, MAX_BYTES, MAX_LABEL = 1024, 1000, 512 << 10, 64
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ def authz(component_id: str) -> Definitions:
     methods always."""
     p = prefix(component_id)
     ops = [Operation(f"{p}.read", p, "read", "low")]
-    ops += [Operation(f"{p}.{op}", p, "action", "low") for op in ("echo", "work", "write", "call")]
+    ops += [Operation(f"{p}.{op}", p, "action", "low") for op in ("echo", "work", "write", "call", "note")]
     return Definitions(component_id, [Resource(p, f"{p}.read", {}, {})], ops)
 
 

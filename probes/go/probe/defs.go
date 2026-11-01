@@ -11,8 +11,10 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.22"
+	Version     = "3.2.23"
 	WrittenType = "test.probe.written.v1"
+	NotedType   = "test.probe.noted.v1" // since 3.2.23: a write asked as "noted" (suite D, V3)
+	MaxLabel    = 64
 	RelayBytes  = 1024
 	MaxWorkMS   = 1000
 	MaxBytes    = 512 << 10
@@ -70,7 +72,7 @@ func Prefix(id string) string {
 func Authz(id string) *authz.Definitions {
 	p := Prefix(id)
 	ops := []authz.Operation{{Key: p + ".read", ResourceType: p, Purpose: "read", RiskClass: "low"}}
-	for _, op := range []string{"echo", "work", "write", "call"} {
+	for _, op := range []string{"echo", "work", "write", "call", "note"} {
 		ops = append(ops, authz.Operation{Key: p + "." + op, ResourceType: p, Purpose: "action", RiskClass: "low"})
 	}
 	return &authz.Definitions{Component: id, Operations: ops, Resources: []authz.Resource{{Type: p,

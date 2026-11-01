@@ -1,5 +1,5 @@
-"""The probe module: the user surface (/api/probe/...), the system surface (/test.probe.v1.Probe/Echo and /Work),
-Write with its event, and the relay of the peer's events to the next probe."""
+"""The probe module: the user surface (/api/probe/...), the system surface (/test.probe.v1.Probe/Echo, /Work and, since
+3.2.22, /Note), Write with its event, and the relay of the peer's events to the next probe."""
 from __future__ import annotations
 
 import asyncio
@@ -16,9 +16,10 @@ from besdk.events.consumer import Received, Sub
 from besdk.events.core import Event, Projection
 from besdk.http import Route
 from besdk.system import Method
-from probe_py import CALLERS, MAX_BYTES, MAX_WORK_MS, RELAY_BYTES, WRITTEN_TYPE, Variant, prefix
+from probe_py import (CALLERS, MAX_BYTES, MAX_LABEL, MAX_WORK_MS, NOTED_TYPE, RELAY_BYTES, WRITTEN_TYPE, Variant,
+                      prefix)
 
-ECHO, WORK = "/test.probe.v1.Probe/Echo", "/test.probe.v1.Probe/Work"
+ECHO, WORK, NOTE = "/test.probe.v1.Probe/Echo", "/test.probe.v1.Probe/Work", "/test.probe.v1.Probe/Note"
 RELAY_POLL, RELAY_CONCURRENCY, RELAY_LEASE, RELAY_TIMEOUT = 0.5, 4, 30, 10.0
 
 
@@ -57,7 +58,8 @@ class Probe:
         guard = self.rt.config.bool("PROBE_GUARD")
         for method, path, op, h in (("POST", "echo", "echo", self.echo_http), ("POST", "work", "work", self.work_http),
                                     ("POST", "write", "write", self.write), ("POST", "call", "call", self.call),
-                                    ("GET", "seen", "read", self.seen)):
+                                    ("GET", "seen", "read", self.seen), ("POST", "note", "note", self.note_http),
+                                    ("GET", "written/{id}", "read", self.written_row)):
             r.add(Route(method, "/api/probe/" + path, h, f"{self.ops}.{op}" if guard else "", public=not guard))
 
     async def echo_http(self, c):
@@ -74,12 +76,17 @@ class Probe:
     async def write(self, c):
         body = await c.json()
         n, relay = number(body, "bytes", MAX_BYTES), bool(body.get("relay", False))
+        label, event = body.get("label", ""), body.get("event", "")  # both since 3.2.22, optional
+        if not isinstance(label, str) or len(label.encode()) > MAX_LABEL or event not in ("", "noted"):
+            raise invalid("bytes must be 0..524288, label at most 64 bytes, event empty or noted")
+        typ = NOTED_TYPE if event == "noted" else WRITTEN_TYPE
         rid = str(uuid.uuid7())
 
         async def fn(tx):
-            await tx.execute("INSERT INTO probe_writes (id, size) VALUES ($1, $2)", uuid.UUID(rid), n)
-            data = {"id": rid, "relay": relay, **({"blob": "w" * n} if n else {})}
-            await self.rt.events.emit(tx, self.v.stream, Event(WRITTEN_TYPE, rid, 1, Projection.FULL, data))
+            await tx.execute("INSERT INTO probe_writes (id, size, label) VALUES ($1, $2, $3)", uuid.UUID(rid), n,
+                             label or None)
+            data = {"id": rid, "relay": relay, **({"blob": "w" * n} if n else {}), **({"label": label} if label else {})}
+            await self.rt.events.emit(tx, self.v.stream, Event(typ, rid, 1, Projection.FULL, data))
 
         await self.rt.db.tx(fn)
         return JSONResponse({"id": rid}, status_code=201)
@@ -96,14 +103,18 @@ class Probe:
         elif surface == "grpc" and op == "work":
             await self._stub(WORK, wrappers_pb2.UInt32Value)(wrappers_pb2.UInt32Value(value=ms),
                                                              metadata=options(idempotent=True))
-        elif surface == "http" and op in ("echo", "work"):
+        elif surface == "grpc" and op == "note":
+            await self._stub(NOTE, wrappers_pb2.BytesValue)(wrappers_pb2.BytesValue(value=b"n"),
+                                                            metadata=options(idempotent=True))
+        elif surface == "http" and op in ("echo", "work", "note"):
             h = self.rt.http_at(self.next, self.rt.config.string("PROBE_NEXT_URL"))
             if h is None:
                 raise self.no_next.new("PROBE_NEXT_URL is not set")
-            path, payload = ("/api/probe/echo", {"payload": "e" * n}) if op == "echo" else ("/api/probe/work", {"ms": ms})
+            path, payload = {"echo": ("/api/probe/echo", {"payload": "e" * n}), "work": ("/api/probe/work", {"ms": ms}),
+                             "note": ("/api/probe/note", {"payload": "n"})}[op]
             await h.do("POST", path, payload, idempotent=True, forward_user=self.rt.config.bool("PROBE_GUARD"))
         else:
-            raise invalid("op must be echo or work, surface grpc or http")
+            raise invalid("op must be echo, work or note, surface grpc or http")
         # the hop alone, as the caller sees it: the driver's own request to this probe is not in it
         return JSONResponse({"ok": True, "elapsed_us": int((time.perf_counter() - start) * 1_000_000)})
 
@@ -122,8 +133,27 @@ class Probe:
     async def seen(self, c):
         row = await self.rt.db.tx(lambda tx: tx.fetchrow(
             "SELECT count(*) AS count, count(*) FILTER (WHERE size > 65536) AS big, "
-            "count(*) FILTER (WHERE relayed_at IS NOT NULL) AS relayed FROM probe_seen"))
+            "count(*) FILTER (WHERE relayed_at IS NOT NULL) AS relayed, count(*) FILTER (WHERE type = $1) AS noted "
+            "FROM probe_seen", NOTED_TYPE))
         return JSONResponse(dict(row))
+
+    async def note_http(self, c):
+        """The payload with "noted:" before it (since 3.2.22)."""
+        body = await c.json()
+        if not isinstance(body, dict) or not isinstance(body.get("payload", ""), str):
+            raise invalid("payload must be a string")
+        return JSONResponse({"payload": "noted:" + body.get("payload", "")})
+
+    async def written_row(self, c):
+        """One written row read back (since 3.2.22): a row of an older probe on the same schema has no label."""
+        try:
+            rid = uuid.UUID(c.param("id"))
+        except ValueError:
+            raise errs.new("NOT_FOUND", "no such write") from None
+        row = await self.rt.db.tx(lambda tx: tx.fetchrow("SELECT size, label FROM probe_writes WHERE id = $1", rid))
+        if row is None:
+            raise errs.new("NOT_FOUND", "no such write")
+        return JSONResponse({"id": str(rid), "bytes": row["size"], "label": row["label"]})
 
     # ------------------------------------------------------------------ system surface
 
@@ -141,20 +171,26 @@ class Probe:
             return grpc.unary_unary_rpc_method_handler(fn, request_deserializer=kind.FromString,
                                                        response_serializer=kind.SerializeToString)
 
+        async def note(request, context):
+            return wrappers_pb2.BytesValue(value=b"noted:" + request.value)
+
         s.add("test.probe.v1.Probe", {"Echo": handler(echo, wrappers_pb2.BytesValue),
-                                      "Work": handler(work, wrappers_pb2.UInt32Value)},
-              {"Echo": Method(f"{self.ops}.echo", CALLERS), "Work": Method(f"{self.ops}.work", CALLERS)})
+                                      "Work": handler(work, wrappers_pb2.UInt32Value),
+                                      "Note": handler(note, wrappers_pb2.BytesValue)},
+              {"Echo": Method(f"{self.ops}.echo", CALLERS), "Work": Method(f"{self.ops}.work", CALLERS),
+               "Note": Method(f"{self.ops}.note", CALLERS)})
 
     # ------------------------------------------------------------------ events and the relay
 
     def subscriptions(self, s) -> None:
         if peer := self.rt.config.string("PROBE_PEER_STREAM"):
-            s.add(Sub("peer", [peer], self.received, types=[WRITTEN_TYPE]))
+            # both types since 3.2.22; an older probe takes test.probe.written.v1 only (P6.33: the transport filters the rest)
+            s.add(Sub("peer", [peer], self.received, types=[WRITTEN_TYPE, NOTED_TYPE]))
 
     async def received(self, tx, e: Received) -> None:
         w = e.decode()
-        await tx.execute("INSERT INTO probe_seen (event_id, source, size, relay) VALUES ($1, $2, $3, $4)",
-                         uuid.UUID(e.id), e.source, len(w.get("blob", "")), bool(w.get("relay")))
+        await tx.execute("INSERT INTO probe_seen (event_id, source, size, relay, type) VALUES ($1, $2, $3, $4, $5)",
+                         uuid.UUID(e.id), e.source, len(w.get("blob", "")), bool(w.get("relay")), e.type)
         if w.get("relay"):
             # the call to the next probe leaves the transaction through the relay queue (no network call inside it)
             await tx.execute("INSERT INTO probe_relay (event_id) VALUES ($1)", uuid.UUID(e.id))

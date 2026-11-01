@@ -20,6 +20,7 @@ import (
 	"github.com/brickKit/be-sdk-go/v3/ids"
 	"github.com/brickKit/be-sdk-go/v3/runtime"
 	"github.com/brickKit/be-sdk-go/v3/work"
+	"github.com/jackc/pgx/v5"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -77,6 +78,8 @@ func (p *Probe) Routes(r *httpx.Routes) error {
 	add("POST", "write", "write", p.write)
 	add("POST", "call", "call", p.call)
 	add("GET", "seen", "read", p.seen)
+	add("POST", "note", "note", p.noteHTTP)
+	add("GET", "written/:id", "read", p.writtenRow)
 	return nil
 }
 
@@ -122,14 +125,17 @@ func burn(d time.Duration) {
 var sink uint64
 
 type writeIn struct {
-	Bytes int  `json:"bytes"`
-	Relay bool `json:"relay"`
+	Bytes int    `json:"bytes"`
+	Relay bool   `json:"relay"`
+	Label string `json:"label"` // since 3.2.23, optional
+	Event string `json:"event"` // since 3.2.23: "noted" emits test.probe.noted.v1 instead
 }
 
 type written struct {
 	ID    string `json:"id"`
 	Relay bool   `json:"relay"`
 	Blob  string `json:"blob,omitempty"`
+	Label string `json:"label,omitempty"`
 }
 
 // write inserts a row and its event in one transaction (Write; a payload over 64 KiB is a big event).
@@ -138,16 +144,25 @@ func (p *Probe) write(c *httpx.Context) error {
 	if err := c.BindJSON(&in); err != nil {
 		return err
 	}
-	if in.Bytes < 0 || in.Bytes > MaxBytes {
-		return invalid("bytes must be 0..524288")
+	if in.Bytes < 0 || in.Bytes > MaxBytes || len(in.Label) > MaxLabel || (in.Event != "" && in.Event != "noted") {
+		return invalid("bytes must be 0..524288, label at most 64 bytes, event empty or noted")
+	}
+	typ, label := WrittenType, &in.Label
+	if in.Event == "noted" {
+		typ = NotedType
+	}
+	if in.Label == "" {
+		label = nil
 	}
 	id := ids.New().String()
 	err := p.rt.DB.Tx(c.Ctx(), func(ctx context.Context, tx db.Tx) error {
-		if _, err := tx.Exec(ctx, "INSERT INTO probe_writes (id, size) VALUES ($1, $2)", id, in.Bytes); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO probe_writes (id, size, label) VALUES ($1, $2, $3)", id, in.Bytes,
+			label); err != nil {
 			return err
 		}
-		_, err := p.rt.Events.Emit(ctx, tx, p.v.Stream, events.Event{Type: WrittenType, RecordID: id, Version: 1,
-			Projection: events.Full, Data: written{ID: id, Relay: in.Relay, Blob: strings.Repeat("w", in.Bytes)}})
+		_, err := p.rt.Events.Emit(ctx, tx, p.v.Stream, events.Event{Type: typ, RecordID: id, Version: 1,
+			Projection: events.Full, Data: written{ID: id, Relay: in.Relay, Blob: strings.Repeat("w", in.Bytes),
+				Label: in.Label}})
 		return err
 	})
 	if err != nil {
@@ -157,7 +172,7 @@ func (p *Probe) write(c *httpx.Context) error {
 }
 
 type callIn struct {
-	Op      string `json:"op"`      // echo, work
+	Op      string `json:"op"`      // echo, work, note (since 3.2.23)
 	Surface string `json:"surface"` // grpc, http
 	Bytes   int    `json:"bytes"`
 	MS      int    `json:"ms"`
@@ -183,10 +198,12 @@ func (p *Probe) call(c *httpx.Context) error {
 		err = p.echoNext(c.Ctx(), next, in.Bytes)
 	case in.Surface == "grpc" && in.Op == "work":
 		err = p.grpcNext(c.Ctx(), next, WorkMethod, wrapperspb.UInt32(uint32(in.MS)), new(wrapperspb.UInt32Value))
-	case in.Surface == "http" && (in.Op == "echo" || in.Op == "work"):
+	case in.Surface == "grpc" && in.Op == "note":
+		err = p.grpcNext(c.Ctx(), next, NoteMethod, wrapperspb.Bytes([]byte("n")), new(wrapperspb.BytesValue))
+	case in.Surface == "http" && (in.Op == "echo" || in.Op == "work" || in.Op == "note"):
 		err = p.httpNext(c.Ctx(), next, in)
 	default:
-		return invalid("op must be echo or work, surface grpc or http")
+		return invalid("op must be echo, work or note, surface grpc or http")
 	}
 	if err != nil {
 		return err
@@ -220,9 +237,12 @@ func (p *Probe) httpNext(ctx context.Context, next string, in callIn) error {
 		return p.noNext.New("PROBE_NEXT_URL is not set")
 	}
 	req := calls.Request{Method: "POST", Idempotent: true, ForwardUser: p.rt.Config.Bool("PROBE_GUARD")}
-	if in.Op == "echo" {
+	switch in.Op {
+	case "echo":
 		req.Path, req.Body = "/api/probe/echo", payload{Payload: strings.Repeat("e", in.Bytes)}
-	} else {
+	case "note":
+		req.Path, req.Body = "/api/probe/note", payload{Payload: "n"}
+	default:
 		req.Path, req.Body = "/api/probe/work", workIn{MS: in.MS}
 	}
 	var out json.RawMessage
@@ -230,27 +250,59 @@ func (p *Probe) httpNext(ctx context.Context, next string, in callIn) error {
 }
 
 func (p *Probe) seen(c *httpx.Context) error {
-	var count, big, relayed int
+	var count, big, relayed, noted int
 	err := p.rt.DB.Tx(c.Ctx(), func(ctx context.Context, tx db.Tx) error {
 		return tx.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE size > 65536),
-			count(*) FILTER (WHERE relayed_at IS NOT NULL) FROM probe_seen`).Scan(&count, &big, &relayed)
+			count(*) FILTER (WHERE relayed_at IS NOT NULL), count(*) FILTER (WHERE type = $1) FROM probe_seen`,
+			NotedType).Scan(&count, &big, &relayed, &noted)
 	})
 	if err != nil {
 		return err
 	}
-	return c.JSON(200, map[string]int{"count": count, "big": big, "relayed": relayed})
+	return c.JSON(200, map[string]int{"count": count, "big": big, "relayed": relayed, "noted": noted})
+}
+
+// noteHTTP answers the payload with "noted:" before it (since 3.2.23).
+func (p *Probe) noteHTTP(c *httpx.Context) error {
+	var in payload
+	if err := c.BindJSON(&in); err != nil {
+		return err
+	}
+	return c.JSON(200, payload{Payload: "noted:" + in.Payload})
+}
+
+// writtenRow reads one written row back (since 3.2.23): a row of an older probe on the same schema has no label.
+func (p *Probe) writtenRow(c *httpx.Context) error {
+	var size int
+	var label *string
+	err := p.rt.DB.Tx(c.Ctx(), func(ctx context.Context, tx db.Tx) error {
+		return tx.QueryRow(ctx, "SELECT size, label FROM probe_writes WHERE id = $1", c.Param("id")).Scan(&size, &label)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errs.New(errs.ReasonNotFound, "no such write")
+	}
+	if err != nil {
+		return err
+	}
+	return c.JSON(200, map[string]any{"id": c.Param("id"), "bytes": size, "label": label})
 }
 
 // Services registers the system surface.
 func (p *Probe) Services(s *grpcx.Services) error {
 	s.Register(&desc, p, map[string]grpcx.Method{"Echo": {Operation: Prefix(p.v.ID) + ".echo", Callers: Callers},
-		"Work": {Operation: Prefix(p.v.ID) + ".work", Callers: Callers}})
+		"Work": {Operation: Prefix(p.v.ID) + ".work", Callers: Callers},
+		"Note": {Operation: Prefix(p.v.ID) + ".note", Callers: Callers}})
 	return nil
 }
 
 // Echo implements the system method.
 func (p *Probe) Echo(_ context.Context, in *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error) {
 	return in, nil
+}
+
+// Note implements the system method (since 3.2.23).
+func (p *Probe) Note(_ context.Context, in *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error) {
+	return wrapperspb.Bytes(append([]byte("noted:"), in.Value...)), nil
 }
 
 // Work implements the system method.
@@ -268,7 +320,8 @@ func (p *Probe) Subscriptions(s *events.Subscriptions) error {
 	if peer == "" {
 		return nil
 	}
-	s.Add(events.Sub{Name: "peer", Streams: []string{peer}, Types: []string{WrittenType}, Handle: p.received})
+	// both types since 3.2.23; an older probe takes test.probe.written.v1 only (P6.33: the transport filters the rest)
+	s.Add(events.Sub{Name: "peer", Streams: []string{peer}, Types: []string{WrittenType, NotedType}, Handle: p.received})
 	return nil
 }
 
@@ -277,8 +330,8 @@ func (p *Probe) received(ctx context.Context, tx db.Tx, e events.Received) error
 	if err := e.Decode(&w); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "INSERT INTO probe_seen (event_id, source, size, relay) VALUES ($1, $2, $3, $4)",
-		e.ID, e.Source, len(w.Blob), w.Relay); err != nil {
+	if _, err := tx.Exec(ctx, "INSERT INTO probe_seen (event_id, source, size, relay, type) VALUES ($1, $2, $3, $4, $5)",
+		e.ID, e.Source, len(w.Blob), w.Relay, e.Type); err != nil {
 		return err
 	}
 	if !w.Relay {

@@ -61,7 +61,8 @@ def manifest(kind: str, lang: str, port: int, grpc: int) -> str:
     run, mig = LOCAL[lang]
     out = re.sub(r"(?m)^  runCommand: .*$", f"  runCommand: {run}", out, count=1)
     out = re.sub(r"(?m)^  migrationCommand: .*$", f"  migrationCommand: {mig}", out, count=1)
-    return out
+    # a variant is not a Go module of its own: its Dockerfile installs the main probe's module tag
+    return re.sub(r"(?m)^release:\n(  .*\n)+\n?", "", out)
 
 
 def version(lang: str) -> str:
