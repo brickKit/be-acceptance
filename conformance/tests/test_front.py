@@ -28,6 +28,14 @@ def test_kubernetes_and_a_single_replica_need_no_door(tmp_path):
     assert front.doors(cell(tmp_path, replicas="  erp/inventory@3.0.11: 1\n")) == []
 
 
+def test_kubernetes_has_no_door_to_remove(tmp_path, monkeypatch):
+    """`cells front down` runs for every row when a cell goes down; on Kubernetes there is no engine command to ask."""
+    def refuse(*a, **k):
+        raise AssertionError(f"ran {a[0]}")
+    monkeypatch.setattr(front.subprocess, "run", refuse)
+    front.down(cell(tmp_path, row="K"))
+
+
 def test_the_config_balances_each_request_and_follows_the_dns():
     cfg = front.config("erp-sales-3-0-17", 8088)
     assert "mode http" in cfg and "balance roundrobin" in cfg and "parse-resolv-conf" in cfg

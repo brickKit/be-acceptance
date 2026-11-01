@@ -51,6 +51,29 @@ def test_rs08_the_same_key_confirms_once(bob, world):
     eventually(lambda: position(bob, world, world.shanghai, world.goods["id"]) == (on_hand, reserved))
 
 
+def test_rs08_the_same_key_sent_at_once_confirms_once(bob, world):
+    """RS08 at once (suite E): eight confirmations with one key at the same time (with replicas, the front door sends
+    them to different replicas) make one process (P4.23): each answer is the same confirmation, or
+    IDEMPOTENCY_IN_PROGRESS while the first use has not finished; the stock is held once."""
+    on_hand, reserved = position(bob, world, world.shanghai, world.goods["id"])
+    o = order(bob, world, world.large, [goods(world, 2)])
+    key = f"l3:{uuid.uuid4()}"
+    url = bob.url("erp/sales", f"/api/sales/orders/{o['id']}/confirm")
+    with ThreadPoolExecutor(8) as pool:
+        answers = list(pool.map(lambda _: bob.http.post(
+            url, headers={"Authorization": f"Bearer {bob.token}", "Idempotency-Key": key}), range(8)))
+    done = [r.json() for r in answers if r.status_code == 200]
+    busy = [r for r in answers if r.status_code != 200]
+    assert all(r.status_code == 409 and r.json().get("reason") == "IDEMPOTENCY_IN_PROGRESS" for r in busy), \
+        [f"{r.status_code} {r.text[:200]}" for r in busy]
+    assert done, "at least the first use answers"
+    assert len({a.get("confirmation_id") for a in done}) == 1, [a.get("confirmation_id") for a in done]
+    assert {a["outcome"] for a in done} == {"confirmed"}, [a["outcome"] for a in done]
+    assert position(bob, world, world.shanghai, world.goods["id"]) == (on_hand, reserved + 2), "held once"
+    bob.post("erp/sales", f"/api/sales/orders/{o['id']}/cancel")
+    eventually(lambda: position(bob, world, world.shanghai, world.goods["id"]) == (on_hand, reserved))
+
+
 def test_rs16_opposite_line_orders_confirm_without_deadlock(bob, world, second_goods):
     """RS16: orders with the same two products in opposite order confirm at the same time, ten pairs: every one is
     confirmed, none waits on the other (a fixed lock order)."""

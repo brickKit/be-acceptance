@@ -81,6 +81,8 @@ def up(c: Cell) -> list[str]:
 
 
 def down(c: Cell) -> None:
+    if c.target == "k8s":  # no doors there (doors())
+        return
     names = subprocess.run([c.target, "ps", "-a", "--format", "{{.Names}}"], capture_output=True,
                            text=True).stdout.split()
     stale = [n for n in names if n.startswith(f"front-{c.project}-")]
