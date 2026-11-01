@@ -75,6 +75,14 @@ def main() -> int:
         role = asyncio.run(prepare.join_shell(sys.argv[2], sys.argv[3], sys.argv[4:]))
         print(f"{sys.argv[3]} in {sys.argv[2]}: login role {role} holds {', '.join(sys.argv[4:])}")
         return 0
+    if sys.argv[1:2] == ["front"] and len(sys.argv) == 4 and sys.argv[2] in ("up", "down"):
+        from cells import front, spec
+        c = spec.Cell.load(sys.argv[3])
+        if sys.argv[2] == "up":
+            print("\n".join(front.up(c)) or "no front doors")
+        else:
+            front.down(c)
+        return 0
     if sys.argv[1:2] == ["invariants"] and len(sys.argv) in (4, 5):
         from cells import invariants
 

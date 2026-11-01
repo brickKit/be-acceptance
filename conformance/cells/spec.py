@@ -67,6 +67,9 @@ class Cell:
     # older versions of components the cell also runs side by side (id@version, suite D's V1): brickkit.yaml keeps
     # each as a compatibility version, on the same schema and stream, its user surface on host port 10010 + its port
     also: list[str] = field(default_factory=list)
+    # suite E: shells and components running alone with several replicas (id -> count); on Docker and Podman they map
+    # no host port, and a front door (cells/front.py) takes their host port instead
+    replicas: dict[str, int] = field(default_factory=dict)
 
     @property
     def base_host(self) -> str:
@@ -97,7 +100,8 @@ class Cell:
                  shells=shells, alone=alone, concurrency=int(spec.get("subscription_concurrency", 1)),
                  row=row, local=local, pooler=spec.get("pooler", ""),
                  baseline_scale=int(spec.get("baseline_scale", 1)), base=spec.get("base", ""),
-                 also=list(spec.get("also") or []))
+                 also=list(spec.get("also") or []),
+                 replicas={k.split("@")[0]: int(v) for k, v in (spec.get("replicas") or {}).items()})
         if c.base not in ("", "cluster") or (c.base == "cluster" and c.row != "K"):
             raise ValueError(f"{c.name}: base {c.base!r}: only the K row runs its base resources in the cluster")
         if c.pooler not in ("", "pgbouncer"):
@@ -105,6 +109,9 @@ class Cell:
         stray = [x for x in c.local if x not in c.shells and x not in c.alone]
         if stray:
             raise ValueError(f"{c.name}: local names what is neither a shell nor a component running alone: {stray}")
+        odd = [k for k, n in c.replicas.items() if n < 1 or (k not in c.shells and k not in c.alone) or k in c.local]
+        if odd:
+            raise ValueError(f"{c.name}: replicas names what is not a shell or a component running alone in a container: {odd}")
         unknown = [p for p in c.chain if p not in c.probes]
         if unknown:
             raise ValueError(f"{c.name}: the chain names probes the cell does not run: {unknown}")
