@@ -53,8 +53,9 @@ def test_rs08_the_same_key_confirms_once(bob, world):
 
 def test_rs08_the_same_key_sent_at_once_confirms_once(bob, world):
     """RS08 at once (suite E): eight confirmations with one key at the same time (with replicas, the front door sends
-    them to different replicas) make one process (P4.23): each answer is the same confirmation, or
-    IDEMPOTENCY_IN_PROGRESS while the first use has not finished; the stock is held once."""
+    them to different replicas) make one process (P4.23): each answer is IDEMPOTENCY_IN_PROGRESS while the first use
+    has not committed, or that one confirmation in its state when the answer was read (the contract: "the same key
+    again answers the same process", processing until it ends; P4.24); the order ends confirmed, the stock held once."""
     on_hand, reserved = position(bob, world, world.shanghai, world.goods["id"])
     o = order(bob, world, world.large, [goods(world, 2)])
     key = f"l3:{uuid.uuid4()}"
@@ -68,7 +69,8 @@ def test_rs08_the_same_key_sent_at_once_confirms_once(bob, world):
         [f"{r.status_code} {r.text[:200]}" for r in busy]
     assert done, "at least the first use answers"
     assert len({a.get("confirmation_id") for a in done}) == 1, [a.get("confirmation_id") for a in done]
-    assert {a["outcome"] for a in done} == {"confirmed"}, [a["outcome"] for a in done]
+    assert {a["outcome"] for a in done} <= {"confirmed", "processing"}, [a["outcome"] for a in done]
+    eventually(lambda: bob.get("erp/sales", f"/api/sales/orders/{o['id']}")["state"] == "confirmed")
     assert position(bob, world, world.shanghai, world.goods["id"]) == (on_hand, reserved + 2), "held once"
     bob.post("erp/sales", f"/api/sales/orders/{o['id']}/cancel")
     eventually(lambda: position(bob, world, world.shanghai, world.goods["id"]) == (on_hand, reserved))

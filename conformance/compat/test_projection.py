@@ -131,3 +131,43 @@ async def test_v3_later_mdm_org_events_reach_the_department_projection(cell):
     finally:
         await nc.close()
         await conn.close()
+
+
+async def test_e4_out_of_order_and_repeated_events_end_as_in_order(cell):
+    """Suite E4 (step13-plan.md H2): three later versions of one department reach erp/sales out of order and twice each
+    (with replicas, competing for them, P6.31 promises no order); the projection takes the newest by version (protocol
+    02), so it ends as in order: at the last version with its name, nothing dead-lettered, the subscription drained.
+    The source is at the last version first, as a fetch would find it."""
+    conn = await _conn(cell)
+    nc = await nats.connect(need("BE_ACC_NATS_URL"))
+    js = nc.jetstream()
+    try:
+        base = await template(js)
+        unit, version = await conn.fetchrow(
+            "SELECT id::text, version FROM mdm_org.org_unit WHERE state = 'active' ORDER BY id DESC LIMIT 1")
+
+        async def complete_at(v):
+            r = await row(conn, unit)
+            assert r is not None and (r["state"], r["version"]) == ("complete", v), dict(r or {})
+            return r
+        r = await eventually(lambda: complete_at(version))
+        dead = await conn.fetchval("SELECT count(*) FROM erp_sales.be_dead_letter")
+        name = json.loads(r["data"])["name"]
+        names = {version + k: f"{name}（E4-{k}）" for k in (1, 2, 3)}
+        last = version + 3
+        await conn.execute("UPDATE mdm_org.org_unit SET name = $2, version = $3 WHERE id = $1",
+                           uuid.UUID(unit), names[last], last)
+        for v in (last, version + 1, version + 2, last, version + 1, version + 2):
+            data = {**json.loads(r["data"]), "version": v, "name": names[v]}
+            await publish(js, base, "mdm.org_unit.changed.v1", unit, v, data)
+
+        r = await eventually(lambda: complete_at(last))
+        await asyncio.sleep(3)
+        r = await complete_at(last)
+        assert json.loads(r["data"])["name"] == names[last], "an older version arriving later is not applied"
+        assert await conn.fetchval("SELECT count(*) FROM erp_sales.be_dead_letter") == dead
+        info = await js.consumer_info(JS, CONSUMER)
+        assert (info.num_pending, info.num_ack_pending) == (0, 0), "the subscription goes on"
+    finally:
+        await nc.close()
+        await conn.close()

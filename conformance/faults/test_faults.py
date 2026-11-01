@@ -21,6 +21,7 @@ from cells import faults
 from cells.faults import backlog_summary
 
 HOLD_TTL = 300  # erp/inventory and erp/credit: a hold expires after five minutes (protocol 04's starting value)
+LEASE = 30  # a work item's lease (be-sdk-go work.DefaultLease, protocol 01)
 
 
 def log(**fields) -> None:
@@ -246,3 +247,42 @@ def test_the_database_restarts(cell, bob):
     back = eventually(lambda: bob.call("GET", "erp/sales", "/api/sales/orders?limit=1").status_code == 200
                       and time.time() - t0, 300)
     log(fault="pg-restart", restart_at=t0, answered_after=round(back, 1))
+
+
+SURFACE = {"erp/sales": "/api/sales/orders?limit=1", "erp/inventory": "/api/inventory/warehouses?limit=1"}
+
+
+@pytest.mark.parametrize("how", ["stop", "crash"])
+@pytest.mark.parametrize("component", ["erp/sales", "erp/inventory"], ids=["sales", "inventory"])
+def test_e3_a_replica_goes_away_under_load(cell, bob, component, how):
+    """Suite E3 (step13-plan.md): one replica of the process that runs the component goes away while the load runs:
+    stopped cleanly (it releases its leases, P7.8) or crashed (its leases run out, then another replica takes the
+    items over, P7.9). Measured: the work items left on an expired lease (the most seen, and when none were left), the
+    user-surface reads through the front door that failed meanwhile, and when every replica was ready again. The
+    in-flight confirmations are RS05 and RS06 above, run on the same cells; the invariants follow in the runner."""
+    host = faults.host_of(cell, component)
+    if cell.replicas.get(host, 1) < 2:
+        pytest.skip(f"{host} has one replica in {cell.name}")
+    before = faults.starts(cell, component)
+    t0 = time.time()
+    gone = faults.stop_replica(cell, component) if how == "stop" else faults.kill(cell, component)
+    # watched for twice the lease (be-sdk-go work: 30 s): a crashed holder's leases only run out after it
+    samples, failed = [], 0
+    while time.time() - t0 < 2 * LEASE + 30:
+        samples.append((time.time() - t0, asyncio.run(faults.expired_leases(cell, component))))
+        try:
+            failed += bob.call("GET", component, SURFACE[component]).status_code != 200
+        except httpx.HTTPError:
+            failed += 1
+        time.sleep(0.5)
+    expired = max(n for _, n in samples)
+    last = max((t for t, n in samples if n), default=None)  # cleared at the first sample after the last non-zero
+    cleared = 0.0 if last is None else next((t for t, n in samples if t > last), None)
+    reads = len(samples)
+    if how == "stop":
+        faults.start_replica(cell, gone)
+    back = faults.wait_running(cell, component, None if how == "stop" else before, 300)
+    log(fault=f"E3-{how}", component=component, replica=gone, at=t0, expired_leases_max=expired,
+        leases_cleared_after=cleared and round(cleared, 1), reads=reads, reads_failed=failed,
+        all_ready_after=round(time.time() - t0, 1), ready_wait=round(back, 1))
+    assert samples[-1][1] == 0, f"{samples[-1][1]} work items still on an expired lease after {samples[-1][0]:.0f} s"

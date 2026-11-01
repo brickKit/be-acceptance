@@ -16,7 +16,7 @@ import time
 import asyncpg
 
 from cells import homes
-from cells.spec import Cell
+from cells.spec import Cell, schema_of
 
 KUBE = ["minikube", "-p", "bek"]
 # where a step can be stopped: the table, the condition on the new row (with $ORDER for the test's order) and what the
@@ -74,17 +74,24 @@ def kill(c: Cell, component: str) -> str:
     return deployment(c, host)
 
 
+def replica(c: Cell, host: str, n: int) -> str:
+    """The container of a host's n-th replica (Docker and Podman number them from 1)."""
+    return c.container_of(host).rsplit("-", 1)[0] + f"-{n}"
+
+
 def healthy(c: Cell, component: str) -> bool:
-    """The process that runs the component passes its health check (Kubernetes: its Deployment is ready)."""
+    """Every replica of the process that runs the component passes its health check (Kubernetes: its Deployment has
+    them all ready)."""
     host = host_of(c, component)
     e = engine(c)
+    n = c.replicas.get(host, 1)
     if e in ("docker", "podman"):
-        out = subprocess.run([e, "inspect", "-f", "{{.State.Health.Status}}", c.container_of(host)],
-                             capture_output=True, text=True).stdout.strip()
-        return out == "healthy"
+        out = subprocess.run([e, "inspect", "-f", "{{.State.Health.Status}}", *(replica(c, host, i) for i in range(1, n + 1))],
+                             capture_output=True, text=True).stdout.split()
+        return out == ["healthy"] * n
     out = subprocess.run([*KUBE, "kubectl", "--", "-n", c.project, "get", "deploy", deployment(c, host), "-o",
                           "jsonpath={.status.readyReplicas}"], capture_output=True, text=True).stdout.strip()
-    return out == "1"
+    return out == str(n)
 
 
 def wait_running(c: Cell, component: str, before: str | None = None, limit: float = 180) -> float:
@@ -111,8 +118,44 @@ def stop(c: Cell, component: str, action: str = "stop") -> str:
         _run([e, action, c.container_of(host)])
         return c.container_of(host)
     deploy = deployment(c, host)
-    _run([*KUBE, "kubectl", "--", "-n", c.project, "scale", "deploy", deploy, f"--replicas={0 if action == 'stop' else 1}"])
+    _run([*KUBE, "kubectl", "--", "-n", c.project, "scale", "deploy", deploy,
+          f"--replicas={0 if action == 'stop' else c.replicas.get(host, 1)}"])
     return deploy
+
+
+def stop_replica(c: Cell, component: str) -> str:
+    """Suite E3: stop one replica of the process that runs the component, cleanly (SIGTERM, its grace period): the
+    last container on Docker and Podman (started again by start_replica), one Pod on Kubernetes (its Deployment
+    makes another)."""
+    host = host_of(c, component)
+    e = engine(c)
+    if c.replicas.get(host, 1) < 2:
+        raise ValueError(f"{c.name}: {host} has one replica")
+    if e in ("docker", "podman"):
+        name = replica(c, host, c.replicas[host])
+        _run([e, "stop", name])
+        return name
+    pods = [p for p in _run([*KUBE, "kubectl", "--", "-n", c.project, "get", "pods", "-o", "name"]).split()
+            if p.startswith(f"pod/{deployment(c, host)}-")]
+    _run([*KUBE, "kubectl", "--", "-n", c.project, "delete", pods[-1], "--wait=false"])
+    return pods[-1]
+
+
+def start_replica(c: Cell, name: str) -> None:
+    """Start again what stop_replica stopped (Kubernetes needs nothing: the Deployment has made another Pod)."""
+    e = engine(c)
+    if e in ("docker", "podman"):
+        _run([e, "start", name])
+
+
+async def expired_leases(c: Cell, component: str) -> int:
+    """The component's work items still running on a lease that has run out: no one has taken them over yet."""
+    s = schema_of(component)
+    conn, _ = await homes.home(c, s)
+    try:
+        return await conn.fetchval(f"SELECT count(*) FROM {s}.be_work_item WHERE state = 'running' AND lease_until < now()")
+    finally:
+        await conn.close()
 
 
 def base(action: str, name: str) -> None:
