@@ -1,0 +1,2 @@
+# go build . in this directory writes a binary named after it
+/go
