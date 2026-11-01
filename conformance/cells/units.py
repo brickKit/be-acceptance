@@ -8,6 +8,8 @@ import json
 import pathlib
 import re
 import subprocess
+import time
+import urllib.request
 
 from cells.spec import PORTS, SHELL_PORTS, Cell
 from measure import readings
@@ -85,7 +87,26 @@ def nodeports(c: Cell) -> list[str]:
         subprocess.run([*KUBE, "apply", "-f", "-"], input=json.dumps(manifest), text=True, check=True,
                        capture_output=True)
         made.append(f"np-{name}:{30000 + port - 8000}")
+    wait_answering([10000 + int(m.rsplit(":", 1)[1]) - 30000 + 8000 for m in made])
     return made
+
+
+def wait_answering(host_ports: list[int], timeout: float = 60) -> None:
+    """Until /healthz answers on every host port: a NodePort Service just made is not routed at once, and a probe cell
+    (no seed data in between) calls it right away; the first call was reset (step 12, K12-V4)."""
+    end, left = time.monotonic() + timeout, set(host_ports)
+    while left and time.monotonic() < end:
+        for p in list(left):
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{p}/healthz", timeout=2) as r:
+                    if r.status == 200:
+                        left.discard(p)
+            except OSError:
+                pass
+        if left:
+            time.sleep(0.5)
+    if left:
+        raise RuntimeError(f"no answer on host ports {sorted(left)} after {timeout} s")
 
 
 def host_ports() -> str:

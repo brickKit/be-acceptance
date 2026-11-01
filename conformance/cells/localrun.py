@@ -70,6 +70,8 @@ def up(directory: str | pathlib.Path, log: str | pathlib.Path, timeout: float = 
     The first start compiles every Go process (go run), so the timeout is long."""
     c = Cell.load(directory)
     down()
+    from cells.logs import session_record  # the tests read a process's lines from this log (cells/logs.py)
+    session_record(c).write_text(str(pathlib.Path(log).resolve()))
     with open(log, "a") as f:
         subprocess.Popen(["brickkit", "up"], cwd=c.dir, stdout=f, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                          start_new_session=True)

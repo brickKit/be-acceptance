@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import os
 import pathlib
-import subprocess
 import sys
 import time
 import uuid
@@ -16,6 +15,7 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
+from cells import logs  # noqa: E402
 from cells.spec import Cell  # noqa: E402
 
 # the first version of each probe with the additive contract (Note, a write's label, test.probe.noted.v1)
@@ -105,8 +105,7 @@ def test_the_trace_and_the_request_id_cross(cell, surface):
         other = cell.next_of(caller)
 
         def logged():
-            out = subprocess.run(["docker", "logs", cell.container_of(other)], capture_output=True, text=True).stdout
-            lines = [line for line in out.splitlines() if trace in line]
+            lines = [line for line in logs.of(cell, other).splitlines() if trace in line]
             assert lines, f"{other}'s log has no line of trace {trace}"
             assert any(f"compat-{trace[:12]}" in line for line in lines), lines
         eventually(logged, 10)
@@ -169,5 +168,4 @@ def test_v2_an_old_consumer_takes_the_new_fields_and_never_sees_the_new_type(cel
     eventually(took_two)
     time.sleep(2)
     assert seen(cell, old)["count"] - before["count"] == 2, "the noted event never arrives"
-    out = subprocess.run(["docker", "logs", cell.container_of(old)], capture_output=True, text=True)
-    assert "dead letter" not in out.stdout + out.stderr
+    assert "dead letter" not in logs.of(cell, old)

@@ -46,6 +46,17 @@ def read(port: int, rid: str) -> httpx.Response:
     return httpx.get(f"http://127.0.0.1:{port}/api/probe/written/{rid}", timeout=30)
 
 
+def start_migration_again(c: Cell, ref: str) -> subprocess.CompletedProcess:
+    """Runs the migration container of an older version (id@version) again, as a restart does: the D row's Docker, the P
+    row's Podman (the same container names). The K row runs migrations as Jobs, which a second brickkit up creates
+    again; the runner checks those (v1row.sh), so the test is skipped there."""
+    if c.target == "k8s":
+        pytest.skip("K row: brickkit up runs every version's migration Job again; v1row.sh checks they completed")
+    cid, version = ref.split("@")
+    name = f"brickkit-{c.project}-{cid.replace('/', '-')}-{version.replace('.', '-')}-migration-1"
+    return subprocess.run([c.target, "start", "-a", name], capture_output=True, text=True, timeout=120)
+
+
 def seen(c: Cell, component: str) -> int:
     return httpx.get(f"http://127.0.0.1:{c.host_port(component)}/api/probe/seen", timeout=30).json()["count"]
 
@@ -86,10 +97,7 @@ def test_v1_after_a_contract_migration_the_older_writer_is_refused(cell):
 def test_v1_the_older_version_migrates_again_on_the_newer_schema(cell):
     """P5.32: on an SDK that has it, the older version's migration, run again (as every deployment run and a restart
     do), takes the schema the newer version migrated as done."""
-    ref = cell.also[0]
-    cid, version = ref.split("@")
-    name = f"brickkit-{cell.project}-{cid.replace('/', '-')}-{version.replace('.', '-')}-migration-1"
-    r = subprocess.run(["docker", "start", "-a", name], capture_output=True, text=True, timeout=120)
+    r = start_migration_again(cell, cell.also[0])
     print("the older version's migration, run again:", r.returncode, (r.stdout + r.stderr)[-1500:])
     assert r.returncode == 0, "the older version's migration refused a schema a newer version migrated"
 
@@ -97,9 +105,6 @@ def test_v1_the_older_version_migrates_again_on_the_newer_schema(cell):
 @pytest.mark.skipif(PHASE != "contract", reason="V1_PHASE=contract")
 def test_v1_the_older_version_does_not_start_again_on_the_newer_schema(cell):
     """Its migration, run again (as a restart would), meets a database migrated past the files it knows."""
-    ref = cell.also[0]
-    cid, version = ref.split("@")
-    name = f"brickkit-{cell.project}-{cid.replace('/', '-')}-{version.replace('.', '-')}-migration-1"
-    r = subprocess.run(["docker", "start", "-a", name], capture_output=True, text=True, timeout=120)
+    r = start_migration_again(cell, cell.also[0])
     print("the older version's migration, run again:", r.returncode, (r.stdout + r.stderr)[-1500:])
     assert r.returncode != 0, "the older version's migration accepted a schema migrated past it"
