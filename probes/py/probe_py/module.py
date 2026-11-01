@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import os
+import sys
 import time
 import uuid
 
@@ -27,13 +30,62 @@ def invalid(msg: str) -> errs.Error:
     return errs.new("REQUEST_INVALID", msg)
 
 
-def burn(ms: int) -> None:
-    """Spends ms of CPU time on the calling thread (wall clock as the measure). Callers run it in a worker thread: on the
-    event loop it would hold up every member of a Python shell, which share one loop (merge safety)."""
-    x, end = 1, time.perf_counter() + ms / 1000
+# A worker spends the milliseconds each line asks for (wall clock as the measure) and answers a line. Standalone code
+# under -I, so a worker imports neither this package nor the SDK.
+BURNER = """
+import sys, time
+for line in sys.stdin:
+    x, end = 1, time.perf_counter() + int(line) / 1000
     while time.perf_counter() < end:
         for _ in range(1000):
             x = (x * 6364136223846793005 + 1442695040888963407) & 0xFFFFFFFFFFFFFFFF
+    sys.stdout.write("ok\\n")
+    sys.stdout.flush()
+"""
+
+
+class Burners:
+    """Work's CPU runs in worker processes (merge safety): in a Python shell the members share one event loop, and a
+    thread would still hold the GIL against it, so a member's work would hold up the others' requests and deadlines.
+    A work takes an idle worker or starts one; a cancelled work kills its worker; at most one idle worker per CPU stays.
+    Not ProcessPoolExecutor: its workers import the process's main module, which in a shell starts the shell."""
+
+    def __init__(self):
+        self._idle: list[asyncio.subprocess.Process] = []
+        self._all: set[asyncio.subprocess.Process] = set()
+
+    async def burn(self, ms: int) -> None:
+        w = self._idle.pop() if self._idle else await self._spawn()
+        try:
+            w.stdin.write(f"{ms}\n".encode())
+            await w.stdin.drain()
+            if await w.stdout.readline() != b"ok\n":
+                raise RuntimeError("a burner ended")
+        except BaseException:
+            self._kill(w)
+            raise
+        if len(self._idle) < (os.process_cpu_count() or 1):
+            self._idle.append(w)
+        else:
+            self._kill(w)
+
+    async def _spawn(self) -> asyncio.subprocess.Process:
+        w = await asyncio.create_subprocess_exec(sys.executable, "-I", "-c", BURNER, stdin=asyncio.subprocess.PIPE,
+                                                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+                                                 env={})  # its own: the process environment is shared by a shell's members
+        self._all.add(w)
+        return w
+
+    def _kill(self, w: asyncio.subprocess.Process) -> None:
+        with contextlib.suppress(ProcessLookupError):
+            w.kill()
+        self._all.discard(w)
+
+    async def close(self) -> None:
+        workers, self._idle = list(self._all), []
+        for w in workers:
+            self._kill(w)
+        await asyncio.gather(*(w.wait() for w in workers), return_exceptions=True)
 
 
 def number(body: dict, key: str, hi: int) -> int:
@@ -52,6 +104,7 @@ class Probe:
         self.next = rt.config.string("PROBE_NEXT")
         self._tasks: list[asyncio.Task] = []
         self._relay_ready = asyncio.Event()  # set after a commit that queued a relay
+        self._burners = Burners()
 
     # ------------------------------------------------------------------ user surface
 
@@ -71,7 +124,7 @@ class Probe:
 
     async def work_http(self, c):
         ms = number(await c.json(), "ms", MAX_WORK_MS)
-        await asyncio.to_thread(burn, ms)
+        await self._burners.burn(ms)
         return JSONResponse({"ms": ms})
 
     async def write(self, c):
@@ -165,7 +218,7 @@ class Probe:
         async def work(request, context):
             if request.value > MAX_WORK_MS:
                 raise invalid("ms must be 0..1000")
-            await asyncio.to_thread(burn, request.value)
+            await self._burners.burn(request.value)
             return request
 
         def handler(fn, kind):
@@ -204,6 +257,7 @@ class Probe:
         for t in self._tasks:
             t.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
+        await self._burners.close()
 
     async def _relay_loop(self) -> None:
         """Relays on a commit's wake and every RELAY_POLL for other replicas' rows and retries; cleared before each

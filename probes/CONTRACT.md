@@ -22,7 +22,7 @@
 | 方法与路径 | 请求 | 回答 | 操作 |
 | --- | --- | --- | --- |
 | `POST /api/probe/echo` | `{"payload": "<字符串>"}` | 原样回送 | `<前缀>.echo` |
-| `POST /api/probe/work` | `{"ms": 0..1000}` | 消耗这么多毫秒的 CPU 后 `{"ms": n}`；不阻塞同一进程里的其他请求（Go 在请求自己的 goroutine 里做，Python 在线程里做：外壳里成员共用一个事件循环，Python 3.2.27 起） | `<前缀>.work` |
+| `POST /api/probe/work` | `{"ms": 0..1000}` | 消耗这么多毫秒的 CPU 后 `{"ms": n}`；不阻塞同一进程里的其他请求（Go 在请求自己的 goroutine 里做，Python 在工作进程里做：外壳里成员共用一个事件循环，线程仍争 GIL；Python 3.2.28 起） | `<前缀>.work` |
 | `POST /api/probe/write` | `{"bytes": 0..524288, "relay": 布尔}`；3.2.23（Go）、3.2.22（Python）起可选 `"label"`（至多 64 字节）与 `"event": "noted"` | 一个事务内写一行并发一个事件，`201 {"id"}`；载荷超过 64 KiB 走对象存储的凭证检查（大事件）；`"event": "noted"` 时发 `test.probe.noted.v1` 而不是 `written` | `<前缀>.write` |
 | `POST /api/probe/call` | `{"op": "echo"\|"work"\|"note"（`note` 自同上的版本起）, "surface": "grpc"\|"http", "bytes", "ms"}` | 调用下一个探针的同一操作（`PROBE_NEXT` 是它的组件 ID，`PROBE_NEXT_URL`、`PROBE_NEXT_GRPC_URL` 是它的两个地址，部署用 `$endpoint:<ID>` 与 `$endpoint:<ID>:grpc` 填入，协议 P4.26），`{"ok": true, "elapsed_us": n}`：`elapsed_us` 是调用方自己测的这一跳（从发出到收到回答），不含驱动到调用方的那一跳；没有下一个探针答 409 `NO_NEXT_PROBE` | `<前缀>.call` |
 | `GET /api/probe/seen` | — | `{"count", "big", "relayed", "noted"}`：收到的对方事件数、其中超过 64 KiB 的数、已转发成调用的数、其中 `noted` 类型的数（自同上的版本起） | `<前缀>.read` |
