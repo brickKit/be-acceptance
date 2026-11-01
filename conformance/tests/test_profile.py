@@ -2,6 +2,7 @@
 outside; every check's self-test catches its known violation first, so a check that always passes is reported as
 invalid, never as a pass."""
 import asyncio
+import contextlib
 import json
 import platform
 
@@ -24,26 +25,32 @@ async def observe_pair(d, all_specs):
                "impl": envs[k]["IMPLEMENTATION_INSTANCE"], "owner": specs[k].schema + "_owner",
                "sdk_tables": observe.sdk_tables(), **await observe.exits(specs[k], envs[k])} for k in specs}
     caps = {k: await observe.capture(specs[k].stream) for k in specs}
-    running = {k: await d.start(specs[k], envs[k], ports[k]) for k in ("go", "py")}
-    token = d.world.token("0190f3a1-0000-7000-8000-0000000000a1")
-    for k, r in running.items():
-        obs[k].update(await observe.endpoints(r))
-        await observe.traffic(d, r, "test/probe-py" if k == "go" else "test/probe-go", token)
-        obs[k]["http_requests"] = 5
-    await asyncio.sleep(3)  # forwarding of the writes (the big one through object storage)
-    for k, r in running.items():
-        nc, got = caps[k]
-        await nc.close()
-        await observe.claims(got)
-        obs[k]["messages"] = got
-        async with __import__("httpx").AsyncClient() as c:
-            obs[k]["metrics"] = (await c.get(r.url + "/metrics")).text
-        obs[k]["db"] = await observe.database(specs[k].schema, specs[k].schema + "_owner", specs[k].schema + "_rw")
-    for k, r in running.items():
-        obs[k].update(await observe.stopping(r))
-        obs[k]["logs"] = r.logs()
-        obs[k]["secrets"] = observe.secrets_of(envs[k], token)
-    d.running.clear()
+    try:
+        running = {k: await d.start(specs[k], envs[k], ports[k]) for k in ("go", "py")}
+        token = d.world.token("0190f3a1-0000-7000-8000-0000000000a1")
+        for k, r in running.items():
+            obs[k].update(await observe.endpoints(r))
+            await observe.traffic(d, r, "test/probe-py" if k == "go" else "test/probe-go", token)
+            obs[k]["http_requests"] = 5
+        await asyncio.sleep(3)  # forwarding of the writes (the big one through object storage)
+        for k, r in running.items():
+            nc, got = caps[k]
+            await nc.close()
+            await observe.claims(got)
+            obs[k]["messages"] = got
+            async with __import__("httpx").AsyncClient() as c:
+                obs[k]["metrics"] = (await c.get(r.url + "/metrics")).text
+            obs[k]["db"] = await observe.database(specs[k].schema, specs[k].schema + "_owner", specs[k].schema + "_rw")
+        for k, r in running.items():
+            obs[k].update(await observe.stopping(r))
+            obs[k]["logs"] = r.logs()
+            obs[k]["secrets"] = observe.secrets_of(envs[k], token)
+        d.running.clear()
+    except BaseException:
+        # a probe that started before another step failed must not keep its ports for the next test
+        with contextlib.suppress(Exception):
+            await d.stop()
+        raise
     return obs
 
 

@@ -2,6 +2,7 @@
 contract as the Go probe. No business logic, so what it measures comes from the language, the topology and the engines
 only."""
 from dataclasses import dataclass
+from importlib import metadata
 from importlib.resources import files
 
 from besdk.authz import Definitions, Operation, Resource
@@ -9,7 +10,7 @@ from besdk.component import Definition
 from besdk.config import Key, Type
 from besdk.events.core import Stream
 
-VERSION, WRITTEN_TYPE = "3.2.25", "test.probe.written.v1"
+VERSION, WRITTEN_TYPE = metadata.version("be-test-probe-py"), "test.probe.written.v1"  # one source: pyproject.toml
 NOTED_TYPE = "test.probe.noted.v1"  # since 3.2.22: a write asked as "noted" (suite D, V3)
 RELAY_BYTES, MAX_WORK_MS, MAX_BYTES, MAX_LABEL = 1024, 1000, 512 << 10, 64
 
