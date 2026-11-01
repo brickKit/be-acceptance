@@ -80,10 +80,8 @@ def in_background(bob, method: str, component: str, path: str) -> threading.Thre
 def participants(cell, order_id: str) -> dict[str, list[str]]:
     """The participants' branch states under the order's processes, by component."""
     async def read():
-        import asyncpg
-        from urllib.parse import urlsplit
-        from harness import need
-        conn = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + cell.database).geturl())
+        from cells import homes
+        conn = await homes.checks(cell)
         try:
             rows = await conn.fetch("""
                 SELECT cb.component, coalesce(ib.state, cr.state) FROM erp_sales.confirmation c

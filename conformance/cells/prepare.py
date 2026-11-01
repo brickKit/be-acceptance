@@ -13,7 +13,8 @@ from urllib.parse import urlsplit
 import asyncpg
 
 from besdk import testing
-from cells.spec import SHELL_ROLES, Cell, file_of, schema_of, stream_of
+from cells import homes
+from cells.spec import INSTANCES, SHELL_ROLES, Cell, file_of, schema_of, stream_of
 
 # The security members' own resource types and permission keys (their component definitions), for the registry the
 # authorization member checks submissions against.
@@ -89,32 +90,48 @@ HEADER = "# Written by be-acceptance/conformance/cells/prepare.py for cell {cell
 
 
 async def databases(c: Cell) -> None:
-    admin = need("BE_ACC_PG_ADMIN")
+    """Every database the cell's schemas live in (cells/homes.py), the shells' login roles on every instance used, and
+    each component's schema and roles in its own home; a moved component's schema is dropped from the cell's database
+    (an earlier cell's, or the checks' foreign tables)."""
     secrets = c.dir / ".secrets" / "db"
     secrets.mkdir(parents=True, exist_ok=True)
-    conn = await asyncpg.connect(admin)
-    try:
-        if not await conn.fetchval("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", c.database):
-            await conn.execute(f'CREATE DATABASE "{c.database}"')
-    finally:
-        await conn.close()
-    conn = await asyncpg.connect(urlsplit(admin)._replace(path="/" + c.database).geturl())
-    try:
-        for shell in c.shells:
-            role = SHELL_ROLES[shell]
-            if not await conn.fetchval("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)", role):
-                await conn.execute(f"CREATE ROLE {role} LOGIN")
-            await conn.execute(f"ALTER ROLE {role} LOGIN PASSWORD '{role}-pw'")
-            (secrets / role).write_text(f"{role}-pw")
-    finally:
-        await conn.close()
+    for instance in dict.fromkeys(i for i, _ in c.homes):
+        conn = await asyncpg.connect(homes.admin(instance))
+        try:
+            for _, database in (h for h in c.homes if h[0] == instance):
+                if not await conn.fetchval("SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)", database):
+                    await conn.execute(f'CREATE DATABASE "{database}"')
+            for shell in c.shells:
+                role = SHELL_ROLES[shell]
+                if not await conn.fetchval("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)", role):
+                    await conn.execute(f"CREATE ROLE {role} LOGIN")
+                await conn.execute(f"ALTER ROLE {role} LOGIN PASSWORD '{role}-pw'")
+                (secrets / role).write_text(f"{role}-pw")
+        finally:
+            await conn.close()
     hosted_by = {m: shell for shell, ms in c.shells.items() for m in ms}
     for probe in c.placed:
         s = schema_of(probe)
         shell_role = SHELL_ROLES[hosted_by[probe]] if probe in hosted_by else ""
-        await testing.provision(admin, c.database, s, s + "_owner", s + "_rw", shell_role)
+        instance, database = c.home_of(probe)
+        await testing.provision(homes.admin(instance), database, s, s + "_owner", s + "_rw", shell_role)
         for role in (s + "_owner", s + "_rw"):
             (secrets / role).write_text(f"{role}-pw")
+    if moved := [schema_of(p) for p in c.placed if p in c.databases]:
+        conn = await asyncpg.connect(homes.admin("main", c.database))
+        try:
+            for s in moved:
+                await conn.execute(f"DROP SCHEMA IF EXISTS {s} CASCADE")
+        finally:
+            await conn.close()
+
+
+def target(c: Cell, comp: str) -> list[str]:
+    """A component's PG_HOST, PG_PORT and PG_DATABASE: the cell's shared values, or its own home (databases:)."""
+    if comp not in c.databases:
+        return ["PG_HOST: $var:PG_HOST", "PG_PORT: $var:PG_PORT", "PG_DATABASE: $var:PG_DATABASE"]
+    instance, database = c.home_of(comp)
+    return [f"PG_HOST: {c.base_host}", f'PG_PORT: "{INSTANCES[instance][0]}"', f"PG_DATABASE: {database}"]
 
 
 def certificates(c: Cell) -> None:
@@ -207,12 +224,11 @@ def security_configs(c: Cell) -> None:
     signing_key(sec / "iam" / "signing-key.pem")
     (sec / "authz-registry.tsv").write_text(registry(c))
     (sec / "authz-registry.tsv").chmod(0o644)
-    common = ["PG_HOST: $var:PG_HOST", "PG_PORT: $var:PG_PORT", "PG_DATABASE: $var:PG_DATABASE", "DEPLOYMENT_ID: $var:DEPLOYMENT_ID",
-              *migration(c)]
+    common = ["DEPLOYMENT_ID: $var:DEPLOYMENT_ID", *migration(c)]
 
     def db(comp: str) -> list[str]:
         s = schema_of(comp)
-        return [f"PG_USER: {s}_rw", f"PG_PASSWORD: file://.secrets/db/{s}_rw", f"PG_SCHEMA: {s}",
+        return [*target(c, comp), f"PG_USER: {s}_rw", f"PG_PASSWORD: file://.secrets/db/{s}_rw", f"PG_SCHEMA: {s}",
                 f"PG_OWNER_USER: {s}_owner", f"PG_OWNER_PASSWORD: file://.secrets/db/{s}_owner"]
 
     def guarded(comp: str) -> list[str]:
@@ -311,7 +327,7 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
 """)
     for probe in c.probes:
         s, f = schema_of(probe), file_of(probe)
-        lines = [f"PG_HOST: $var:PG_HOST", "PG_PORT: $var:PG_PORT", "PG_DATABASE: $var:PG_DATABASE", *migration(c),
+        lines = [*target(c, probe), *migration(c),
                  f"PG_USER: {s}_rw", f"PG_PASSWORD: file://.secrets/db/{s}_rw", f"PG_SCHEMA: {s}",
                  f"PG_OWNER_USER: {s}_owner", f"PG_OWNER_PASSWORD: file://.secrets/db/{s}_owner",
                  "BUS_URL: file://.secrets/bus", f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}",
@@ -344,15 +360,17 @@ async def join_shell(directory: str | pathlib.Path, shell: str, members: list[st
     role = SHELL_ROLES[shell]
     secrets = c.dir / ".secrets" / "db"
     secrets.mkdir(parents=True, exist_ok=True)
-    conn = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
-    try:
-        if not await conn.fetchval("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)", role):
-            await conn.execute(f"CREATE ROLE {role} LOGIN")
-        await conn.execute(f"ALTER ROLE {role} LOGIN PASSWORD '{role}-pw'")
-        for m in members:
-            await conn.execute(f"GRANT {schema_of(m)}_rw TO {role} WITH INHERIT FALSE, SET TRUE")
-    finally:
-        await conn.close()
+    for instance in dict.fromkeys(c.home_of(m)[0] for m in members):  # roles belong to an instance
+        conn = await asyncpg.connect(homes.admin(instance))
+        try:
+            if not await conn.fetchval("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)", role):
+                await conn.execute(f"CREATE ROLE {role} LOGIN")
+            await conn.execute(f"ALTER ROLE {role} LOGIN PASSWORD '{role}-pw'")
+            for m in members:
+                if c.home_of(m)[0] == instance:
+                    await conn.execute(f"GRANT {schema_of(m)}_rw TO {role} WITH INHERIT FALSE, SET TRUE")
+        finally:
+            await conn.close()
     (secrets / role).write_text(f"{role}-pw")
     (c.dir / "config" / f"{file_of(shell)}.yaml").write_text(HEADER.format(cell=c.name) + f"""PG_SHELL_USER: {role}
 PG_SHELL_PASSWORD: file://.secrets/db/{role}

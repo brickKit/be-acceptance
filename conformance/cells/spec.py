@@ -24,6 +24,10 @@ SHELL_PORTS = {"be/go-core": 8090, "be/go-infra": 8224, "be/py-render": 8402}
 # outgoing connection or test listener may take a port at random (a cell once failed to start on 38090, 2026-10-18),
 # and clear of the registry's ports
 HOST_BAND = 10000
+# suite E: the PostgreSQL instances a cell may place a component's schema on (`databases:`): name -> (its port on this
+# machine, its name as the first instance reaches it on be-net, for the checks' postgres_fdw); "second" is
+# dev/rebuild/experiment-scripts/postgres2.sh
+INSTANCES = {"main": (5432, "localhost"), "second": (5433, "be-postgres-2")}
 
 
 def schema_of(component_id: str) -> str:
@@ -70,6 +74,9 @@ class Cell:
     # suite E: shells and components running alone with several replicas (id -> count); on Docker and Podman they map
     # no host port, and a front door (cells/front.py) takes their host port instead
     replicas: dict[str, int] = field(default_factory=dict)
+    # suite E: components whose schema is not in `database` on the first instance, id -> "[instance/]database"
+    # (instance: INSTANCES, default main); cells/homes.py
+    databases: dict[str, str] = field(default_factory=dict)
 
     @property
     def base_host(self) -> str:
@@ -101,7 +108,8 @@ class Cell:
                  row=row, local=local, pooler=spec.get("pooler", ""),
                  baseline_scale=int(spec.get("baseline_scale", 1)), base=spec.get("base", ""),
                  also=list(spec.get("also") or []),
-                 replicas={k.split("@")[0]: int(v) for k, v in (spec.get("replicas") or {}).items()})
+                 replicas={k.split("@")[0]: int(v) for k, v in (spec.get("replicas") or {}).items()},
+                 databases={k.split("@")[0]: str(v) for k, v in (spec.get("databases") or {}).items()})
         if c.base not in ("", "cluster") or (c.base == "cluster" and c.row != "K"):
             raise ValueError(f"{c.name}: base {c.base!r}: only the K row runs its base resources in the cluster")
         if c.pooler not in ("", "pgbouncer"):
@@ -112,10 +120,25 @@ class Cell:
         odd = [k for k, n in c.replicas.items() if n < 1 or (k not in c.shells and k not in c.alone) or k in c.local]
         if odd:
             raise ValueError(f"{c.name}: replicas names what is not a shell or a component running alone in a container: {odd}")
+        astray = [k for k in c.databases if k not in c.placed or c.home_of(k)[0] not in INSTANCES or not c.home_of(k)[1]]
+        if astray:
+            raise ValueError(f"{c.name}: databases names what the cell does not run, or no known instance and database: {astray}")
+        if c.databases and (c.pooler or c.base):
+            raise ValueError(f"{c.name}: databases goes with neither a pooler nor base resources in the cluster")
         unknown = [p for p in c.chain if p not in c.probes]
         if unknown:
             raise ValueError(f"{c.name}: the chain names probes the cell does not run: {unknown}")
         return c
+
+    def home_of(self, component: str) -> tuple[str, str]:
+        """(instance, database) holding a component's schema."""
+        instance, _, database = self.databases.get(component, self.database).rpartition("/")
+        return instance or "main", database
+
+    @property
+    def homes(self) -> list[tuple[str, str]]:
+        """Every (instance, database) the cell's schemas are in, the cell's database first."""
+        return [("main", self.database), *sorted({self.home_of(p) for p in self.placed} - {("main", self.database)})]
 
     @property
     def placed(self) -> list[str]:

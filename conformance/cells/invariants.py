@@ -17,10 +17,8 @@ import asyncio
 import json
 import pathlib
 from collections import Counter
-from urllib.parse import urlsplit
 
-import asyncpg
-
+from cells import homes
 from cells.spec import PORTS, Cell
 from harness import need
 
@@ -202,7 +200,7 @@ def duplicates(seen: dict[str, Counter]) -> dict[str, int]:
 
 
 async def read(c: Cell, age: float = 120) -> dict[str, list[str]]:
-    conn = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
+    conn = await homes.checks(c)
     try:
         outbox, work = {}, {}
         for (s,) in await conn.fetch(SCHEMAS, "be_outbox"):
@@ -265,7 +263,7 @@ async def stream_check(c: Cell) -> tuple[list[str], dict[str, int], dict[str, in
 
     from besdk.events.core import jetstream_name
 
-    conn = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
+    conn = await homes.checks(c)
     published: dict[str, set] = {}
     try:
         for (s,) in await conn.fetch(SCHEMAS, "be_outbox"):

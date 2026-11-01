@@ -12,12 +12,11 @@ import asyncio
 import subprocess
 import threading
 import time
-from urllib.parse import urlsplit
 
 import asyncpg
 
+from cells import homes
 from cells.spec import Cell
-from harness import need
 
 KUBE = ["minikube", "-p", "bek"]
 # where a step can be stopped: the table, the condition on the new row (with $ORDER for the test's order) and what the
@@ -134,7 +133,7 @@ def backlog_summary(samples: list[tuple[float, int]], stopped: float, started: f
 
 
 async def _conn(c: Cell) -> asyncpg.Connection:
-    return await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
+    return await homes.checks(c)
 
 
 async def outbox_backlog(c: Cell) -> int:
@@ -194,7 +193,9 @@ class Point:
         self.schema = self.table.split(".")[0]
 
     async def _conn(self) -> asyncpg.Connection:
-        return await _conn(self.c)
+        """The trigger goes on the table itself: the database that holds its schema (cells/homes.py)."""
+        conn, self.database = await homes.home(self.c, self.schema)
+        return conn
 
     async def arm(self, seconds: int = 900) -> None:
         conn = await self._conn()
@@ -214,7 +215,7 @@ class Point:
         try:
             return [r[0] for r in await conn.fetch(
                 "SELECT pid FROM pg_stat_activity WHERE datname = $1 AND wait_event = 'PgSleep' AND query ILIKE $2",
-                self.c.database, f"%{self.table.split('.')[1]}%")]
+                self.database, f"%{self.table.split('.')[1]}%")]
         finally:
             await conn.close()
 
@@ -236,7 +237,7 @@ class Point:
             await conn.execute("SET lock_timeout = '2s'")
             while True:
                 for (p,) in await conn.fetch(
-                        "SELECT pid FROM pg_stat_activity WHERE datname = $1 AND wait_event = 'PgSleep'", self.c.database):
+                        "SELECT pid FROM pg_stat_activity WHERE datname = $1 AND wait_event = 'PgSleep'", self.database):
                     ended += bool(await conn.fetchval("SELECT pg_terminate_backend($1)", p))
                 try:
                     await conn.execute(f"DROP TRIGGER IF EXISTS {self.name} ON {self.table}")

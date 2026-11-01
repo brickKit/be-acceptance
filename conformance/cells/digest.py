@@ -7,12 +7,9 @@ from __future__ import annotations
 import asyncio
 import json
 import pathlib
-from urllib.parse import urlsplit
 
-import asyncpg
-
+from cells import homes
 from cells.spec import Cell
-from harness import need
 
 # (item, SQL answering rows of (key, value)): counts by state, sums as text so decimals compare exactly
 QUERIES = [
@@ -39,7 +36,7 @@ QUERIES = [
 
 
 async def read(c: Cell) -> dict:
-    conn = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + c.database).geturl())
+    conn = await homes.checks(c)
     try:
         return {item: {str(k): v for k, v in await conn.fetch(sql)} for item, sql in QUERIES}
     finally:
