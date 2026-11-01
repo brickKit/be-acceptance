@@ -45,3 +45,15 @@ def test_the_config_balances_each_request_and_follows_the_dns():
 def test_replicas_must_name_a_shell_or_a_component_alone(tmp_path):
     with pytest.raises(ValueError, match="replicas"):
         cell(tmp_path, replicas="  erp/sales@3.0.17: 2\n")  # a member: the shell is what has replicas
+
+
+def test_a_replica_that_cannot_be_reached_is_skipped_without_replaying_requests():
+    """Suite E3: a replica that stops is taken out after two failed checks, and a request whose connection to it fails
+    goes to another replica (redispatch, at most 2 retries, a 1 s connect timeout); only connection failures are
+    retried, never a request that reached a replica (the default retry-on: conn-failure), so no write runs twice.
+    1.0.26 kept sending to a stopped container for up to 3 checks and gave up after 5 s per connection, and the
+    load saw requests hang to its 15 s deadline (step 13, the step 2 trials)."""
+    cfg = front.config("erp-sales-3-0-19", 8084)
+    for line in ("retries 2", "option redispatch", "timeout connect 1s", "check inter 1s fall 2 rise 1"):
+        assert line in cfg, line
+    assert "retry-on" not in cfg, "the default (conn-failure) only"

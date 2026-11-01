@@ -40,13 +40,18 @@ def doors(c: Cell) -> list[tuple[str, str, int, int]]:
 
 def config(service: str, port: int) -> str:
     """HTTP mode, so every request is balanced on its own even over a kept-alive connection; the engine's DNS (from the
-    container's resolv.conf: Docker's 127.0.0.11, Podman's network gateway) re-read every second."""
+    container's resolv.conf: Docker's 127.0.0.11, Podman's network gateway) re-read every second. A replica that stops
+    is out after two failed checks, and a request whose connection to it fails goes to another (redispatch, 2 retries,
+    1 s to connect), as an edge does: E3 measures the components' stop, not the door's. Only connection failures are
+    retried (the default retry-on), never a request that reached a replica, so no write runs twice."""
     return f"""global
     log stdout format raw local0 notice
 defaults
     mode http
     log global
-    timeout connect 5s
+    retries 2
+    option redispatch
+    timeout connect 1s
     timeout client 120s
     timeout server 120s
 resolvers engine
@@ -60,7 +65,7 @@ backend replicas
     balance roundrobin
     option httpchk GET /healthz
     http-check expect status 200
-    server-template r 1-8 {service}:{port} check inter 1s resolvers engine init-addr none resolve-prefer ipv4
+    server-template r 1-8 {service}:{port} check inter 1s fall 2 rise 1 resolvers engine init-addr none resolve-prefer ipv4
 """
 
 
