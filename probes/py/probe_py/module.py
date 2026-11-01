@@ -28,7 +28,8 @@ def invalid(msg: str) -> errs.Error:
 
 
 def burn(ms: int) -> None:
-    """Spends ms of CPU time on this thread (wall clock as the measure); the event loop waits, as any CPU work does."""
+    """Spends ms of CPU time on the calling thread (wall clock as the measure). Callers run it in a worker thread: on the
+    event loop it would hold up every member of a Python shell, which share one loop (merge safety)."""
     x, end = 1, time.perf_counter() + ms / 1000
     while time.perf_counter() < end:
         for _ in range(1000):
@@ -70,7 +71,7 @@ class Probe:
 
     async def work_http(self, c):
         ms = number(await c.json(), "ms", MAX_WORK_MS)
-        burn(ms)
+        await asyncio.to_thread(burn, ms)
         return JSONResponse({"ms": ms})
 
     async def write(self, c):
@@ -164,7 +165,7 @@ class Probe:
         async def work(request, context):
             if request.value > MAX_WORK_MS:
                 raise invalid("ms must be 0..1000")
-            burn(request.value)
+            await asyncio.to_thread(burn, request.value)
             return request
 
         def handler(fn, kind):
