@@ -133,3 +133,26 @@ def test_a_container_whose_init_moved_itself_is_found_at_its_scope(tmp_path, mon
         return subprocess.CompletedProcess(cmd, 0 if ok else 125, f"{cid} 4242\n" if ok else "", "")
     monkeypatch.setattr(readings.subprocess, "run", run)
     assert readings.find("bek") == (cid, scope)
+
+
+async def test_connections_on_several_instances_keep_apart(monkeypatch):
+    """Suite E5: the connection counts of a second instance are kept apart from the first's ("second:<role>")."""
+    from measure import series
+
+    class Conn:
+        def __init__(self, rows):
+            self.rows = rows
+
+        async def fetch(self, *_):
+            return self.rows
+
+        async def close(self):
+            pass
+
+    rows = {"a": [{"usename": "erp_sales_rw", "n": 3}], "b": [{"usename": "erp_sales_rw", "n": 2}]}
+
+    async def connect(dsn):
+        return Conn(rows[dsn])
+    monkeypatch.setattr(series.asyncpg, "connect", connect)
+    assert await series.connections({"main": "a", "second": "b"}) == {"erp_sales_rw": 3, "second:erp_sales_rw": 2}
+    assert await series.connections("a") == {"erp_sales_rw": 3}

@@ -9,9 +9,8 @@ import json
 import os
 import pathlib
 
-import asyncpg
-
-from cells.runner import db_dsn, driver
+from cells import homes
+from cells.runner import driver
 from cells.spec import Cell, schema_of, stream_of
 from harness import need
 from measure.backlog import jetstream as backlog
@@ -42,10 +41,15 @@ def window(c: Cell) -> Window:
     return Window(containers(c))
 
 
+def instances(c: Cell) -> dict[str, str]:
+    """The admin DSN of every PostgreSQL instance the cell's schemas are on, for the connection counts."""
+    return {i: homes.admin(i) for i in dict.fromkeys(h[0] for h in c.homes)}
+
+
 async def leftovers(c: Cell) -> dict:
     """Unpublished outbox rows of every business component, and messages its consumers have not acknowledged."""
     out = {}
-    conn = await asyncpg.connect(db_dsn(c))
+    conn = await homes.checks(c)  # a moved schema too (databases:)
     try:
         for p in c.placed:
             s = schema_of(p)
@@ -79,7 +83,7 @@ async def completions(c: Cell, orders: list[str]) -> dict:
     formalizes at the source, which completes the order: protocol 05). Orders not completed yet are counted."""
     if not orders:
         return {"orders": 0}
-    conn = await asyncpg.connect(db_dsn(c))
+    conn = await homes.checks(c)
     try:
         rows = await conn.fetch(
             "SELECT o.state, extract(epoch FROM o.updated_at - i.issued_at) * 1000 AS ms FROM erp_sales.sales_order o "
@@ -97,7 +101,7 @@ async def completions(c: Cell, orders: list[str]) -> dict:
 async def idle(c: Cell, out: pathlib.Path, seconds: int) -> dict:
     before = await quiet(c)
     w = window(c)
-    await w.run(seconds, db_dsn(c))
+    await w.run(seconds, instances(c))
     record = {"cell": c.name, "idle_seconds": seconds, "before": before, "resources": w.figures()}
     (out / "idle.json").write_text(json.dumps(record, indent=2))
     return record
@@ -111,7 +115,7 @@ async def mix(c: Cell, binary: pathlib.Path, world: str, out: pathlib.Path, rate
     env = {**os.environ, "BE_LOAD_PASSWORD": need("BE_ACC_IAM_TEST_PASSWORD")}
     proc = await asyncio.create_subprocess_exec(str(binary), *flags, "-out", str(out / "driver.json"), env=env)
     await asyncio.sleep(warmup)
-    sampler = asyncio.create_task(w.run_until(stop, db_dsn(c)))
+    sampler = asyncio.create_task(w.run_until(stop, instances(c)))
     if await proc.wait() != 0:
         stop.set()
         await sampler

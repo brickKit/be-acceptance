@@ -14,7 +14,7 @@ from measure import readings
 
 # the base resources read when they run; object storage is RustFS by default or SeaweedFS in its place; PgBouncer
 # only in the cells with a pooler (step 10, B1)
-BASE = ("be-postgres", "be-nats", "be-rustfs", "be-seaweedfs", "be-pgbouncer")
+BASE = ("be-postgres", "be-postgres-2", "be-nats", "be-rustfs", "be-seaweedfs", "be-pgbouncer")  # -2: suite E5
 
 
 @dataclass
@@ -27,7 +27,7 @@ class Window:
     samples: list[dict] = field(default_factory=list)
     connections: list[dict] = field(default_factory=list)
 
-    async def run(self, seconds: float, pg_dsn: str | None = None) -> None:
+    async def run(self, seconds: float, pg_dsn: str | dict[str, str] | None = None) -> None:
         end = time.monotonic() + seconds
         while True:
             self.samples.append(self.read())
@@ -38,7 +38,7 @@ class Window:
                 return
             await asyncio.sleep(min(self.interval, left))
 
-    async def run_until(self, stop: asyncio.Event, pg_dsn: str | None = None) -> None:
+    async def run_until(self, stop: asyncio.Event, pg_dsn: str | dict[str, str] | None = None) -> None:
         """Samples until stop is set (always at least two samples)."""
         while True:
             self.samples.append(self.read())
@@ -109,8 +109,14 @@ class Window:
         return out
 
 
-async def connections(dsn: str) -> dict[str, int]:
-    """Connections per role (pg_stat_activity), the sampling session excluded."""
+async def connections(dsn: str | dict[str, str]) -> dict[str, int]:
+    """Connections per role (pg_stat_activity), the sampling session excluded. Several instances (suite E5: {"main":
+    dsn, "second": dsn}): the main instance's roles as they are, another's as "<instance>:<role>"."""
+    if isinstance(dsn, dict):
+        out = {}
+        for label, one in dsn.items():
+            out.update({(r if label == "main" else f"{label}:{r}"): n for r, n in (await connections(one)).items()})
+        return out
     c = await asyncpg.connect(dsn)
     try:
         rows = await c.fetch("SELECT usename, count(*) AS n FROM pg_stat_activity WHERE usename IS NOT NULL "
