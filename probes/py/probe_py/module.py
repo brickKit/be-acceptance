@@ -83,7 +83,7 @@ class Probe:
         rid = str(uuid.uuid7())
 
         async def fn(tx):
-            await tx.execute("INSERT INTO probe_writes (id, size, label) VALUES ($1, $2, $3)", uuid.UUID(rid), n,
+            await tx.execute("INSERT INTO probe_writes (id, bytes, label) VALUES ($1, $2, $3)", uuid.UUID(rid), n,
                              label or None)
             data = {"id": rid, "relay": relay, **({"blob": "w" * n} if n else {}), **({"label": label} if label else {})}
             await self.rt.events.emit(tx, self.v.stream, Event(typ, rid, 1, Projection.FULL, data))
@@ -150,10 +150,10 @@ class Probe:
             rid = uuid.UUID(c.param("id"))
         except ValueError:
             raise errs.new("NOT_FOUND", "no such write") from None
-        row = await self.rt.db.tx(lambda tx: tx.fetchrow("SELECT size, label FROM probe_writes WHERE id = $1", rid))
+        row = await self.rt.db.tx(lambda tx: tx.fetchrow("SELECT bytes, label FROM probe_writes WHERE id = $1", rid))
         if row is None:
             raise errs.new("NOT_FOUND", "no such write")
-        return JSONResponse({"id": str(rid), "bytes": row["size"], "label": row["label"]})
+        return JSONResponse({"id": str(rid), "bytes": row["bytes"], "label": row["label"]})
 
     # ------------------------------------------------------------------ system surface
 

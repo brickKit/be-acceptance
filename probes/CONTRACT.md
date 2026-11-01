@@ -49,4 +49,4 @@
 
 ## 迁移
 
-`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。
+`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。

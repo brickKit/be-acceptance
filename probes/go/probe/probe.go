@@ -156,7 +156,7 @@ func (p *Probe) write(c *httpx.Context) error {
 	}
 	id := ids.New().String()
 	err := p.rt.DB.Tx(c.Ctx(), func(ctx context.Context, tx db.Tx) error {
-		if _, err := tx.Exec(ctx, "INSERT INTO probe_writes (id, size, label) VALUES ($1, $2, $3)", id, in.Bytes,
+		if _, err := tx.Exec(ctx, "INSERT INTO probe_writes (id, bytes, label) VALUES ($1, $2, $3)", id, in.Bytes,
 			label); err != nil {
 			return err
 		}
@@ -276,7 +276,7 @@ func (p *Probe) writtenRow(c *httpx.Context) error {
 	var size int
 	var label *string
 	err := p.rt.DB.Tx(c.Ctx(), func(ctx context.Context, tx db.Tx) error {
-		return tx.QueryRow(ctx, "SELECT size, label FROM probe_writes WHERE id = $1", c.Param("id")).Scan(&size, &label)
+		return tx.QueryRow(ctx, "SELECT bytes, label FROM probe_writes WHERE id = $1", c.Param("id")).Scan(&size, &label)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.New(errs.ReasonNotFound, "no such write")

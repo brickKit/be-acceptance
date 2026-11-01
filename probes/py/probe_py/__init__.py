@@ -9,7 +9,7 @@ from besdk.component import Definition
 from besdk.config import Key, Type
 from besdk.events.core import Stream
 
-VERSION, WRITTEN_TYPE = "3.2.22", "test.probe.written.v1"
+VERSION, WRITTEN_TYPE = "3.2.23", "test.probe.written.v1"
 NOTED_TYPE = "test.probe.noted.v1"  # since 3.2.22: a write asked as "noted" (suite D, V3)
 RELAY_BYTES, MAX_WORK_MS, MAX_BYTES, MAX_LABEL = 1024, 1000, 512 << 10, 64
 

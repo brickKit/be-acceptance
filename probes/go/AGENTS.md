@@ -15,7 +15,7 @@
 
 ## 构建与测试
 
-`go vet ./... && go build .`；单跑：`go run . migrate` 后 `go run .`（需要 `PG_*`、`BUS_URL` 等，见 `component.yaml`）。两个探针一起的测试在 be-acceptance 仓库的 `conformance/`：`uv run pytest`。
+`go vet ./... && go build -o /dev/null .`（不带 `-o` 会在这个目录留下一个叫 `go` 的二进制，3.2.23 因此误提交过 52 MB）；单跑：`go run . migrate` 后 `go run .`（需要 `PG_*`、`BUS_URL` 等，见 `component.yaml`）。两个探针一起的测试在 be-acceptance 仓库的 `conformance/`：`uv run pytest`。
 
 ## 设计取舍
 
