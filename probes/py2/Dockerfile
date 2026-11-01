@@ -3,7 +3,7 @@
 FROM python:3.15.0-slim-trixie AS build
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/uv
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* \
-    && git clone -q --depth 1 --branch test-probe-py/3.2.28 https://github.com/brickKit/be-acceptance /src \
+    && git clone -q --depth 1 --branch test-probe-py/3.2.29 https://github.com/brickKit/be-acceptance /src \
     && mkdir -p /app && cp -r /src/probes/py/. /app
 WORKDIR /app
 RUN uv sync --frozen --no-dev --no-editable

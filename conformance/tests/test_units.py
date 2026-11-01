@@ -70,3 +70,33 @@ def test_a_component_without_a_service_still_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(units.subprocess, "run", Kube([service("erp-inventory-3-0-8", units.PORTS["erp/inventory"][0])]))
     with pytest.raises(RuntimeError, match="erp/credit"):
         units.nodeports(Cell.load(tmp_path))
+
+
+def test_wait_answering_returns_once_healthz_answers_and_fails_on_a_closed_port():
+    import http.server
+    import socket
+    import threading
+
+    class Healthz(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200 if self.path == "/healthz" else 404)
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Healthz)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        units.wait_answering([server.server_address[1]], timeout=5)
+    finally:
+        server.shutdown()
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        closed = s.getsockname()[1]
+    with pytest.raises(RuntimeError, match=str(closed)):
+        units.wait_answering([closed], timeout=1)
+
+
+def test_host_ports_of_the_node_ports_made():
+    assert units.host_ports_of(["np-test-probe-go:30600", "np-be-go-core:30090"]) == [18600, 18090]

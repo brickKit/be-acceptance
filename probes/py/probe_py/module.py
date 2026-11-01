@@ -48,7 +48,8 @@ class Burners:
     """Work's CPU runs in worker processes (merge safety): in a Python shell the members share one event loop, and a
     thread would still hold the GIL against it, so a member's work would hold up the others' requests and deadlines.
     A work takes an idle worker or starts one; a cancelled work kills its worker; at most one idle worker per CPU stays.
-    Not ProcessPoolExecutor: its workers import the process's main module, which in a shell starts the shell."""
+    Not a multiprocessing pool: the process does not own one per module (the forkserver is one per process, and fork
+    copies the other members' connections, locks and threads into the worker)."""
 
     def __init__(self):
         self._idle: list[asyncio.subprocess.Process] = []
