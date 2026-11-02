@@ -91,10 +91,10 @@ class Running:
 
 @dataclass
 class Deployment:
-    """The probes of one test: a world (certificates), a bus and their processes."""
+    """The probes of one test: a world (certificates), a bus and their processes. stop removes the bus too."""
 
     world: testing.World
-    bus_url: str
+    bus: Bus
     tmp: pathlib.Path
     running: list[Running] = field(default_factory=list)
 
@@ -103,7 +103,7 @@ class Deployment:
         db = await testing.provision(need("BE_ACC_PG_ADMIN"), DATABASE, spec.schema, spec.schema + "_owner",
                                      spec.schema + "_rw")
         return {**db, **self.world.env(spec.id), "COMPONENT_ID": spec.id, "COMPONENT_VERSION": spec.version,
-                "BUS_URL": self.bus_url, "IMPLEMENTATION_INSTANCE": str(uuid.uuid4()), "STOP_DRAIN_DELAY": "100ms",
+                "BUS_URL": self.bus.url, "IMPLEMENTATION_INSTANCE": str(uuid.uuid4()), "STOP_DRAIN_DELAY": "100ms",
                 "OBJECT_STORE_URL": need("BE_ACC_S3_URL"), "OBJECT_STORE_BUCKET": "be-acceptance",
                 "OBJECT_STORE_PREFIX": spec.schema + "/", "OBJECT_STORE_ACCESS_KEY": need("BE_ACC_S3_ACCESS_KEY"),
                 "OBJECT_STORE_SECRET_KEY": need("BE_ACC_S3_SECRET_KEY"), **extra}
@@ -131,7 +131,10 @@ class Deployment:
         raise AssertionError(f"{spec.id} never ready: {r.logs()}")
 
     async def stop(self) -> None:
-        codes = await asyncio.gather(*(r.stop() for r in self.running))
+        try:
+            codes = await asyncio.gather(*(r.stop() for r in self.running))
+        finally:
+            await self.bus.drop()
         bad = [(r.spec.id, c, r.logs()[-2000:]) for r, c in zip(self.running, codes) if c != 0]
         assert not bad, bad
 
@@ -143,22 +146,51 @@ def address(spec: Spec, port: int) -> dict:
             "PROBE_NEXT_GRPC_URL": f"http://127.0.0.1:{spec.grpc_port}"}
 
 
-async def fresh_bus(kind: str, streams: list[str]) -> str:
+@dataclass
+class Bus:
+    """A bus of one test: its URL, and what to remove afterwards (the streams on JetStream, or the queue's schema)."""
+
+    url: str
+    kind: str
+    streams: list[str]
+    schema: str = ""
+    dropped: bool = False
+
+    async def drop(self) -> None:
+        """Removes the test's streams or queue schema; an earlier run's leftovers grew the shared NATS and database."""
+        if self.dropped:
+            return
+        self.dropped = True
+        if self.kind == "jetstream":
+            await _delete_streams(self.url, self.streams)
+            return
+        c = await asyncpg.connect(urlsplit(need("BE_ACC_PG_ADMIN"))._replace(path="/" + DATABASE).geturl())
+        try:
+            await c.execute(f"DROP SCHEMA IF EXISTS {self.schema} CASCADE")
+        finally:
+            await c.close()
+
+
+async def _delete_streams(url: str, streams: list[str]) -> None:
+    from besdk.events import jetstream
+
+    tr = await jetstream.Transport.connect(url, "acceptance-cleanup")
+    try:
+        for s in streams:
+            try:
+                await tr.delete_stream(s)
+            except Exception:  # noqa: BLE001 - not there
+                pass
+    finally:
+        await tr.close()
+
+
+async def fresh_bus(kind: str, streams: list[str]) -> Bus:
     """A bus without earlier messages of these streams: JetStream with them deleted, or a new PostgreSQL queue."""
     if kind == "jetstream":
-        from besdk.events import jetstream
-
         url = need("BE_ACC_NATS_URL")
-        tr = await jetstream.Transport.connect(url, "acceptance-cleanup")
-        try:
-            for s in streams:
-                try:
-                    await tr.delete_stream(s)
-                except Exception:  # noqa: BLE001 - not there yet
-                    pass
-        finally:
-            await tr.close()
-        return url
+        await _delete_streams(url, streams)  # an interrupted run may have left them
+        return Bus(url, kind, streams)
     from besdk.events import pgqueue
 
     admin = need("BE_ACC_PG_ADMIN")
@@ -175,8 +207,13 @@ async def fresh_bus(kind: str, streams: list[str]) -> str:
     finally:
         await c.close()
     url = urlsplit(admin)._replace(path="/" + DATABASE, scheme="pgqueue", query=f"schema={schema}&sslmode=disable").geturl()
-    await pgqueue.migrate_bus(url, obs.new_logger(obs.Member("bus", "0"), "error", io.StringIO()))
-    return url
+    bus = Bus(url, kind, streams, schema)
+    try:
+        await pgqueue.migrate_bus(url, obs.new_logger(obs.Member("bus", "0"), "error", io.StringIO()))
+    except BaseException:
+        await bus.drop()
+        raise
+    return bus
 
 
 async def ensure_bucket(name: str = "be-acceptance") -> None:

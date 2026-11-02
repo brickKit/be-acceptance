@@ -51,6 +51,7 @@ async def observe_pair(d, all_specs):
         with contextlib.suppress(Exception):
             await d.stop()
         raise
+    await d.bus.drop()  # the probes stopped one by one above
     return obs
 
 
