@@ -44,3 +44,16 @@ def test_replicas_map_no_host_port_on_docker_and_keep_the_node_port_on_kubernete
     assert by_id["mdm/org"]["expose"] is True
     k = yaml.safe_load(deploy_file("X", {}, ["mdm/org", "erp/inventory"], row="K", replicas={"erp/inventory": 2}))
     assert {c["id"]: c for c in k["components"]}["erp/inventory"] == {"id": "erp/inventory", "replicas": 2}
+
+
+def test_quadlet_units_on_the_podman_row():
+    """FRR-025 retest: a P-row cell with `units: quadlet` runs as Podman Quadlet units (podman.units); other rows refuse it."""
+    out = yaml.safe_load(deploy_file("X", {}, ["mdm/org"], row="P", units="quadlet"))
+    assert out["target"] == "podman" and out["podman"] == {"units": "quadlet"}
+    assert "podman" not in yaml.safe_load(deploy_file("X", {}, ["mdm/org"], row="P"))
+    for row in ("D", "LP", "K"):
+        try:
+            deploy_file("X", {}, ["mdm/org"], row=row, units="quadlet")
+        except ValueError:
+            continue
+        raise AssertionError(f"row {row} took units: quadlet")
