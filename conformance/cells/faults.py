@@ -79,19 +79,36 @@ def replica(c: Cell, host: str, n: int) -> str:
     return c.container_of(host).rsplit("-", 1)[0] + f"-{n}"
 
 
-def healthy(c: Cell, component: str) -> bool:
-    """Every replica of the process that runs the component passes its health check (Kubernetes: its Deployment has
-    them all ready)."""
+def ready(c: Cell, component: str) -> int:
+    """How many replicas of the process that runs the component are running and pass their health check (Kubernetes:
+    its Deployment's ready Pods; a Pod being deleted no longer counts)."""
     host = host_of(c, component)
     e = engine(c)
-    n = c.replicas.get(host, 1)
     if e in ("docker", "podman"):
-        out = subprocess.run([e, "inspect", "-f", "{{.State.Health.Status}}", *(replica(c, host, i) for i in range(1, n + 1))],
-                             capture_output=True, text=True).stdout.split()
-        return out == ["healthy"] * n
+        n = c.replicas.get(host, 1)
+        out = subprocess.run([e, "inspect", "-f", "{{.State.Running}}/{{if .State.Health}}{{.State.Health.Status}}{{end}}",
+                              *(replica(c, host, i) for i in range(1, n + 1))], capture_output=True, text=True).stdout
+        return out.split().count("true/healthy")
     out = subprocess.run([*KUBE, "kubectl", "--", "-n", c.project, "get", "deploy", deployment(c, host), "-o",
                           "jsonpath={.status.readyReplicas}"], capture_output=True, text=True).stdout.strip()
-    return out == str(n)
+    return int(out or 0)
+
+
+def healthy(c: Cell, component: str) -> bool:
+    """Every replica of the process that runs the component is ready."""
+    return ready(c, component) == c.replicas.get(host_of(c, component), 1)
+
+
+def wait_down(c: Cell, component: str, limit: float = 30) -> float:
+    """Seconds until fewer replicas of the process are ready than it has: the stop has taken effect. Raises when it has
+    not: the fault hit something else, and a test that only checks what follows would pass without it (step 13's
+    K13-E1 deleted the migration Job's pod, no replica stopped, and E3 passed)."""
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < limit:
+        if not healthy(c, component):
+            return time.monotonic() - t0
+        time.sleep(0.2)
+    raise RuntimeError(f"{c.name}: every replica of {host_of(c, component)} still ready {limit:.0f} s after the stop")
 
 
 def wait_running(c: Cell, component: str, before: str | None = None, limit: float = 180) -> float:
@@ -111,22 +128,25 @@ def wait_running(c: Cell, component: str, before: str | None = None, limit: floa
 
 def stop(c: Cell, component: str, action: str = "stop") -> str:
     """Stop (or start again) the process that runs the component, cleanly: the container, or on Kubernetes the
-    Deployment scaled to 0 (or 1)."""
+    Deployment scaled to 0 (or 1). A stop returns once it has taken effect (wait_down)."""
     host = host_of(c, component)
     e = engine(c)
     if e in ("docker", "podman"):
         _run([e, action, c.container_of(host)])
-        return c.container_of(host)
-    deploy = deployment(c, host)
-    _run([*KUBE, "kubectl", "--", "-n", c.project, "scale", "deploy", deploy,
-          f"--replicas={0 if action == 'stop' else c.replicas.get(host, 1)}"])
-    return deploy
+        stopped = c.container_of(host)
+    else:
+        stopped = deployment(c, host)
+        _run([*KUBE, "kubectl", "--", "-n", c.project, "scale", "deploy", stopped,
+              f"--replicas={0 if action == 'stop' else c.replicas.get(host, 1)}"])
+    if action == "stop":
+        wait_down(c, component)
+    return stopped
 
 
 def stop_replica(c: Cell, component: str) -> str:
     """Suite E3: stop one replica of the process that runs the component, cleanly (SIGTERM, its grace period): the
     last container on Docker and Podman (started again by start_replica), one Pod on Kubernetes (its Deployment
-    makes another)."""
+    makes another). Returns once fewer replicas are ready (wait_down)."""
     host = host_of(c, component)
     e = engine(c)
     if c.replicas.get(host, 1) < 2:
@@ -134,6 +154,7 @@ def stop_replica(c: Cell, component: str) -> str:
     if e in ("docker", "podman"):
         name = replica(c, host, c.replicas[host])
         _run([e, "stop", name])
+        wait_down(c, component)
         return name
     # the Deployment's running pods: the migration Job's pod shares the name prefix (<deployment>-migration-...)
     listed = _run([*KUBE, "kubectl", "--", "-n", c.project, "get", "pods", "-o",
@@ -141,6 +162,7 @@ def stop_replica(c: Cell, component: str) -> str:
     pods = [f"pod/{n}" for n, phase in (p.split("=", 1) for p in listed)
             if n.startswith(f"{deployment(c, host)}-") and "-migration-" not in n and phase == "Running"]
     _run([*KUBE, "kubectl", "--", "-n", c.project, "delete", pods[-1], "--wait=false"])
+    wait_down(c, component)
     return pods[-1]
 
 
