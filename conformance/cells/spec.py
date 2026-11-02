@@ -77,6 +77,10 @@ class Cell:
     # suite E: components whose schema is not in `database` on the first instance, id -> "[instance/]database"
     # (instance: INSTANCES, default main); cells/homes.py
     databases: dict[str, str] = field(default_factory=dict)
+    # the P row's Podman: "" rootless, or "rootful" (compose through root's socket); units "" compose, or "quadlet"
+    # (Podman Quadlet units, FRR-025)
+    podman: str = ""
+    units: str = ""
 
     @property
     def base_host(self) -> str:
@@ -109,7 +113,8 @@ class Cell:
                  baseline_scale=int(spec.get("baseline_scale", 1)), base=spec.get("base", ""),
                  also=list(spec.get("also") or []),
                  replicas={k.split("@")[0]: int(v) for k, v in (spec.get("replicas") or {}).items()},
-                 databases={k.split("@")[0]: str(v) for k, v in (spec.get("databases") or {}).items()})
+                 databases={k.split("@")[0]: str(v) for k, v in (spec.get("databases") or {}).items()},
+                 podman=spec.get("podman", ""), units=spec.get("units", ""))
         if c.base not in ("", "cluster") or (c.base == "cluster" and c.row != "K"):
             raise ValueError(f"{c.name}: base {c.base!r}: only the K row runs its base resources in the cluster")
         if c.pooler not in ("", "pgbouncer"):
@@ -163,6 +168,12 @@ class Cell:
     def erp(self) -> list[str]:
         """The business components and the print component the cell runs (they need the security members)."""
         return [p for p in self.placed if p in ERP_PORTS]
+
+    @property
+    def root_runs_up(self) -> bool:
+        """Rootful Podman with Quadlet units: the units go into the system's systemd, so root runs `brickkit up`
+        (rootful/quadlet-up.sh); the runner, as the user, would install a second, rootless copy of the project."""
+        return self.podman == "rootful" and self.units == "quadlet"
 
     @property
     def secured(self) -> bool:

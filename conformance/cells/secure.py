@@ -76,17 +76,28 @@ async def secure(directory: str | pathlib.Path) -> dict:
     if c.has_local:  # a new mode: local session: the processes (and in LD, LP the containers) restart with the claim
         from cells import localrun
         localrun.up(c.dir, c.dir / ".brickkit" / "local-session.log")
-    else:
+    elif not c.root_runs_up:  # otherwise rootful/quadlet-up.sh, as root, sees the claim and runs `brickkit up` again
         brickkit(c.dir, "up")  # the authorization member restarts with the claim
     await ready(authz)
     admin_token, _ = await token(iam, ADMIN, password)
     headers = {"Authorization": "Bearer " + admin_token}
     async with httpx.AsyncClient(base_url=authz, timeout=15, headers=headers) as h:
-        for _ in range(60):  # the administrator's grant reaches the member's own view within a verification
-            r = await h.get("/api/authz/records", params={"type": "management_unit"})
+        # the administrator's grant reaches the member's own view within a verification; when root restarts the
+        # member, up to 15 minutes until it has
+        r = None
+        for _ in range(1800 if c.root_runs_up else 60):
+            try:
+                r = await h.get("/api/authz/records", params={"type": "management_unit"})
+            except httpx.TransportError:  # root's `brickkit up` is restarting the member right now
+                if not c.root_runs_up:
+                    raise
+                await asyncio.sleep(0.5)
+                continue
             if r.status_code == 200:
                 break
             await asyncio.sleep(0.5)
+        if r is None:
+            raise RuntimeError(f"the authorization member never answered on {authz}")
         r.raise_for_status()
         root = next(u["id"] for u in r.json()["records"] if u["body"].get("root"))
         start = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
