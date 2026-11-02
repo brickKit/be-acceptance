@@ -1,0 +1,983 @@
+{
+ "bus": "jetstream",
+ "stream": "test.probe_go",
+ "rollback": {
+  "code": 400,
+  "before": [
+   0,
+   0
+  ],
+  "after": [
+   0,
+   0
+  ],
+  "commit_code": 201,
+  "committed": [
+   {
+    "record_id": "01a19e69-2827-77d1-a2c7-87c7024f22f8",
+    "partition": 3,
+    "seq": null,
+    "epoch_generation": null,
+    "epoch_timeline": null,
+    "published": false,
+    "hops": 0,
+    "causation": null
+   }
+  ]
+ },
+ "numbering": {
+  "rows": [
+   {
+    "record_id": "01a19e69-2827-77d1-a2c7-87c7024f22f8",
+    "partition": 3,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2830-7a0d-b5c3-5b23d763b6a8",
+    "partition": 2,
+    "seq": 11,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-28f9-79c2-ba98-ab4496659000",
+    "partition": 3,
+    "seq": 2,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2905-7d98-a436-05aa54866bb3",
+    "partition": 2,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-290c-71bc-91d5-f73704f52f0b",
+    "partition": 1,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2912-739e-8fd2-f8e64c2de606",
+    "partition": 2,
+    "seq": 2,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2918-7a01-8b81-fe636111317e",
+    "partition": 2,
+    "seq": 3,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-291f-76c3-b19b-154cb11d23e9",
+    "partition": 2,
+    "seq": 4,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2925-7d04-92f9-9cd858e43b69",
+    "partition": 2,
+    "seq": 5,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-292d-7164-8f32-f00a328b66ed",
+    "partition": 2,
+    "seq": 6,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2934-72e3-9e69-88d4b98c5236",
+    "partition": 3,
+    "seq": 3,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-293e-7142-b6c0-8882d095960f",
+    "partition": 2,
+    "seq": 7,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2945-745e-8ccd-97d9a443313e",
+    "partition": 1,
+    "seq": 2,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-294b-7aad-928c-bd2479caf060",
+    "partition": 1,
+    "seq": 3,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2952-7930-841a-b19712643836",
+    "partition": 2,
+    "seq": 8,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2958-7b1b-9f7d-4301e9714487",
+    "partition": 0,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-295e-7d1e-9c70-70aa5078487e",
+    "partition": 1,
+    "seq": 4,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2966-70e3-b46d-13785b6d3259",
+    "partition": 2,
+    "seq": 9,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-296c-7b2b-bfe5-c82e2b7653ce",
+    "partition": 1,
+    "seq": 5,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2972-7df6-a71d-568113882bdb",
+    "partition": 1,
+    "seq": 6,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-297b-7cfd-a57a-6630925dc533",
+    "partition": 2,
+    "seq": 10,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2982-747f-99f2-41955a0133de",
+    "partition": 3,
+    "seq": 4,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   }
+  ],
+  "held": "01a19e69-2830-7a0d-b5c3-5b23d763b6a8",
+  "quick": [
+   "01a19e69-28f9-79c2-ba98-ab4496659000",
+   "01a19e69-2905-7d98-a436-05aa54866bb3",
+   "01a19e69-290c-71bc-91d5-f73704f52f0b",
+   "01a19e69-2912-739e-8fd2-f8e64c2de606",
+   "01a19e69-2918-7a01-8b81-fe636111317e",
+   "01a19e69-291f-76c3-b19b-154cb11d23e9",
+   "01a19e69-2925-7d04-92f9-9cd858e43b69",
+   "01a19e69-292d-7164-8f32-f00a328b66ed",
+   "01a19e69-2934-72e3-9e69-88d4b98c5236",
+   "01a19e69-293e-7142-b6c0-8882d095960f",
+   "01a19e69-2945-745e-8ccd-97d9a443313e",
+   "01a19e69-294b-7aad-928c-bd2479caf060",
+   "01a19e69-2952-7930-841a-b19712643836",
+   "01a19e69-2958-7b1b-9f7d-4301e9714487",
+   "01a19e69-295e-7d1e-9c70-70aa5078487e",
+   "01a19e69-2966-70e3-b46d-13785b6d3259",
+   "01a19e69-296c-7b2b-bfe5-c82e2b7653ce",
+   "01a19e69-2972-7df6-a71d-568113882bdb",
+   "01a19e69-297b-7cfd-a57a-6630925dc533",
+   "01a19e69-2982-747f-99f2-41955a0133de"
+  ]
+ },
+ "retained": {
+  "rows": [
+   {
+    "record_id": "01a19e69-2827-77d1-a2c7-87c7024f22f8",
+    "partition": 3,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2830-7a0d-b5c3-5b23d763b6a8",
+    "partition": 2,
+    "seq": 11,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-28f9-79c2-ba98-ab4496659000",
+    "partition": 3,
+    "seq": 2,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2905-7d98-a436-05aa54866bb3",
+    "partition": 2,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-290c-71bc-91d5-f73704f52f0b",
+    "partition": 1,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2912-739e-8fd2-f8e64c2de606",
+    "partition": 2,
+    "seq": 2,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2918-7a01-8b81-fe636111317e",
+    "partition": 2,
+    "seq": 3,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-291f-76c3-b19b-154cb11d23e9",
+    "partition": 2,
+    "seq": 4,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2925-7d04-92f9-9cd858e43b69",
+    "partition": 2,
+    "seq": 5,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-292d-7164-8f32-f00a328b66ed",
+    "partition": 2,
+    "seq": 6,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2934-72e3-9e69-88d4b98c5236",
+    "partition": 3,
+    "seq": 3,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-293e-7142-b6c0-8882d095960f",
+    "partition": 2,
+    "seq": 7,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2945-745e-8ccd-97d9a443313e",
+    "partition": 1,
+    "seq": 2,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-294b-7aad-928c-bd2479caf060",
+    "partition": 1,
+    "seq": 3,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2952-7930-841a-b19712643836",
+    "partition": 2,
+    "seq": 8,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2958-7b1b-9f7d-4301e9714487",
+    "partition": 0,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-295e-7d1e-9c70-70aa5078487e",
+    "partition": 1,
+    "seq": 4,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2966-70e3-b46d-13785b6d3259",
+    "partition": 2,
+    "seq": 9,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-296c-7b2b-bfe5-c82e2b7653ce",
+    "partition": 1,
+    "seq": 5,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2972-7df6-a71d-568113882bdb",
+    "partition": 1,
+    "seq": 6,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-297b-7cfd-a57a-6630925dc533",
+    "partition": 2,
+    "seq": 10,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2982-747f-99f2-41955a0133de",
+    "partition": 3,
+    "seq": 4,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   }
+  ],
+  "retention_s": 604800
+ },
+ "epoch": {
+  "old_generation": 1,
+  "row": {
+   "record_id": "01a19e69-2ef2-7316-b340-c60d86ba09d6",
+   "partition": 3,
+   "seq": 1,
+   "epoch_generation": 2,
+   "epoch_timeline": 1,
+   "published": true,
+   "hops": 0,
+   "causation": null
+  },
+  "history": [
+   {
+    "partition": 3,
+    "old_generation": 1,
+    "fork_seq": 4,
+    "new_generation": 2
+   }
+  ],
+  "old_rows": [
+   {
+    "record_id": "01a19e69-2827-77d1-a2c7-87c7024f22f8",
+    "partition": 3,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2830-7a0d-b5c3-5b23d763b6a8",
+    "partition": 2,
+    "seq": 11,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-28f9-79c2-ba98-ab4496659000",
+    "partition": 3,
+    "seq": 2,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2905-7d98-a436-05aa54866bb3",
+    "partition": 2,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-290c-71bc-91d5-f73704f52f0b",
+    "partition": 1,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2912-739e-8fd2-f8e64c2de606",
+    "partition": 2,
+    "seq": 2,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2918-7a01-8b81-fe636111317e",
+    "partition": 2,
+    "seq": 3,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-291f-76c3-b19b-154cb11d23e9",
+    "partition": 2,
+    "seq": 4,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2925-7d04-92f9-9cd858e43b69",
+    "partition": 2,
+    "seq": 5,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-292d-7164-8f32-f00a328b66ed",
+    "partition": 2,
+    "seq": 6,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2934-72e3-9e69-88d4b98c5236",
+    "partition": 3,
+    "seq": 3,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-293e-7142-b6c0-8882d095960f",
+    "partition": 2,
+    "seq": 7,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2945-745e-8ccd-97d9a443313e",
+    "partition": 1,
+    "seq": 2,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-294b-7aad-928c-bd2479caf060",
+    "partition": 1,
+    "seq": 3,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2952-7930-841a-b19712643836",
+    "partition": 2,
+    "seq": 8,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2958-7b1b-9f7d-4301e9714487",
+    "partition": 0,
+    "seq": 1,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-295e-7d1e-9c70-70aa5078487e",
+    "partition": 1,
+    "seq": 4,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2966-70e3-b46d-13785b6d3259",
+    "partition": 2,
+    "seq": 9,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-296c-7b2b-bfe5-c82e2b7653ce",
+    "partition": 1,
+    "seq": 5,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2972-7df6-a71d-568113882bdb",
+    "partition": 1,
+    "seq": 6,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-297b-7cfd-a57a-6630925dc533",
+    "partition": 2,
+    "seq": 10,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   },
+   {
+    "record_id": "01a19e69-2982-747f-99f2-41955a0133de",
+    "partition": 3,
+    "seq": 4,
+    "epoch_generation": 1,
+    "epoch_timeline": 1,
+    "published": true,
+    "hops": 0,
+    "causation": null
+   }
+  ]
+ },
+ "duplicate": {
+  "stored": 2,
+  "seen": 1
+ },
+ "hops": {
+  "dead": [
+   {
+    "error": "be/INTERNAL: : events: 11 hops exceed the limit of 10 (a causal loop?)",
+    "attempts": 3
+   }
+  ],
+  "seen": 0,
+  "emitted": [],
+  "over": []
+ },
+ "claim": {
+  "readable": 200,
+  "dead": [
+   {
+    "error": "event 01a19e69-447d-72f2-9370-4906c41f236b: the claimed object does not match its size and digest",
+    "attempts": 3
+   }
+  ],
+  "seen": 0,
+  "after": 1
+ },
+ "bus_retention": {
+  "kind": "jetstream",
+  "max_age_s": 604800.0
+ },
+ "bus_start": {
+  "late": [
+   [
+    0.0,
+    0
+   ],
+   [
+    0.2,
+    0
+   ],
+   [
+    0.4,
+    0
+   ],
+   [
+    0.6,
+    0
+   ],
+   [
+    0.8,
+    0
+   ],
+   [
+    1.0,
+    0
+   ],
+   [
+    1.2,
+    0
+   ],
+   [
+    1.4,
+    0
+   ],
+   [
+    1.6,
+    0
+   ],
+   [
+    1.8,
+    0
+   ],
+   [
+    2.0,
+    0
+   ],
+   [
+    2.2,
+    0
+   ],
+   [
+    2.4,
+    0
+   ],
+   [
+    2.6,
+    0
+   ],
+   [
+    2.8,
+    0
+   ],
+   [
+    3.0,
+    200
+   ],
+   [
+    3.2,
+    200
+   ],
+   [
+    3.4,
+    200
+   ],
+   [
+    3.6,
+    200
+   ],
+   [
+    3.8,
+    200
+   ],
+   [
+    4.1,
+    200
+   ],
+   [
+    4.3,
+    200
+   ],
+   [
+    4.5,
+    200
+   ],
+   [
+    4.7,
+    200
+   ],
+   [
+    4.9,
+    200
+   ],
+   [
+    5.1,
+    200
+   ],
+   [
+    5.3,
+    200
+   ],
+   [
+    5.5,
+    200
+   ],
+   [
+    5.7,
+    200
+   ],
+   [
+    5.9,
+    200
+   ],
+   [
+    6.1,
+    200
+   ],
+   [
+    6.3,
+    200
+   ],
+   [
+    6.5,
+    200
+   ],
+   [
+    6.7,
+    200
+   ],
+   [
+    6.9,
+    200
+   ],
+   [
+    7.1,
+    200
+   ],
+   [
+    7.3,
+    200
+   ],
+   [
+    7.5,
+    200
+   ],
+   [
+    7.7,
+    200
+   ],
+   [
+    7.9,
+    200
+   ]
+  ],
+  "late_exit": 0,
+  "absent": [
+   [
+    0.0,
+    0
+   ],
+   [
+    0.2,
+    0
+   ],
+   [
+    0.4,
+    0
+   ],
+   [
+    0.6,
+    0
+   ],
+   [
+    0.8,
+    0
+   ],
+   [
+    1.0,
+    0
+   ],
+   [
+    1.2,
+    0
+   ],
+   [
+    1.4,
+    0
+   ],
+   [
+    1.6,
+    0
+   ],
+   [
+    1.8,
+    0
+   ]
+  ],
+  "absent_alive": true,
+  "absent_exit": 0,
+  "refused_exit": 78
+ }
+}

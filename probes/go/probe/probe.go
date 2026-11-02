@@ -129,6 +129,10 @@ type writeIn struct {
 	Relay bool   `json:"relay"`
 	Label string `json:"label"` // since 3.2.23, optional
 	Event string `json:"event"` // since 3.2.23: "noted" emits test.probe.noted.v1 instead
+	// since 3.2.29, for the suite's events profile: Fail rolls the whole transaction back after the event was
+	// emitted (CK-EV-01); HoldMS keeps it open that long after emitting, so later writes commit first (CK-EV-02)
+	Fail   bool `json:"fail"`
+	HoldMS int  `json:"hold_ms"`
 }
 
 type written struct {
@@ -136,7 +140,12 @@ type written struct {
 	Relay bool   `json:"relay"`
 	Blob  string `json:"blob,omitempty"`
 	Label string `json:"label,omitempty"`
+	// Emit (since 3.2.29): the consumer emits an event of its own while handling this one, one hop further (CK-EV-07)
+	Emit bool `json:"emit,omitempty"`
 }
+
+// MaxHoldMS bounds hold_ms: under the transaction timeouts, and a write never ties a connection up for long.
+const MaxHoldMS = 2000
 
 // write inserts a row and its event in one transaction (Write; a payload over 64 KiB is a big event).
 func (p *Probe) write(c *httpx.Context) error {
@@ -144,8 +153,9 @@ func (p *Probe) write(c *httpx.Context) error {
 	if err := c.BindJSON(&in); err != nil {
 		return err
 	}
-	if in.Bytes < 0 || in.Bytes > MaxBytes || len(in.Label) > MaxLabel || (in.Event != "" && in.Event != "noted") {
-		return invalid("bytes must be 0..524288, label at most 64 bytes, event empty or noted")
+	if in.Bytes < 0 || in.Bytes > MaxBytes || len(in.Label) > MaxLabel || (in.Event != "" && in.Event != "noted") ||
+		in.HoldMS < 0 || in.HoldMS > MaxHoldMS {
+		return invalid("bytes must be 0..524288, label at most 64 bytes, event empty or noted, hold_ms 0..2000")
 	}
 	typ, label := WrittenType, &in.Label
 	if in.Event == "noted" {
@@ -160,10 +170,22 @@ func (p *Probe) write(c *httpx.Context) error {
 			label); err != nil {
 			return err
 		}
-		_, err := p.rt.Events.Emit(ctx, tx, p.v.Stream, events.Event{Type: typ, RecordID: id, Version: 1,
+		if _, err := p.rt.Events.Emit(ctx, tx, p.v.Stream, events.Event{Type: typ, RecordID: id, Version: 1,
 			Projection: events.Full, Data: written{ID: id, Relay: in.Relay, Blob: strings.Repeat("w", in.Bytes),
-				Label: in.Label}})
-		return err
+				Label: in.Label}}); err != nil {
+			return err
+		}
+		if in.HoldMS > 0 {
+			select {
+			case <-time.After(time.Duration(in.HoldMS) * time.Millisecond):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		if in.Fail {
+			return errs.New(errs.ReasonRequestInvalid, "rolled back as asked (fail)")
+		}
+		return nil
 	})
 	if err != nil {
 		return err
@@ -333,6 +355,18 @@ func (p *Probe) received(ctx context.Context, tx db.Tx, e events.Received) error
 	if _, err := tx.Exec(ctx, "INSERT INTO probe_seen (event_id, source, size, relay, type) VALUES ($1, $2, $3, $4, $5)",
 		e.ID, e.Source, len(w.Blob), w.Relay, e.Type); err != nil {
 		return err
+	}
+	if w.Emit {
+		// in the handling transaction and its context: the SDK counts this event one hop further, and past the
+		// limit (P6.15) the emit fails, so does the handling
+		id := ids.New().String()
+		if _, err := tx.Exec(ctx, "INSERT INTO probe_writes (id, bytes) VALUES ($1, 0)", id); err != nil {
+			return err
+		}
+		if _, err := p.rt.Events.Emit(ctx, tx, p.v.Stream, events.Event{Type: WrittenType, RecordID: id, Version: 1,
+			Projection: events.Full, Data: written{ID: id}}); err != nil {
+			return err
+		}
 	}
 	if !w.Relay {
 		return nil
