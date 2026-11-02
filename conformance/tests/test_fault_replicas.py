@@ -43,3 +43,20 @@ def test_stopping_a_replica_needs_two(tmp_path, monkeypatch):
     assert stopped == [["docker", "stop", "brickkit-e-erp-sales-3-0-18-2"]]
     with pytest.raises(ValueError, match="one replica"):
         faults.stop_replica(c, "mdm/org")
+
+
+def test_on_kubernetes_a_running_replica_pod_is_deleted_not_the_migration_job(tmp_path, monkeypatch):
+    """The Deployment's pods share their name prefix with the migration Job's pod (erp-sales-3-0-18-migration-...):
+    step 13's K13-E1 deleted that one, and no replica stopped."""
+    ran = []
+
+    def run(cmd):
+        ran.append(cmd)
+        if "get" in cmd:
+            return ("erp-sales-3-0-18-7c569b777f-5ltcc=Running erp-sales-3-0-18-7c569b777f-bkbtb=Running "
+                    "erp-sales-3-0-18-migration-mjlbr=Succeeded mdm-org-3-0-13-6b9c8d7f5d-x2x2x=Running")
+        return ""
+    monkeypatch.setattr(faults, "_run", run)
+    gone = faults.stop_replica(cell(tmp_path, "K"), "erp/sales")
+    assert gone == "pod/erp-sales-3-0-18-7c569b777f-bkbtb", gone
+    assert ran[-1][-3:] == ["delete", "pod/erp-sales-3-0-18-7c569b777f-bkbtb", "--wait=false"]

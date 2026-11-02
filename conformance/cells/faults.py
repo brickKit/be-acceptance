@@ -135,8 +135,11 @@ def stop_replica(c: Cell, component: str) -> str:
         name = replica(c, host, c.replicas[host])
         _run([e, "stop", name])
         return name
-    pods = [p for p in _run([*KUBE, "kubectl", "--", "-n", c.project, "get", "pods", "-o", "name"]).split()
-            if p.startswith(f"pod/{deployment(c, host)}-")]
+    # the Deployment's running pods: the migration Job's pod shares the name prefix (<deployment>-migration-...)
+    listed = _run([*KUBE, "kubectl", "--", "-n", c.project, "get", "pods", "-o",
+                   "jsonpath={range .items[*]}{.metadata.name}={.status.phase} {end}"]).split()
+    pods = [f"pod/{n}" for n, phase in (p.split("=", 1) for p in listed)
+            if n.startswith(f"{deployment(c, host)}-") and "-migration-" not in n and phase == "Running"]
     _run([*KUBE, "kubectl", "--", "-n", c.project, "delete", pods[-1], "--wait=false"])
     return pods[-1]
 
