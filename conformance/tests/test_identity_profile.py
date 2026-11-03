@@ -1,7 +1,7 @@
 """The identity profile (foundations item 2, T6) against both probes with their guard on: the suite signs the tokens
 and serves the key set, issues the views, calls the system surface with good and bad certificates. CK-ID-05 and 06
-apply to the Go probe only (be-sdk-python implements P8.25 and P8.26 with foundations item 6). Every check's
-self-test catches its known violation first."""
+apply to both since be-sdk-python a46 (foundations item 3, T0). Every check's self-test catches its known violation
+first."""
 import json
 import platform
 
@@ -12,7 +12,7 @@ from profile import identity, observe
 from profile.model import SUITE_VERSION, Report, Result, Verdict, run
 
 
-@pytest.mark.parametrize("kind,peer", [("go", "go2"), ("py", None)])
+@pytest.mark.parametrize("kind,peer", [("go", "go2"), ("py", "py2")])
 async def test_the_probes_conform_to_the_identity_profile(specs, world, tmp_path, kind, peer):
     spec, peer_spec = specs[kind], specs[peer] if peer else None
     d = Deployment(world, await fresh_bus("jetstream", [spec.stream] + ([peer_spec.stream] if peer_spec else [])),
@@ -30,7 +30,4 @@ async def test_the_probes_conform_to_the_identity_profile(specs, world, tmp_path
     print(report.summary())
     assert report.verdict == Verdict.CONFORMS, report.summary()
     applies = {o.check: o.result for o in report.outcomes}
-    if kind == "py":
-        assert applies["CK-ID-05"] == applies["CK-ID-06"] == Result.NOT_APPLICABLE
-    else:
-        assert all(r == Result.PASS for r in applies.values()), applies
+    assert all(r == Result.PASS for r in applies.values()), applies

@@ -26,7 +26,7 @@ ALICE = "0190f3a1-0000-7000-8000-0000000000a1"
 PEER = "test/probe-go2"  # a component the probes' system methods admit
 STRANGER = "test/stranger"
 ECHO = "/test.probe.v1.Probe/Echo"
-STALE_SDKS = {"go"}  # the SDKs that implement P8.25 and P8.26 (be-sdk-python: foundations item 6)
+STALE_SDKS = {"go", "py"}  # the SDKs that implement P8.25 and P8.26 (be-sdk-python since a46)
 
 
 def prefix(component: str) -> str:
@@ -192,7 +192,7 @@ async def _downstream(d: Deployment, spec: Spec, env: dict, peer: Spec, pr: Runn
         direct = await c.post(pr.url + "/api/probe/echo", json={"payload": "x"},
                               headers={"Authorization": "Bearer " + token})
     body = resp.json() if resp.headers.get("content-type", "").startswith("application/problem") else {}
-    return {"status": resp.status_code, "reason": body.get("reason", ""),
+    return {"status": resp.status_code, "reason": body.get("reason", ""), "peer": peer.id,
             "dependency": (body.get("metadata") or {}).get("dependency", ""),
             "peer_direct": direct.status_code, "peer_reason": reason_of(direct)}
 
@@ -265,7 +265,7 @@ def judge_downstream(obs: dict) -> list[str]:
         out.append(f"precondition: the peer refuses the token directly ({d['peer_direct']} {d['peer_reason']})")
     if (d["status"], d["reason"]) != (503, "AUTHORIZATION_UNPROVABLE"):
         out.append(f"the call for the user: {d['status']} {d['reason']}, want 503 AUTHORIZATION_UNPROVABLE")
-    if d["dependency"] != PEER and d["status"] == 503:
+    if d["dependency"] != d.get("peer", PEER) and d["status"] == 503:
         out.append(f"metadata.dependency is {d['dependency']!r}")
     return out
 

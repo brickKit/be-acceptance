@@ -1,4 +1,4 @@
-"""The identity profile's checks on recorded observations (the Go and Python probes, 2026-11-03; no base resources):
+"""The identity profile's checks on recorded observations (the Go and Python probes, 2026-11-03, Python on a46; no base resources):
 each passes its recording, each one's known violation fails it, and a precondition that did not hold proves nothing.
 The tokens in the recordings were signed by a test deployment's throwaway keys."""
 import json
@@ -24,10 +24,16 @@ def test_each_check_passes_the_go_recording_and_catches_its_violation(check):
     assert check.judge(check.bad(GO)), "the known violation passed"
 
 
-def test_the_python_recording_passes_and_staleness_does_not_apply():
+def test_the_python_recording_passes_every_check():
     results = {c.id: run(c, PY).result for c in identity.IDENTITY}
+    assert all(r == Result.PASS for r in results.values()), results
+
+
+def test_an_sdk_without_staleness_is_not_applicable():
+    o = copy(PY)
+    o["sdk"] = "an-sdk-without-p8.25"
+    results = {c.id: run(c, o).result for c in identity.IDENTITY}
     assert results["CK-ID-05"] == results["CK-ID-06"] == Result.NOT_APPLICABLE
-    assert all(r == Result.PASS for k, r in results.items() if k not in ("CK-ID-05", "CK-ID-06")), results
 
 
 def test_a_probe_that_never_answers_stale_fails_rather_than_not_running():
