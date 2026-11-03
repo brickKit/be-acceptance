@@ -77,6 +77,8 @@ class Cell:
     # suite E: components whose schema is not in `database` on the first instance, id -> "[instance/]database"
     # (instance: INSTANCES, default main); cells/homes.py
     databases: dict[str, str] = field(default_factory=dict)
+    # extra configuration of one probe, id -> {key: value} (foundations item 1, T10: PROBE_CRON on one probe)
+    settings: dict[str, dict[str, str]] = field(default_factory=dict)
     # the P row's Podman: "" rootless, or "rootful" (compose through root's socket); units "" compose, or "quadlet"
     # (Podman Quadlet units, FRR-025)
     podman: str = ""
@@ -114,6 +116,7 @@ class Cell:
                  also=list(spec.get("also") or []),
                  replicas={k.split("@")[0]: int(v) for k, v in (spec.get("replicas") or {}).items()},
                  databases={k.split("@")[0]: str(v) for k, v in (spec.get("databases") or {}).items()},
+                 settings={k.split("@")[0]: {kk: str(vv) for kk, vv in v.items()} for k, v in (spec.get("settings") or {}).items()},
                  podman=spec.get("podman", ""), units=spec.get("units", ""))
         if c.base not in ("", "cluster") or (c.base == "cluster" and c.row != "K"):
             raise ValueError(f"{c.name}: base {c.base!r}: only the K row runs its base resources in the cluster")

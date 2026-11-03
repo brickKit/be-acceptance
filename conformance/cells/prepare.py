@@ -5,6 +5,7 @@ are referenced from config; the object storage keys come from the environment (B
 from __future__ import annotations
 
 import io
+import json
 import pathlib
 import shutil
 import uuid
@@ -343,6 +344,8 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
             lines.append(f"PROBE_PEER_STREAM: {stream_of(prev)}")
         if c.concurrency != 1:
             lines.append(f"BUS_SUBSCRIPTION_CONCURRENCY: {c.concurrency}")
+        for key, value in c.settings.get(probe, {}).items():  # the cell's extra settings of this probe
+            lines.append(f"{key}: {json.dumps(value)}")
         if c.secured:  # the routes need a token and their operation; the view and the audit records are real
             lines += ["PROBE_GUARD: \"true\"", "IAM_ISSUER: $var:IAM_ISSUER", "IAM_JWKS_URL: $var:IAM_JWKS_URL",
                       "AUTHZ_GRPC_URL: $var:AUTHZ_GRPC_URL", "AUDIT_GRPC_URL: $var:AUDIT_GRPC_URL"]
