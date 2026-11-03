@@ -45,6 +45,15 @@ func (p *Probe) Jobs(j *work.Jobs) error {
 		j.Add(work.Job{Name: jobNames[effect], Kind: work.Queue, Effect: class, MaxAttempts: JobAttempts, Handle: p.job,
 			DeadLetter: p.deadLetter})
 	}
+	if p.rt.Config.Bool("PROBE_CRON") { // since 3.2.32: a slot a minute, its run recorded (CK-WK-05)
+		j.Add(work.Job{Name: "probe.minutely", Kind: work.Cron, Effect: work.Local, Cron: "* * * * *", TimeZone: "UTC",
+			Handle: func(ctx context.Context, run *work.Run) error {
+				return run.Complete(ctx, func(ctx context.Context, tx db.Tx) error {
+					_, err := tx.Exec(ctx, "INSERT INTO probe_cron (slot, instance) VALUES ($1, $2)", run.Slot, p.instance)
+					return err
+				})
+			}})
+	}
 	if every := p.rt.Config.Duration("PROBE_STEPS_EVERY"); every > 0 {
 		j.Add(work.Job{Name: "probe.steps", Kind: work.Singleton, Effect: work.Local, Interval: every, Handle: p.steps})
 	}

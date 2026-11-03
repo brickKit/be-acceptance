@@ -12,7 +12,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.31"
+	Version     = "3.2.32"
 	WrittenType = "test.probe.written.v1"
 	NotedType   = "test.probe.noted.v1" // since 3.2.23: a write asked as "noted" (suite D, V3)
 	MaxLabel    = 64
@@ -67,6 +67,8 @@ func Keys() []config.Key {
 		{Name: "PROBE_GUARD", Type: config.Boolean, Default: false},
 		// since 3.2.30: how often the steps singleton runs (the background work profile); 0: no such job
 		{Name: "PROBE_STEPS_EVERY", Type: config.Duration, Default: time.Duration(0)},
+		// since 3.2.32: the cron job of the background work profile (a slot a minute); off by default
+		{Name: "PROBE_CRON", Type: config.Boolean, Default: false},
 	}
 }
 

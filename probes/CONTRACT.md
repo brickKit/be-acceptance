@@ -54,6 +54,8 @@
 
 一次尝试：先在 `probe_job_attempts` 记一行（工作项、探针自己数的第几次、`operation_id`、本进程的身份 `instance`、开始时刻），结束时写 `ended`（`done`、`failed`、`cancelled`；进程死在里面时为空）。`fail` 为 `retryable` 时前 `fail_times` 次答可重试的错，`permanent` 时第一次就答不可重试的错，用完或不可重试时死信处理在 `probe_job_dead` 记一行。外部作业先“调用对方”，对方是 `probe_job_calls`：幂等的按 `Run.SubKey("call")` 每个键只收一次，非幂等的先 `BeforeCall`、按 `operation_id` 每次都收。第一次尝试在提交效果之前（外部作业在调用之后）等 `hold_ms`，让套件在这期间停止、杀掉探针或推进恢复代次；以后的尝试不等。效果与完成标记在同一个事务里：`probe_job_effects` 记工作项、步、`operation_id` 与 `instance`。
 
+配置了 `PROBE_CRON`（3.2.32 起，Go；两个探针的清单都声明这个键）时另有 cron 作业 `probe.minutely`（每分钟一槽，UTC），每次运行在 `probe_cron` 记一行（槽与 `instance`，不加唯一约束：同一个槽跑了两次会显出来）。
+
 `probe.steps` 每次运行读 `probe_steps` 的任务，没有就完成；有就从已提交的进度之后一步一段：每步记一次尝试，用 `Checkpoint` 把这一步的效果与进度一起提交，最后一步用 `Complete` 并删掉任务。第一个走到 `hold_step` 的进程在那一步等（至多 120 秒），套件趁机杀掉它。
 
 ## 水位来源（3.2.31 起，Go；Python 探针随底层先行第 6 项补齐）
@@ -66,4 +68,4 @@
 
 ## 迁移
 
-`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。`0005_jobs`（扩展，3.2.30 起，Go）：后台工作项一节的 `probe_job_requests`、`probe_job_attempts`、`probe_job_effects`、`probe_job_calls`、`probe_job_dead`、`probe_steps`。
+`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。`0005_jobs`（扩展，3.2.30 起，Go）：后台工作项一节的 `probe_job_requests`、`probe_job_attempts`、`probe_job_effects`、`probe_job_calls`、`probe_job_dead`、`probe_steps`。`0006_cron`（扩展，3.2.32 起，Go）：`probe_cron`。

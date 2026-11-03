@@ -57,7 +57,9 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
         Key("PROBE_PEER_STREAM", Type.STRING),  # the peer's event stream to consume; empty: none
         Key("PROBE_GUARD", Type.BOOLEAN, default=False),
         # the common contract's key since 3.2.32; the Python probe has no jobs yet (foundations item 6) and reads it not
-        Key("PROBE_STEPS_EVERY", Type.DURATION, default=timedelta(0))],
+        Key("PROBE_STEPS_EVERY", Type.DURATION, default=timedelta(0)),
+        # since 3.2.33, the same: the Go probe's cron job for the background work profile; not read here yet
+        Key("PROBE_CRON", Type.BOOLEAN, default=False)],
         migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4)],
         subscribes=True, authz=authz(v.id))
 
