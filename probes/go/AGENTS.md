@@ -8,7 +8,8 @@
 | --- | --- |
 | `main.go` | 单跑入口（`serve`、`migrate`），按 `COMPONENT_ID` 选变体 |
 | `probe/defs.go` | 契约常量、配置键、流、资源与操作 |
-| `probe/probe.go` | 模块：用户面、系统面、写入与事件、转发工作项 |
+| `probe/probe.go` | 模块：用户面、系统面、写入与事件 |
+| `probe/jobs.go` | 后台工作项：转发、套件后台工作剖面用的作业与 `probe.steps`（3.2.30 起） |
 | `probe/rpc.go` | 手写的 gRPC 服务描述（不需要生成代码） |
 | `probe/migrations/` | 迁移 |
 | `Dockerfile` | 镜像（Alpine，健康检查经 `/bin/sh` 与 `wget`） |

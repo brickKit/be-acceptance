@@ -43,10 +43,23 @@
 
 每个探针向自己的流发 `test.probe.written.v1`（见变体表，各 4 个分区），数据 `{"id", "relay", "blob"}`，有 `label` 时加上它；写入时要求 `noted` 的发 `test.probe.noted.v1`，数据相同。`PROBE_PEER_STREAM` 指向对方的流时消费它（两种类型；旧版只订阅 `written`，`noted` 由运输过滤掉，协议 P6.33）：记一行与它的类型；`relay` 为真时在事务之外调用 `PROBE_NEXT` 的 `Echo`（1 KiB）；数据里 `emit` 为真时（3.2.29 起，Go）在处理的事务里向自己的流再发一个 `written`（跳数比收到的多一，超过 10 时发不出、处理失败，协议 P6.15）。Go 探针用 SDK 的后台工作项，Python 探针用自己的转发队列（Python SDK 子集没有后台工作项；认领规则相同：`FOR UPDATE SKIP LOCKED`、租约到期再认领、每 0.5 秒轮询、并发 4）。
 
+## 后台工作项（3.2.30 起，Go；Python 探针随底层先行第 6 项补齐）
+
+给套件的后台工作剖面用（`conformance/profile/work.py`）。两条用户面路由的操作都是 `<前缀>.write`：
+
+| 方法与路径 | 请求 | 回答 |
+| --- | --- | --- |
+| `POST /api/probe/job` | `{"effect": "local"（缺省）\|"idempotent_external"\|"non_idempotent_external", "hold_ms": 0..120000, "fail": ""\|"retryable"\|"permanent", "fail_times": n, "rollback": 布尔}` | 一个事务里写一行 `probe_job_requests` 并排入作业 `probe.job.local`、`probe.job.idempotent` 或 `probe.job.non_idempotent`（按副作用种类，各至多 3 次尝试），`201 {"id": <工作项身份>}`；`rollback` 时排入后整个事务回滚，答 400 |
+| `POST /api/probe/steps` | `{"n": 1..20, "hold_step": 0..n}` | 给 singleton 作业 `probe.steps` 下一次运行的任务，`202`；只有配置了 `PROBE_STEPS_EVERY`（时长，缺省 0：不声明这个作业；两种探针的清单都声明这个键，Python 探针 3.2.32 起声明、暂不读）时它才运行 |
+
+一次尝试：先在 `probe_job_attempts` 记一行（工作项、探针自己数的第几次、`operation_id`、本进程的身份 `instance`、开始时刻），结束时写 `ended`（`done`、`failed`、`cancelled`；进程死在里面时为空）。`fail` 为 `retryable` 时前 `fail_times` 次答可重试的错，`permanent` 时第一次就答不可重试的错，用完或不可重试时死信处理在 `probe_job_dead` 记一行。外部作业先“调用对方”，对方是 `probe_job_calls`：幂等的按 `Run.SubKey("call")` 每个键只收一次，非幂等的先 `BeforeCall`、按 `operation_id` 每次都收。第一次尝试在提交效果之前（外部作业在调用之后）等 `hold_ms`，让套件在这期间停止、杀掉探针或推进恢复代次；以后的尝试不等。效果与完成标记在同一个事务里：`probe_job_effects` 记工作项、步、`operation_id` 与 `instance`。
+
+`probe.steps` 每次运行读 `probe_steps` 的任务，没有就完成；有就从已提交的进度之后一步一段：每步记一次尝试，用 `Checkpoint` 把这一步的效果与进度一起提交，最后一步用 `Complete` 并删掉任务。第一个走到 `hold_step` 的进程在那一步等（至多 120 秒），套件趁机杀掉它。
+
 ## 资源与操作
 
 资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起），风险均为低。
 
 ## 迁移
 
-`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。
+`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。`0005_jobs`（扩展，3.2.30 起，Go）：后台工作项一节的 `probe_job_requests`、`probe_job_attempts`、`probe_job_effects`、`probe_job_calls`、`probe_job_dead`、`probe_steps`。

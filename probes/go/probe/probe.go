@@ -19,7 +19,6 @@ import (
 	"github.com/brickKit/be-sdk-go/v3/httpx"
 	"github.com/brickKit/be-sdk-go/v3/ids"
 	"github.com/brickKit/be-sdk-go/v3/runtime"
-	"github.com/brickKit/be-sdk-go/v3/work"
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -30,7 +29,7 @@ func Definition(v Variant) component.Definition {
 		Streams: []events.Stream{{Name: v.Stream, Partitions: 4}}, Subscribes: true, Authz: Authz(v.ID),
 		New: func(rt *runtime.Runtime) (component.Module, error) {
 			// the probe's own reason: this deployment gives the probe no next probe to call
-			return &Probe{rt: rt, v: v, noNext: errs.Define(v.ID, "NO_NEXT_PROBE", errs.FailedPrecondition, 409,
+			return &Probe{rt: rt, v: v, instance: ids.New().String(), noNext: errs.Define(v.ID, "NO_NEXT_PROBE", errs.FailedPrecondition, 409,
 				errs.RetryNo, "No next probe is configured")}, nil
 		}}
 }
@@ -56,9 +55,10 @@ func ByID(id string) (Variant, bool) {
 
 // Probe is the module.
 type Probe struct {
-	rt     *runtime.Runtime
-	v      Variant
-	noNext errs.Declared
+	rt       *runtime.Runtime
+	v        Variant
+	instance string // this process, as the job attempts record it
+	noNext   errs.Declared
 }
 
 func invalid(msg string) error { return errs.New(errs.ReasonRequestInvalid, msg) }
@@ -80,6 +80,8 @@ func (p *Probe) Routes(r *httpx.Routes) error {
 	add("GET", "seen", "read", p.seen)
 	add("POST", "note", "note", p.noteHTTP)
 	add("GET", "written/:id", "read", p.writtenRow)
+	add("POST", "job", "write", p.enqueueJob)
+	add("POST", "steps", "write", p.setSteps)
 	return nil
 }
 
@@ -374,27 +376,4 @@ func (p *Probe) received(ctx context.Context, tx db.Tx, e events.Received) error
 	// Relay: the call to the next probe leaves the transaction as a work item (no network call inside it)
 	_, err := p.rt.Work.Enqueue(ctx, tx, "probe.relay", map[string]string{"event": e.ID})
 	return err
-}
-
-// Jobs declares the relay.
-func (p *Probe) Jobs(j *work.Jobs) error {
-	j.Add(work.Job{Name: "probe.relay", Kind: work.Queue, Effect: work.IdempotentExternal, Timeout: 10 * time.Second,
-		Handle: p.relay})
-	return nil
-}
-
-func (p *Probe) relay(ctx context.Context, run *work.Run) error {
-	var args struct{ Event string }
-	if err := json.Unmarshal(run.Args, &args); err != nil {
-		return work.Permanent(err)
-	}
-	if next := p.rt.Config.String("PROBE_NEXT"); next != "" {
-		if err := p.echoNext(ctx, next, RelayBytes); err != nil {
-			return err
-		}
-	}
-	return run.Complete(ctx, func(ctx context.Context, tx db.Tx) error {
-		_, err := tx.Exec(ctx, "UPDATE probe_seen SET relayed_at = now() WHERE event_id = $1", args.Event)
-		return err
-	})
 }

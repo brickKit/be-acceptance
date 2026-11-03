@@ -2,6 +2,7 @@
 contract as the Go probe. No business logic, so what it measures comes from the language, the topology and the engines
 only."""
 from dataclasses import dataclass
+from datetime import timedelta
 from importlib import metadata
 from importlib.resources import files
 
@@ -54,7 +55,9 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
         Key("PROBE_NEXT_URL", Type.STRING),  # its user surface ($endpoint:<id>), protocol P4.26
         Key("PROBE_NEXT_GRPC_URL", Type.STRING),  # its system surface ($endpoint:<id>:grpc)
         Key("PROBE_PEER_STREAM", Type.STRING),  # the peer's event stream to consume; empty: none
-        Key("PROBE_GUARD", Type.BOOLEAN, default=False)],
+        Key("PROBE_GUARD", Type.BOOLEAN, default=False),
+        # the common contract's key since 3.2.32; the Python probe has no jobs yet (foundations item 6) and reads it not
+        Key("PROBE_STEPS_EVERY", Type.DURATION, default=timedelta(0))],
         migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4)],
         subscribes=True, authz=authz(v.id))
 
