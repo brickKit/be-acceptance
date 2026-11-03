@@ -25,6 +25,13 @@ scenarios:  ## L3 business chains against a running, seeded cell (needs BE_ACC_C
 check:  ## Before a v tag: the tests that need no base resources, and the probe variants up to date
 	@cd probes && $(PYTHON) variants.py --check
 	@cd conformance && uv run pytest -q tests --ignore=tests/test_probes.py --ignore=tests/test_profile.py \
-		--ignore=tests/test_events_profile.py --ignore=tests/test_work_profile.py \
+		--ignore=tests/test_events_profile.py --ignore=tests/test_work_profile.py --ignore=tests/test_watermark_profile.py \
 		--ignore=tests/test_homes_db.py \
 		--deselect tests/test_measure.py::test_backlog_counts_what_no_one_acknowledged
+
+# The pull's messages for the watermark profile: a descriptor set built from be-protocol's proto/ (the assembly
+# project's tools/be-protocol, a sibling of this repository), committed; buf runs in the image the contracts pin.
+watermark-proto:  ## conformance/profile/watermark.binpb from ../be-protocol/proto
+	docker run --rm -u $$(id -u):$$(id -g) -e HOME=/tmp -e BUF_CACHE_DIR=/tmp/buf -v $(CURDIR)/conformance/profile:/out \
+	  -v $(CURDIR)/../be-protocol/proto:/proto:ro -w /out \
+	  bufbuild/buf:1.74.0@sha256:621f108266b19236906aa328e64b7c50340738472c5da4d4b25104f01aa8d204 build /proto -o /out/watermark.binpb

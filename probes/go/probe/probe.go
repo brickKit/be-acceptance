@@ -26,7 +26,9 @@ import (
 // Definition is one probe variant as the launcher and the shells take it.
 func Definition(v Variant) component.Definition {
 	return component.Definition{ID: v.ID, Version: Version, Keys: Keys(), Migrations: Migrations(), GRPCPort: v.GRPCPort,
-		Streams: []events.Stream{{Name: v.Stream, Partitions: 4}}, Subscribes: true, Authz: Authz(v.ID),
+		Streams: []events.Stream{{Name: v.Stream, Partitions: 4}, {Name: WatermarkStream(v), Partitions: 2,
+			Watermark: &events.Watermark{Operation: Prefix(v.ID) + ".pull", Pullers: append(append([]string{}, Callers...), Suite)}}},
+		Subscribes: true, Authz: Authz(v.ID),
 		New: func(rt *runtime.Runtime) (component.Module, error) {
 			// the probe's own reason: this deployment gives the probe no next probe to call
 			return &Probe{rt: rt, v: v, instance: ids.New().String(), noNext: errs.Define(v.ID, "NO_NEXT_PROBE", errs.FailedPrecondition, 409,
@@ -135,6 +137,8 @@ type writeIn struct {
 	// emitted (CK-EV-01); HoldMS keeps it open that long after emitting, so later writes commit first (CK-EV-02)
 	Fail   bool `json:"fail"`
 	HoldMS int  `json:"hold_ms"`
+	// Watermark (since 3.2.31, Go): the event goes to the watermark stream instead, its subject the written row
+	Watermark bool `json:"watermark"`
 }
 
 type written struct {
@@ -172,9 +176,13 @@ func (p *Probe) write(c *httpx.Context) error {
 			label); err != nil {
 			return err
 		}
-		if _, err := p.rt.Events.Emit(ctx, tx, p.v.Stream, events.Event{Type: typ, RecordID: id, Version: 1,
+		stream, subjects := p.v.Stream, []string(nil)
+		if in.Watermark {
+			stream, subjects = WatermarkStream(p.v), []string{"probe:" + id}
+		}
+		if _, err := p.rt.Events.Emit(ctx, tx, stream, events.Event{Type: typ, RecordID: id, Version: 1,
 			Projection: events.Full, Data: written{ID: id, Relay: in.Relay, Blob: strings.Repeat("w", in.Bytes),
-				Label: in.Label}}); err != nil {
+				Label: in.Label}, Subjects: subjects}); err != nil {
 			return err
 		}
 		if in.HoldMS > 0 {

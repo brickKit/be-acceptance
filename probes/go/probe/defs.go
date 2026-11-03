@@ -12,7 +12,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.30"
+	Version     = "3.2.31"
 	WrittenType = "test.probe.written.v1"
 	NotedType   = "test.probe.noted.v1" // since 3.2.23: a write asked as "noted" (suite D, V3)
 	MaxLabel    = 64
@@ -37,6 +37,12 @@ var Variants = []Variant{
 	{"test/probe-go3", "test.probe_go3", 8603, 9603},
 	{"test/probe-go4", "test.probe_go4", 8604, 9604},
 }
+
+// Suite is the conformance suite's own service identity: it pulls the watermark stream (since 3.2.31).
+const Suite = "test/acceptance"
+
+// WatermarkStream is a variant's watermark source stream (since 3.2.31, Go): the suite's watermark profile pulls it.
+func WatermarkStream(v Variant) string { return v.Stream + "_wm" }
 
 // Callers are the components allowed to call the probes' system methods: every probe of either language.
 var Callers = []string{"test/probe-go", "test/probe-go2", "test/probe-go3", "test/probe-go4", "test/probe-py",
@@ -75,7 +81,7 @@ func Prefix(id string) string {
 func Authz(id string) *authz.Definitions {
 	p := Prefix(id)
 	ops := []authz.Operation{{Key: p + ".read", ResourceType: p, Purpose: "read", RiskClass: "low"}}
-	for _, op := range []string{"echo", "work", "write", "call", "note"} {
+	for _, op := range []string{"echo", "work", "write", "call", "note", "pull"} { // pull since 3.2.31
 		ops = append(ops, authz.Operation{Key: p + "." + op, ResourceType: p, Purpose: "action", RiskClass: "low"})
 	}
 	return &authz.Definitions{Component: id, Operations: ops, Resources: []authz.Resource{{Type: p,

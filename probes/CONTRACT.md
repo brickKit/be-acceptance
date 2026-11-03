@@ -56,9 +56,13 @@
 
 `probe.steps` 每次运行读 `probe_steps` 的任务，没有就完成；有就从已提交的进度之后一步一段：每步记一次尝试，用 `Checkpoint` 把这一步的效果与进度一起提交，最后一步用 `Complete` 并删掉任务。第一个走到 `hold_step` 的进程在那一步等（至多 120 秒），套件趁机杀掉它。
 
+## 水位来源（3.2.31 起，Go；Python 探针随底层先行第 6 项补齐）
+
+每个 Go 变体另有一条水位来源的流 `<事件流>_wm`（2 个分区；`test.probe_go_wm` 等），给套件的水位来源剖面用（`conformance/profile/watermark.py`）。`POST /api/probe/write` 带 `"watermark": true` 时事件发到这条流，`besubjects` 为 `["probe:<写入的身份>"]`。补取方法 `be.source.v1.WatermarkService/Pull` 的操作是 `<前缀>.pull`，补取者是全部探针与套件自己的身份 `test/acceptance`。
+
 ## 资源与操作
 
-资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起），风险均为低。
+资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起）、`pull`（3.2.31 起，Go：水位来源的补取），风险均为低。
 
 ## 迁移
 
