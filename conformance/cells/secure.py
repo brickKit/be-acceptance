@@ -2,15 +2,14 @@
 
 1. the administrator (test.alice) and the load user (test.bob) log in once through the identity member's development
    exchange (A101), which binds their platform principals;
-2. the authorization member's install claim names the administrator (AUTHZ_BOOTSTRAP_ADMIN), and `brickkit up`
-   restarts it with that;
+2. the administrator consumes the authorization member's install claim with the one-time code prepare.py made
+   (infra/authz 3.0.20, A130): no restart;
 3. the administrator grants the load user every operation of every probe, through the effect point;
 4. once every probe and master data component takes the load user's token, the driver's credentials are written to
    .secrets/load-user.json (a seed run straight after would otherwise meet 404 from a member whose view has not got
    the grant yet).
 
-The install claim needs a principal, and the identity member binds one only at the first login: hence the two-step
-start (step 5's finding; security 08's claim by the external identity would remove it). Needs
+Needs
 BE_ACC_IAM_TEST_PASSWORD (the test users' password in Casdoor, scripts/dev_setup.py of infra-iam-casdoor)."""
 from __future__ import annotations
 
@@ -18,14 +17,12 @@ import asyncio
 import datetime as dt
 import json
 import pathlib
-import re
 
 import httpx
 from besdk import canon
 
-from cells.create import brickkit
 from cells.prepare import DIMENSIONS, ERP_KEYS, MDM_KEYS, PROBE_OPS, probe_prefix
-from cells.spec import Cell, file_of
+from cells.spec import Cell
 from harness import need
 
 ADMIN, LOAD_USER = "test.alice", "test.bob"
@@ -57,12 +54,6 @@ async def token(iam: str, username: str, password: str) -> tuple[str, str]:
     return d["access_token"], d["principal"]
 
 
-def claim(c: Cell, admin: str) -> None:
-    f = c.dir / "config" / f"{file_of('infra/authz')}.yaml"
-    text = re.sub(r"^AUTHZ_BOOTSTRAP_ADMIN: .*\n", "", f.read_text(), flags=re.M)
-    f.write_text(text + f"AUTHZ_BOOTSTRAP_ADMIN: {admin}\n")
-
-
 async def secure(directory: str | pathlib.Path) -> dict:
     c = Cell.load(directory)
     if not c.secured:
@@ -71,18 +62,21 @@ async def secure(directory: str | pathlib.Path) -> dict:
     iam = f"http://127.0.0.1:{c.host_port('infra/iam-casdoor')}"
     authz = f"http://127.0.0.1:{c.host_port('infra/authz')}"
     await ready(iam)
-    _, admin = await token(iam, ADMIN, password)
-    _, user = await token(iam, LOAD_USER, password)
-    claim(c, admin)
-    if c.has_local:  # a new mode: local session: the processes (and in LD, LP the containers) restart with the claim
-        from cells import localrun
-        localrun.up(c.dir, c.dir / ".brickkit" / "local-session.log")
-    elif not c.root_runs_up:  # otherwise rootful/quadlet-up.sh, as root, sees the claim and runs `brickkit up` again
-        brickkit(c.dir, "up")  # the authorization member restarts with the claim
-    await ready(authz)
     admin_token, _ = await token(iam, ADMIN, password)
+    _, user = await token(iam, LOAD_USER, password)
+    await ready(authz)
     headers = {"Authorization": "Bearer " + admin_token}
     async with httpx.AsyncClient(base_url=authz, timeout=15, headers=headers) as h:
+        # the install claim: its one-time code (prepare.py); the member's own view opens once its account
+        # projection is aligned (503 until then)
+        code = (c.dir / ".secrets" / "install-claim.code").read_text().strip()
+        for _ in range(120):
+            r = await h.post("/api/authz/claim", json={"code": code})
+            if r.status_code != 503:
+                break
+            await asyncio.sleep(0.5)
+        if r.status_code != 200:
+            raise RuntimeError(f"the install claim failed: {r.status_code} {r.text[:300]}")
         # the administrator's grant reaches the member's own view within a verification; when root restarts the
         # member, up to 15 minutes until it has
         r = None

@@ -7,6 +7,7 @@ from __future__ import annotations
 import io
 import json
 import pathlib
+import secrets as secrets_mod
 import shutil
 import uuid
 from urllib.parse import urlsplit
@@ -25,7 +26,8 @@ INFRA_KEYS = {
                                    "infra.authz.security_record.tighten", "infra.authz.security_record.relinquish",
                                    "infra.authz.security_disposition.read", "infra.authz.security_disposition.dispose",
                                    "infra.authz.security_disposition.release",
-                                   "infra.authz.system.read", "infra.authz.system.verify", "infra.authz.system.submit"]},
+                                   "infra.authz.system.read", "infra.authz.system.verify", "infra.authz.system.submit",
+                                   "infra.authz.system.claim"]},
     "infra/audit": {"resource_type": ["infra.audit.record", "infra.audit.intake"],
                     "permission": ["infra.audit.record.read", "infra.audit.intake.read", "infra.audit.intake.submit",
                                    "infra.audit.intake.watermark"]},
@@ -157,6 +159,20 @@ def owner_key(c: Cell) -> None:
     pub.chmod(0o644)  # mounted into the member's container, which runs as another user
 
 
+def install_claim(c: Cell) -> None:
+    """The install claim (infra/authz 3.0.20, A130): a one-time code whose digest is the member's AUTHZ_INSTALL_CLAIM;
+    secure.py presents the code as the administrator, once."""
+    import hashlib
+    code = secrets_mod.token_hex(16)
+    sec = c.dir / ".secrets"
+    sec.mkdir(exist_ok=True)
+    (sec / "install-claim.code").write_text(code)
+    (sec / "install-claim.code").chmod(0o600)
+    claim = sec / "install-claim"
+    claim.write_text("code:sha256:" + hashlib.sha256(code.encode()).hexdigest())
+    claim.chmod(0o644)  # mounted into the member's container, which runs as another user
+
+
 def certificates(c: Cell) -> None:
     tls = c.dir / ".secrets" / "tls"
     if tls.exists():
@@ -242,7 +258,7 @@ def signing_key(path: pathlib.Path) -> None:
 def security_configs(c: Cell) -> None:
     """The three security members' config files (step 5): the identity member in front of the local Casdoor (its
     development exchange on: a test deployment, A101), the authorization member with the cell's registry, the audit
-    component. The install claim (AUTHZ_BOOTSTRAP_ADMIN) is added by secure.py once the admin has a principal."""
+    component. The install claim is a one-time code's digest (install_claim); secure.py presents the code."""
     cfg, sec = c.dir / "config", c.dir / ".secrets"
     signing_key(sec / "iam" / "signing-key.pem")
     (sec / "authz-registry.tsv").write_text(registry(c))
@@ -276,6 +292,8 @@ def security_configs(c: Cell) -> None:
                         "AUTHZ_REGISTRY: file://.secrets/authz-registry.tsv",
                         # 3.0.18 on: the deployment owner's confirmation key (A124), for protected changes
                         "AUTHZ_OWNER_KEY: file://.secrets/owner.pub.pem",
+                        # 3.0.20 on: the install claim, a one-time code's digest (A130)
+                        "AUTHZ_INSTALL_CLAIM: file://.secrets/install-claim",
                         # 3.0.16 on: the identity member's account status, a watermark source (security 03)
                         "IAM_GRPC_URL: $var:IAM_GRPC_URL", "IAM_COMPONENT: $var:IAM_COMPONENT",
                         "BUS_URL: file://.secrets/bus"],
@@ -421,6 +439,7 @@ async def prepare(directory: str | pathlib.Path) -> Cell:
     certificates(c)
     if c.secured:
         owner_key(c)
+        install_claim(c)
     await ensure_bucket()
     await empty_prefixes([schema_of(p) + "/" for p in c.probes])  # the prefixes configs() gives the probes
     await clean_bus(c)
