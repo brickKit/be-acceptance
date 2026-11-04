@@ -21,6 +21,7 @@ import pathlib
 import re
 
 import httpx
+from besdk import canon
 
 from cells.create import brickkit
 from cells.prepare import DIMENSIONS, ERP_KEYS, MDM_KEYS, PROBE_OPS, probe_prefix
@@ -120,9 +121,13 @@ async def secure(directory: str | pathlib.Path) -> dict:
         # every member is ready before its definitions are accepted (P8.24): one that started while the authorization
         # member was unreachable submits them again within 30 s (and the claim above restarted that member); until
         # then the grant answers DEFINITION_PENDING, which leaves the change key free, so the same key is sent again
+        # security 09a's change request: a widening with its candidate and the candidate's digest (its canonical
+        # form under be.security.<record type>, v1)
+        candidate = {"record_type": "grant", "governance_unit": root, "grantee": user, "segments": segments}
+        grant = {"change_key": "cell-load-user", "direction": "widen", "candidate": candidate,
+                 "candidate_digest": canon.digest("be.security.grant", 1, candidate)}
         for _ in range(120):
-            r = await h.post("/api/authz/changes", json={"change_key": "cell-load-user", "action": "grant.create",
-                                                         "unit": root, "grantee": user, "segments": segments})
+            r = await h.post("/api/authz/changes", json=grant)
             if r.status_code != 503 or "DEFINITION_PENDING" not in r.text:
                 break
             await asyncio.sleep(1)
