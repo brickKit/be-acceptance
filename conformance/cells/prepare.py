@@ -136,6 +136,25 @@ def target(c: Cell, comp: str) -> list[str]:
     return [f"PG_HOST: {c.base_host}", f'PG_PORT: "{INSTANCES[instance][0]}"', f"PG_DATABASE: {database}"]
 
 
+def owner_key(c: Cell) -> None:
+    """The deployment owner's confirmation key pair (security 08, the assembly project's A124): the public key for the
+    authorization member's AUTHZ_OWNER_KEY, the private key for the seeds (SEED_OWNER_KEY) — kept offline by a real
+    owner; a cell has no owner but the suite."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ed25519
+    key = ed25519.Ed25519PrivateKey.generate()
+    secrets = c.dir / ".secrets"
+    secrets.mkdir(exist_ok=True)
+    (secrets / "owner.key.pem").write_bytes(key.private_bytes(serialization.Encoding.PEM,
+                                                               serialization.PrivateFormat.PKCS8,
+                                                               serialization.NoEncryption()))
+    (secrets / "owner.key.pem").chmod(0o600)
+    pub = secrets / "owner.pub.pem"
+    pub.write_bytes(key.public_key().public_bytes(serialization.Encoding.PEM,
+                                                   serialization.PublicFormat.SubjectPublicKeyInfo))
+    pub.chmod(0o644)  # mounted into the member's container, which runs as another user
+
+
 def certificates(c: Cell) -> None:
     tls = c.dir / ".secrets" / "tls"
     if tls.exists():
@@ -253,6 +272,8 @@ def security_configs(c: Cell) -> None:
                               f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"],
         "infra/authz": [*common, *db("infra/authz"), *guarded("infra/authz"), f"AUTHZ_INSTANCE: {uuid.uuid4()}",
                         "AUTHZ_REGISTRY: file://.secrets/authz-registry.tsv",
+                        # 3.0.18 on: the deployment owner's confirmation key (A124), for protected changes
+                        "AUTHZ_OWNER_KEY: file://.secrets/owner.pub.pem",
                         # 3.0.16 on: the identity member's account status, a watermark source (security 03)
                         "IAM_GRPC_URL: $var:IAM_GRPC_URL", "IAM_COMPONENT: $var:IAM_COMPONENT",
                         "BUS_URL: file://.secrets/bus"],
@@ -396,6 +417,8 @@ async def prepare(directory: str | pathlib.Path) -> Cell:
     c = Cell.load(directory)
     await databases(c)
     certificates(c)
+    if c.secured:
+        owner_key(c)
     await ensure_bucket()
     await empty_prefixes([schema_of(p) + "/" for p in c.probes])  # the prefixes configs() gives the probes
     await clean_bus(c)
