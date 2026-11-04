@@ -62,7 +62,7 @@ async def secure(directory: str | pathlib.Path) -> dict:
     iam = f"http://127.0.0.1:{c.host_port('infra/iam-casdoor')}"
     authz = f"http://127.0.0.1:{c.host_port('infra/authz')}"
     await ready(iam)
-    admin_token, _ = await token(iam, ADMIN, password)
+    admin_token, admin = await token(iam, ADMIN, password)
     _, user = await token(iam, LOAD_USER, password)
     await ready(authz)
     headers = {"Authorization": "Bearer " + admin_token}
@@ -77,24 +77,18 @@ async def secure(directory: str | pathlib.Path) -> dict:
             await asyncio.sleep(0.5)
         if r.status_code != 200:
             raise RuntimeError(f"the install claim failed: {r.status_code} {r.text[:300]}")
-        # the administrator's grant reaches the member's own view within a verification; when root restarts the
-        # member, up to 15 minutes until it has
-        r = None
-        for _ in range(1800 if c.root_runs_up else 60):
-            try:
-                r = await h.get("/api/authz/records", params={"type": "management_unit"})
-            except httpx.TransportError:  # root's `brickkit up` is restarting the member right now
-                if not c.root_runs_up:
-                    raise
-                await asyncio.sleep(0.5)
-                continue
-            if r.status_code == 200:
+        # the administrator's grant reaches the member's own view within a verification: until then the list is
+        # an empty page (no segment is no refusal, security 07)
+        root = None
+        for _ in range(60):
+            r = await h.get("/api/authz/records", params={"type": "management_unit"})
+            r.raise_for_status()
+            root = next((u["id"] for u in r.json().get("records") or [] if u["body"].get("root")), None)
+            if root:
                 break
             await asyncio.sleep(0.5)
-        if r is None:
-            raise RuntimeError(f"the authorization member never answered on {authz}")
-        r.raise_for_status()
-        root = next(u["id"] for u in r.json()["records"] if u["body"].get("root"))
+        if root is None:
+            raise RuntimeError(f"the administrator's grant never reached the authorization member's view on {authz}")
         start = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         segments = [{"resource_type": probe_prefix(p), "operation": f"{probe_prefix(p)}.{op}", "atoms": {}, "read_fields": [],
                      "valid": {"from": start}} for p in c.probes for op in PROBE_OPS]
