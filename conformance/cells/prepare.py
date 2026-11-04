@@ -246,9 +246,16 @@ def security_configs(c: Cell) -> None:
                               f"CASDOOR_URL: http://{c.base_host}:8000", "CASDOOR_PUBLIC_URL: http://localhost:8000",
                               "CASDOOR_CLIENT_ID: be-iam-client", "CASDOOR_CLIENT_SECRET: ${BE_ACC_IAM_CLIENT_SECRET}",
                               "IAM_DEV_EXCHANGE: \"true\"", "IAM_DEV_CLIENT_ID: be-iam-dev-client",
-                              "IAM_DEV_CLIENT_SECRET: ${BE_ACC_IAM_DEV_CLIENT_SECRET}"],
+                              "IAM_DEV_CLIENT_SECRET: ${BE_ACC_IAM_DEV_CLIENT_SECRET}",
+                              # 3.0.16 on: system methods over mTLS (sessions, the account status stream's pull and
+                              # read for infra/authz), its definitions submitted, the stream on the bus
+                              *guarded("infra/iam-casdoor"), "BUS_URL: file://.secrets/bus",
+                              f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"],
         "infra/authz": [*common, *db("infra/authz"), *guarded("infra/authz"), f"AUTHZ_INSTANCE: {uuid.uuid4()}",
-                        "AUTHZ_REGISTRY: file://.secrets/authz-registry.tsv"],
+                        "AUTHZ_REGISTRY: file://.secrets/authz-registry.tsv",
+                        # 3.0.16 on: the identity member's account status, a watermark source (security 03)
+                        "IAM_GRPC_URL: $var:IAM_GRPC_URL", "IAM_COMPONENT: $var:IAM_COMPONENT",
+                        "BUS_URL: file://.secrets/bus"],
         "infra/audit": [*common, *db("infra/audit"), *guarded("infra/audit")],
     }
     for comp in c.mdm:  # the master data components: a database, the bus, a service identity, guarded routes
@@ -319,6 +326,9 @@ IAM_ISSUER: https://iam.be-acceptance.invalid
 IAM_JWKS_URL: $endpoint:infra/iam-casdoor/api/iam/jwks
 AUTHZ_GRPC_URL: $endpoint:infra/authz:grpc
 AUDIT_GRPC_URL: $endpoint:infra/audit:grpc
+# the identity member as the authorization member reads it: changed together when the member is switched
+IAM_GRPC_URL: $endpoint:infra/iam-casdoor:grpc
+IAM_COMPONENT: infra/iam-casdoor
 """ if c.secured else ""))
     if c.secured:
         security_configs(c)
