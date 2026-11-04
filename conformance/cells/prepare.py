@@ -20,9 +20,11 @@ from cells.spec import INSTANCES, SHELL_ROLES, Cell, file_of, schema_of, stream_
 # The security members' own resource types and permission keys (their component definitions), for the registry the
 # authorization member checks submissions against.
 INFRA_KEYS = {
-    "infra/authz": {"resource_type": ["infra.authz.security_record", "infra.authz.system"],
+    "infra/authz": {"resource_type": ["infra.authz.security_record", "infra.authz.security_disposition", "infra.authz.system"],
                     "permission": ["infra.authz.security_record.read", "infra.authz.security_record.change",
                                    "infra.authz.security_record.tighten", "infra.authz.security_record.relinquish",
+                                   "infra.authz.security_disposition.read", "infra.authz.security_disposition.dispose",
+                                   "infra.authz.security_disposition.release",
                                    "infra.authz.system.read", "infra.authz.system.verify", "infra.authz.system.submit"]},
     "infra/audit": {"resource_type": ["infra.audit.record", "infra.audit.intake"],
                     "permission": ["infra.audit.record.read", "infra.audit.intake.read", "infra.audit.intake.submit",
