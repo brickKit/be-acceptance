@@ -219,7 +219,7 @@ dependencies = [
 requires-dist = [
     { name = "aioboto3" },
     { name = "asyncpg" },
-    { name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a46" },
+    { name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a47" },
     { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -228,8 +228,8 @@ requires-dist = [
 
 [[package]]
 name = "be-sdk"
-version = "3.0.0a46"
-source = { git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a46#dec69532d6e06b986e7995a1e3753e0a75134711" }
+version = "3.0.0a47"
+source = { git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a47#13250617e2fc3a2acef22efa890c373fbf51ef17" }
 dependencies = [
     { name = "aiohttp" },
     { name = "asyncpg" },
@@ -411,8 +411,8 @@ dependencies = [
 
 [[package]]
 name = "contract-infra-authz"
-version = "3.0.0a1"
-source = { git = "https://github.com/brickKit/contract-infra-authz?subdirectory=python&rev=v3.0.0-alpha.1#8d69296d5a8a9429aacadaf33a25b5261d78edaa" }
+version = "3.0.0a2"
+source = { git = "https://github.com/brickKit/contract-infra-authz?subdirectory=python&rev=v3.0.0-alpha.2#daa05cc1d39856fa3c545a66988dbd7fa2484240" }
 dependencies = [
     { name = "grpcio" },
     { name = "protobuf" },

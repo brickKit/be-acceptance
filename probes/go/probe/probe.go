@@ -27,7 +27,10 @@ import (
 func Definition(v Variant) component.Definition {
 	return component.Definition{ID: v.ID, Version: Version, Keys: Keys(), Migrations: Migrations(), GRPCPort: v.GRPCPort,
 		Streams: []events.Stream{{Name: v.Stream, Partitions: 4}, {Name: WatermarkStream(v), Partitions: 2,
-			Watermark: &events.Watermark{Operation: Prefix(v.ID) + ".pull", Pullers: append(append([]string{}, Callers...), Suite)}}},
+			Watermark: &events.Watermark{Operation: Prefix(v.ID) + ".pull", Pullers: append(append([]string{}, Callers...), Suite)},
+			// a watermark source's batch read and snapshot (P9.30, since 3.2.35): the writes made on this stream
+			Records: &events.Records{Operation: Prefix(v.ID) + ".read", Readers: append(append([]string{}, Callers...), Suite),
+				Read: readWatermarked, Page: pageWatermarked}}},
 		Subscribes: true, Authz: Authz(v.ID),
 		New: func(rt *runtime.Runtime) (component.Module, error) {
 			// the probe's own reason: this deployment gives the probe no next probe to call
@@ -172,8 +175,8 @@ func (p *Probe) write(c *httpx.Context) error {
 	}
 	id := ids.New().String()
 	err := p.rt.DB.Tx(c.Ctx(), func(ctx context.Context, tx db.Tx) error {
-		if _, err := tx.Exec(ctx, "INSERT INTO probe_writes (id, bytes, label) VALUES ($1, $2, $3)", id, in.Bytes,
-			label); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO probe_writes (id, bytes, label, watermark, relay) VALUES ($1, $2, $3, $4, $5)",
+			id, in.Bytes, label, in.Watermark, in.Relay); err != nil {
 			return err
 		}
 		stream, subjects := p.v.Stream, []string(nil)
@@ -384,4 +387,65 @@ func (p *Probe) received(ctx context.Context, tx db.Tx, e events.Received) error
 	// Relay: the call to the next probe leaves the transaction as a work item (no network call inside it)
 	_, err := p.rt.Work.Enqueue(ctx, tx, "probe.relay", map[string]string{"event": e.ID})
 	return err
+}
+
+// watermarkedData is a write on the watermark stream as its event carried it (the record's full state).
+func watermarkedData(id string, bytes int, label *string, relay bool) (json.RawMessage, error) {
+	w := written{ID: id, Relay: relay, Blob: strings.Repeat("w", bytes)}
+	if label != nil {
+		w.Label = *label
+	}
+	return json.Marshal(w)
+}
+
+// readWatermarked answers the watermark stream's records by ID (P9.30): a write never deleted; an ID it never made
+// is purged (nothing to tell).
+func readWatermarked(ctx context.Context, tx db.Tx, ids []string) ([]events.ReadResult, error) {
+	var out []events.ReadResult
+	for _, id := range ids {
+		var bytes int
+		var label *string
+		var relay bool
+		err := tx.QueryRow(ctx, "SELECT bytes, label, relay FROM probe_writes WHERE id::text = $1 AND watermark", id).
+			Scan(&bytes, &label, &relay)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			out = append(out, events.ReadResult{ID: id, State: events.Purged})
+		case err != nil:
+			return nil, err
+		default:
+			data, err := watermarkedData(id, bytes, label, relay)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, events.ReadResult{ID: id, State: events.Exists, Version: 1, Data: data})
+		}
+	}
+	return out, nil
+}
+
+// pageWatermarked is one page of the watermark stream's records after a cursor, in ID order (the snapshot).
+func pageWatermarked(ctx context.Context, tx db.Tx, after string, limit int) ([]events.Record, error) {
+	rows, err := tx.Query(ctx, `SELECT id::text, bytes, label, relay FROM probe_writes WHERE watermark AND id::text > $1
+		ORDER BY id::text COLLATE "C" LIMIT $2`, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []events.Record
+	for rows.Next() {
+		var id string
+		var bytes int
+		var label *string
+		var relay bool
+		if err := rows.Scan(&id, &bytes, &label, &relay); err != nil {
+			return nil, err
+		}
+		data, err := watermarkedData(id, bytes, label, relay)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, events.Record{ID: id, Version: 1, Data: data})
+	}
+	return out, rows.Err()
 }
