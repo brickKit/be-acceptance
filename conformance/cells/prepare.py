@@ -103,7 +103,7 @@ PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the operations the load
 # every key a probe defines (probe/defs.go, probe_py): the registry must own them all, or the authorization member
 # refuses the probe's whole submission (DEFINITION_OWNER_MISMATCH); note since 3.2.22, pull since 3.2.31 (Go), the
 # entries of the authorization profile since 3.2.38
-PROBE_KEYS = PROBE_OPS + ["note", "pull", "resend"]  # resend: the redelivery since 3.2.39 (Go), P6.38
+PROBE_KEYS = PROBE_OPS + ["note", "pull", "resend", "pay"]  # resend: the redelivery since 3.2.39 (Go), P6.38; pay: the payment since 3.2.41 (Go)
 PROBE_ENTRY_OPS = ["read", "create", "move", "approve", "export"]
 
 

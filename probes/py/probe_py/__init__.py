@@ -64,7 +64,16 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
         # since 3.2.33, the same: the Go probe's cron job for the background work profile; not read here yet
         Key("PROBE_CRON", Type.BOOLEAN, default=False),
         # since 3.2.38: a guarded route naming an operation the probe does not declare, so the start fails (CK-AZ-01)
-        Key("PROBE_UNDECLARED_ROUTE", Type.BOOLEAN, default=False)],
+        Key("PROBE_UNDECLARED_ROUTE", Type.BOOLEAN, default=False),
+        # since 3.2.41, the common contract's keys of the Go probe's payment (an external command, be-protocol chapter
+        # 13): be-sdk-python implements external commands with foundations item 6; until then they are not read here,
+        # and EXTERNAL_COMMANDS_QUERY_ONLY (the Go SDK's own key) is declared here for the manifests to agree (A144)
+        Key("PROBE_EXTERNAL_URL", Type.STRING),
+        Key("PROBE_EXTERNAL_DEDUPE_WINDOW", Type.DURATION, default=timedelta(0)),
+        Key("PROBE_EXTERNAL_LAST_USE", Type.BOOLEAN, default=False),
+        Key("PROBE_EXTERNAL_MAX_PROCESSING", Type.DURATION, default=timedelta(0)),
+        Key("PROBE_EXTERNAL_IRREVOCABLE", Type.BOOLEAN, default=True),
+        Key("EXTERNAL_COMMANDS_QUERY_ONLY", Type.BOOLEAN, default=False)],
         migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4)],
         subscribes=True, authz=authz(v.id))
 

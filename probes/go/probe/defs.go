@@ -12,7 +12,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.40"
+	Version     = "3.2.41"
 	WrittenType = "test.probe.written.v1"
 	NotedType   = "test.probe.noted.v1" // since 3.2.23: a write asked as "noted" (suite D, V3)
 	MaxLabel    = 64
@@ -59,7 +59,7 @@ func Migrations() fs.FS {
 
 // Keys are the probe's own configuration keys.
 func Keys() []config.Key {
-	return []config.Key{
+	return append([]config.Key{
 		{Name: "PROBE_NEXT", Type: config.String},          // the probe that call and relay go to; empty: none
 		{Name: "PROBE_NEXT_URL", Type: config.String},      // its user surface ($endpoint:<id>), protocol P4.26
 		{Name: "PROBE_NEXT_GRPC_URL", Type: config.String}, // its system surface ($endpoint:<id>:grpc)
@@ -71,7 +71,7 @@ func Keys() []config.Key {
 		{Name: "PROBE_CRON", Type: config.Boolean, Default: false},
 		// since 3.2.38: a guarded route naming an operation the probe does not declare, so the start fails (CK-AZ-01)
 		{Name: "PROBE_UNDECLARED_ROUTE", Type: config.Boolean, Default: false},
-	}
+	}, ExternalKeys()...) // the payment (since 3.2.41)
 }
 
 // Prefix is a variant's resource type and the prefix of its operation keys: the component ID with "/" as "." and
@@ -86,7 +86,7 @@ func Authz(id string) *authz.Definitions {
 	p := Prefix(id)
 	ops := []authz.Operation{{Key: p + ".read", ResourceType: p, Purpose: "read", RiskClass: "low"},
 		{Key: p + ".resend", ResourceType: p, Purpose: "read", RiskClass: "low"}} // the redelivery (P6.38, since 3.2.39)
-	for _, op := range []string{"echo", "work", "write", "call", "note", "pull"} { // pull since 3.2.31
+	for _, op := range []string{"echo", "work", "write", "call", "note", "pull", OpPay} { // pull since 3.2.31, pay since 3.2.41
 		ops = append(ops, authz.Operation{Key: p + "." + op, ResourceType: p, Purpose: "action", RiskClass: "low"})
 	}
 	ops = append(ops, entryOperations(p)...) // since 3.2.38: the authorization profile's entries

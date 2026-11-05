@@ -28,6 +28,7 @@ check:  ## Before a v tag: the tests that need no base resources, and the probe 
 		--ignore=tests/test_events_profile.py --ignore=tests/test_work_profile.py --ignore=tests/test_watermark_profile.py \
 		--ignore=tests/test_identity_profile.py \
 		--ignore=tests/test_authz_profile.py \
+		--ignore=tests/test_external_profile.py \
 		--ignore=tests/test_homes_db.py \
 		--deselect tests/test_measure.py::test_backlog_counts_what_no_one_acknowledged
 

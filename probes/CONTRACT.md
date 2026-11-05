@@ -62,6 +62,15 @@
 
 每个 Go 变体另有一条水位来源的流 `<事件流>_wm`（2 个分区；`test.probe_go_wm` 等），给套件的水位来源剖面用（`conformance/profile/watermark.py`）。`POST /api/probe/write` 带 `"watermark": true` 时事件发到这条流，`besubjects` 为 `["probe:<写入的身份>"]`。补取方法 `be.source.v1.WatermarkService/Pull` 的操作是 `<前缀>.pull`，补取者是全部探针与套件自己的身份 `test/acceptance`。
 
+## 付款：对外命令（3.2.41 起，Go；Python 探针随底层先行第 6 项补齐）
+
+给套件的对外命令剖面用（`conformance/tests/test_external_profile.py`，假外部系统 `conformance/external/fake.py`；线协议第 13 章，装配项目协议 10）。付款是一条对外命令，经 SDK 的 `extcmd` 发到 `PROBE_EXTERNAL_URL` 的假外部系统；业务参考号就是外部的幂等键。声明的能力按配置：`PROBE_EXTERNAL_DEDUPE_WINDOW`（去重保留期，0 为不去重）、`PROBE_EXTERNAL_LAST_USE`（按最后使用计期）、`PROBE_EXTERNAL_MAX_PROCESSING`（最长处理时间）、`PROBE_EXTERNAL_IRREVOCABLE`（不可撤回，缺省真：发出前把发出记录交给证据存储，`AUDIT_GRPC_URL`；没有证据存储就不发）。没有 `PROBE_EXTERNAL_URL` 时付款发不出去（按“肯定没到达”退避）。两个探针的清单一样：Python 探针声明这几个键与 `EXTERNAL_COMMANDS_QUERY_ONLY` 但不读（A144）。
+
+| 方法与路径 | 请求 | 回答 | 操作 |
+| --- | --- | --- | --- |
+| `POST /api/probe/payment` | `{"reference", "params": {…}, "expires_at"?}` | `{"command", "state"}`：在这个请求的事务里写命令；同一参考号、同样参数答原命令，参数不同答 409 `IDEMPOTENCY_KEY_REUSED` | `<前缀>.pay` |
+| `GET /api/probe/payment/{reference}` | — | `{"command", "state", "reason", "external_id", "resend_deadline", "attempts": [{"kind", "result", "reached"}]}` | `<前缀>.read` |
+
 ## 授权剖面的条目（3.2.38 起，两种探针）
 
 给套件的授权剖面用（`conformance/profile/authz.py`，CK-AZ-01..05）。只在 `PROBE_GUARD` 为真时注册，路由都受保护。资源 `<前缀>.entry` 每种维度一个：`legal_entity`（值集合，列 `legal_entity`）、`dept`（组织树，列 `dept_path`）、`owner`（主体，列 `owner_id`，角色 `owner`）、`amount`（金额，列 `amount` 与 `currency`）；字段 `id`、`number`、`legal_entity`、`dept_path`、`owner_id`、`amount`、`currency`、`approved` 普通，`cost` 受限（读取键 `<前缀>.entry.cost`），`note` 秘密。列为 SQL NULL 是已知的 null。
@@ -79,7 +88,7 @@
 
 ## 资源与操作
 
-资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起）、`pull`（3.2.31 起，Go：水位来源的补取），风险均为低。
+资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起）、`pull`（3.2.31 起，Go：水位来源的补取）、`pay`（3.2.41 起，Go：付款），风险均为低。
 
 ## 迁移
 

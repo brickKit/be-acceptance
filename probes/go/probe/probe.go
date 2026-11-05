@@ -32,6 +32,9 @@ func Definition(v Variant) component.Definition {
 			Records: &events.Records{Operation: Prefix(v.ID) + ".read", Readers: append(append([]string{}, Callers...), Suite),
 				Read: readWatermarked, Page: pageWatermarked}}},
 		Subscribes: true, Authz: Authz(v.ID), Resend: Prefix(v.ID) + ".resend",
+		// the payment (since 3.2.41): an irrevocable command; its issue record goes to the evidence store
+		// (AUDIT_GRPC_URL). Without Evidence: no alert channel keys, so the manifests of both probes agree (A144)
+		ExternalCommands: true,
 		New: func(rt *runtime.Runtime) (component.Module, error) {
 			// the probe's own reason: this deployment gives the probe no next probe to call
 			return &Probe{rt: rt, v: v, instance: ids.New().String(), noNext: errs.Define(v.ID, "NO_NEXT_PROBE", errs.FailedPrecondition, 409,
@@ -87,6 +90,8 @@ func (p *Probe) Routes(r *httpx.Routes) error {
 	add("GET", "written/:id", "read", p.writtenRow)
 	add("POST", "job", "write", p.enqueueJob)
 	add("POST", "steps", "write", p.setSteps)
+	add("POST", "payment", OpPay, p.payHTTP) // since 3.2.41: an external command (payments.go)
+	add("GET", "payment/:reference", "read", p.paymentHTTP)
 	if guard { // the entries are always protected (since 3.2.38)
 		p.entryRoutes(add)
 		if p.rt.Config.Bool("PROBE_UNDECLARED_ROUTE") {

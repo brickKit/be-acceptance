@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-go3
   name: Go probe (go3)
-  version: 3.2.40
+  version: 3.2.41
   description: "A variant of test/probe-go: the same code under its own component ID, ports and event stream"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -66,6 +66,24 @@ configSchema:
     PROBE_UNDECLARED_ROUTE:
       type: boolean
       description: "true (with PROBE_GUARD): a route naming an operation the probe does not declare, so the start fails, for the suite's authorization profile (since 3.2.38); SDK default false"
+    PROBE_EXTERNAL_URL:
+      type: string
+      description: "the suite's fake external system the payment goes to (Go since 3.2.41; an external command, be-protocol chapter 13); unset: a payment is never sent"
+    PROBE_EXTERNAL_DEDUPE_WINDOW:
+      type: string
+      description: "the payment's declared dedupe window (Go since 3.2.41); 0: not deduplicated; a duration (e.g. 2s, 500ms); SDK default 0s"
+    PROBE_EXTERNAL_LAST_USE:
+      type: boolean
+      description: "true: the dedupe window counts from the last use (Go since 3.2.41); SDK default false"
+    PROBE_EXTERNAL_MAX_PROCESSING:
+      type: string
+      description: "the payment's declared longest processing time (Go since 3.2.41); 0: not declared; a duration (e.g. 2s, 500ms); SDK default 0s"
+    PROBE_EXTERNAL_IRREVOCABLE:
+      type: boolean
+      description: "the payment is irrevocable: its issue record precedes the send (Go since 3.2.41); SDK default true"
+    EXTERNAL_COMMANDS_QUERY_ONLY:
+      type: boolean
+      description: "true: query the external commands, never send them (the Go SDK, P13.10); SDK default false"
     LOG_LEVEL:
       type: string
       enum: [debug, info, warn, error]

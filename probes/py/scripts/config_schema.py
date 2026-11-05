@@ -21,7 +21,14 @@ OWN = {"PROBE_NEXT": "the component ID of the probe that call and relay go to; u
        "PROBE_STEPS_EVERY": "how often the steps singleton runs, for the suite's background work profile (Go since 3.2.30); 0: no such job",
        "PROBE_CRON": "true: a cron job with a slot a minute, its runs recorded (Go since 3.2.32)",
        "PROBE_UNDECLARED_ROUTE": "true (with PROBE_GUARD): a route naming an operation the probe does not declare, so "
-                                 "the start fails, for the suite's authorization profile (since 3.2.38)"}
+                                 "the start fails, for the suite's authorization profile (since 3.2.38)",
+       "PROBE_EXTERNAL_URL": "the suite's fake external system the payment goes to (Go since 3.2.41; an external command, "
+                             "be-protocol chapter 13); unset: a payment is never sent",
+       "PROBE_EXTERNAL_DEDUPE_WINDOW": "the payment's declared dedupe window (Go since 3.2.41); 0: not deduplicated",
+       "PROBE_EXTERNAL_LAST_USE": "true: the dedupe window counts from the last use (Go since 3.2.41)",
+       "PROBE_EXTERNAL_MAX_PROCESSING": "the payment's declared longest processing time (Go since 3.2.41); 0: not declared",
+       "PROBE_EXTERNAL_IRREVOCABLE": "the payment is irrevocable: its issue record precedes the send (Go since 3.2.41)",
+       "EXTERNAL_COMMANDS_QUERY_ONLY": "true: query the external commands, never send them (the Go SDK, P13.10)"}
 
 
 def describe(k: Key) -> str:
