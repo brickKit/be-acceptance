@@ -12,7 +12,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.38"
+	Version     = "3.2.39"
 	WrittenType = "test.probe.written.v1"
 	NotedType   = "test.probe.noted.v1" // since 3.2.23: a write asked as "noted" (suite D, V3)
 	MaxLabel    = 64
@@ -84,7 +84,8 @@ func Prefix(id string) string {
 // PROBE_GUARD is on and the system methods always) and, since 3.2.38, the entry of the authorization profile.
 func Authz(id string) *authz.Definitions {
 	p := Prefix(id)
-	ops := []authz.Operation{{Key: p + ".read", ResourceType: p, Purpose: "read", RiskClass: "low"}}
+	ops := []authz.Operation{{Key: p + ".read", ResourceType: p, Purpose: "read", RiskClass: "low"},
+		{Key: p + ".resend", ResourceType: p, Purpose: "read", RiskClass: "low"}} // the redelivery (P6.38, since 3.2.39)
 	for _, op := range []string{"echo", "work", "write", "call", "note", "pull"} { // pull since 3.2.31
 		ops = append(ops, authz.Operation{Key: p + "." + op, ResourceType: p, Purpose: "action", RiskClass: "low"})
 	}

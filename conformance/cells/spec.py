@@ -118,6 +118,8 @@ class Cell:
                  databases={k.split("@")[0]: str(v) for k, v in (spec.get("databases") or {}).items()},
                  settings={k.split("@")[0]: {kk: str(vv) for kk, vv in v.items()} for k, v in (spec.get("settings") or {}).items()},
                  podman=spec.get("podman", ""), units=spec.get("units", ""))
+        if spec.get("deployment"):  # a cell of its own deployment (a recovery drill: the run profile keeps its state)
+            c.deployment = str(spec["deployment"])
         if c.base not in ("", "cluster") or (c.base == "cluster" and c.row != "K"):
             raise ValueError(f"{c.name}: base {c.base!r}: only the K row runs its base resources in the cluster")
         if c.pooler not in ("", "pgbouncer"):

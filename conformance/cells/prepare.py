@@ -13,6 +13,7 @@ import uuid
 from urllib.parse import urlsplit
 
 import asyncpg
+import yaml
 
 from besdk import testing
 from cells import homes
@@ -30,7 +31,7 @@ INFRA_KEYS = {
                                    "infra.authz.system.claim", "infra.authz.system.account_check"]},
     "infra/iam-casdoor": {"resource_type": ["infra.iam.session", "infra.iam.account_status", "infra.iam.account"],
                           "permission": ["infra.iam.session.exchange", "infra.iam.session.ended",
-                                         "infra.iam.account_status.pull", "infra.iam.account_status.read",
+                                         "infra.iam.account_status.pull", "infra.iam.account_status.read", "infra.iam.account_status.resend",
                                          "infra.iam.account.read", "infra.iam.account.disable", "infra.iam.account.freeze",
                                          "infra.iam.account.enable", "infra.iam.account.logout",
                                          "infra.iam.account.reset_second_factor"]},
@@ -43,16 +44,18 @@ INFRA_KEYS = {
 MDM_KEYS = {
     "mdm/org": {"resource_type": ["mdm.legal_entity", "mdm.org_unit", "mdm.org.system"],
                 "permission": ["mdm.legal_entity.read", "mdm.legal_entity.manage", "mdm.org_unit.read",
-                               "mdm.org_unit.manage", "mdm.org.system.read"]},
+                               "mdm.org_unit.manage", "mdm.org.system.read", "mdm.org.system.resend"]},
     "mdm/currency": {"resource_type": ["mdm.currency", "mdm.exchange_rate", "mdm.currency.system"],
                      "permission": ["mdm.currency.read", "mdm.currency.manage", "mdm.exchange_rate.read",
-                                    "mdm.exchange_rate.maintain", "mdm.currency.system.read"]},
+                                    "mdm.exchange_rate.maintain", "mdm.currency.system.read",
+                                    "mdm.currency.system.resend"]},
     "mdm/partner": {"resource_type": ["mdm.partner", "mdm.partner_role", "mdm.partner.system"],
                     "permission": ["mdm.partner.read", "mdm.partner.create", "mdm.partner.edit", "mdm.partner.merge",
-                                   "mdm.partner_role.read", "mdm.partner_role.manage", "mdm.partner.system.read"]},
+                                   "mdm.partner_role.read", "mdm.partner_role.manage", "mdm.partner.system.read",
+                                   "mdm.partner.system.resend"]},
     "mdm/product": {"resource_type": ["mdm.product", "mdm.product_category", "mdm.product.system"],
                     "permission": ["mdm.product.read", "mdm.product.edit", "mdm.product_category.read",
-                                   "mdm.product_category.manage", "mdm.product.system.read"]},
+                                   "mdm.product_category.manage", "mdm.product.system.read", "mdm.product.system.resend"]},
 }
 # The business components' and the print component's resource types, operations and each resource type's dimensions
 # (their definition.go and infra_print/__init__.py): for the registry, the grants and the segments' atoms.
@@ -63,21 +66,22 @@ ERP_KEYS = {
                                      "erp.inventory.stock.read", "erp.inventory.movement.read",
                                      "erp.inventory.movement.create", "erp.inventory.adjustment.create",
                                      "erp.inventory.system.read", "erp.inventory.system.reserve",
-                                     "erp.inventory.system.issue"]},
+                                     "erp.inventory.system.issue", "erp.inventory.system.resend"]},
     "erp/credit": {"resource_type": ["erp.credit.limit", "erp.credit.policy", "erp.credit.system"],
                    "permission": ["erp.credit.limit.read", "erp.credit.limit.manage", "erp.credit.limit.request",
                                   "erp.credit.policy.read", "erp.credit.policy.manage", "erp.credit.system.read",
-                                  "erp.credit.system.reserve"]},
+                                  "erp.credit.system.reserve", "erp.credit.system.resend"]},
     "erp/sales": {"resource_type": ["erp.sales.quotation", "erp.sales.order", "erp.sales.delivery", "erp.sales.price_list",
                                     "erp.sales.return", "erp.sales.system"],
                   "permission": ["erp.sales.quotation.read", "erp.sales.quotation.edit", "erp.sales.order.read",
                                  "erp.sales.order.edit", "erp.sales.order.confirm", "erp.sales.order.cancel",
                                  "erp.sales.delivery.read", "erp.sales.delivery.create", "erp.sales.price_list.read",
                                  "erp.sales.price_list.manage", "erp.sales.return.read", "erp.sales.return.edit",
-                                 "erp.sales.system.read", "erp.sales.system.billing"]},
+                                 "erp.sales.system.read", "erp.sales.system.billing", "erp.sales.system.resend"]},
     "erp/billing": {"resource_type": ["erp.billing.invoice", "erp.billing.system"],
                     "permission": ["erp.billing.invoice.read", "erp.billing.invoice.draft", "erp.billing.invoice.issue",
-                                   "erp.billing.invoice.print", "erp.billing.system.read"]},
+                                   "erp.billing.invoice.print", "erp.billing.system.read",
+                                   "erp.billing.system.resend"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render"]},
@@ -97,7 +101,7 @@ PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the operations the load
 # every key a probe defines (probe/defs.go, probe_py): the registry must own them all, or the authorization member
 # refuses the probe's whole submission (DEFINITION_OWNER_MISMATCH); note since 3.2.22, pull since 3.2.31 (Go), the
 # entries of the authorization profile since 3.2.38
-PROBE_KEYS = PROBE_OPS + ["note", "pull"]
+PROBE_KEYS = PROBE_OPS + ["note", "pull", "resend"]  # resend: the redelivery since 3.2.39 (Go), P6.38
 PROBE_ENTRY_OPS = ["read", "create", "move", "approve", "export"]
 
 
@@ -193,7 +197,7 @@ def certificates(c: Cell) -> None:
         shutil.rmtree(tls)
     tls.mkdir(parents=True)
     world = testing.World(tls, c.deployment)
-    for probe in c.placed:
+    for probe in [*c.placed, "ops/recover"]:  # ops/recover: be-ops recover's own identity (signs the run profile)
         cert, key, ca = world.certs(probe)
         shutil.move(cert, tls / f"{file_of(probe)}.cert.pem")
         shutil.move(key, tls / f"{file_of(probe)}.key.pem")
@@ -275,6 +279,23 @@ def signing_key(path: pathlib.Path) -> None:
     path.chmod(0o644)  # read by a container user, as the TLS files
 
 
+def declares(c: Cell, comp: str, key: str) -> bool:
+    """Whether the version of comp the cell runs declares a configuration key: its manifest in BrickKit's cache (the
+    create stage fetched it), a shell member's version read from its shell's manifest. Unknown: no."""
+    versions = dict(c.versions)
+    cache = c.dir / ".brickkit" / "manifests"
+    for shell, version in list(versions.items()):
+        m = cache / shell / version / "component.yaml"
+        if m.exists():
+            for ref in (yaml.safe_load(m.read_text()).get("shell") or {}).get("members") or []:
+                versions.setdefault(ref.split("@")[0], ref.split("@")[1])
+    m = cache / comp / versions.get(comp, "") / "component.yaml"
+    if not versions.get(comp) or not m.exists():
+        return False
+    props = (yaml.safe_load(m.read_text()).get("configSchema") or {}).get("properties") or {}
+    return key in props
+
+
 def security_configs(c: Cell) -> None:
     """The three security members' config files (step 5): the identity member in front of the local Casdoor (its
     development exchange on: a test deployment, A101), the authorization member with the cell's registry, the audit
@@ -330,6 +351,8 @@ def security_configs(c: Cell) -> None:
         files["mdm/org"].append("DEFAULT_LEGAL_ENTITY_TIMEZONE: Asia/Shanghai")
     for comp, lines in files.items():
         if comp in c.placed:
+            if declares(c, comp, "RECOVERY_PHASE"):  # the recovery phase (be-protocol P1.22): a shared variable
+                lines = [*lines, "RECOVERY_PHASE: $var:RECOVERY_PHASE"]
             (cfg / f"{file_of(comp)}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
 
 
@@ -381,6 +404,8 @@ PG_MIGRATION_PORT: "5432"
 """ if c.pooler else "") + f"""OBJECT_STORE_URL: http://{c.base_host}:9000
 OBJECT_STORE_BUCKET: be-acceptance
 DEPLOYMENT_ID: {c.deployment}
+# the full recovery's phase (A140; be-ops recover sets it): empty while running
+RECOVERY_PHASE: ""
 """ + ("""# the tokens' iss is an identifier, the same string for every component wherever it runs: a $endpoint resolves
 # per caller (a service name in a container, localhost:port on this machine), so LD and LP would refuse the tokens
 IAM_ISSUER: https://iam.be-acceptance.invalid

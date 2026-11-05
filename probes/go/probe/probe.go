@@ -31,7 +31,7 @@ func Definition(v Variant) component.Definition {
 			// a watermark source's batch read and snapshot (P9.30, since 3.2.35): the writes made on this stream
 			Records: &events.Records{Operation: Prefix(v.ID) + ".read", Readers: append(append([]string{}, Callers...), Suite),
 				Read: readWatermarked, Page: pageWatermarked}}},
-		Subscribes: true, Authz: Authz(v.ID),
+		Subscribes: true, Authz: Authz(v.ID), Resend: Prefix(v.ID) + ".resend",
 		New: func(rt *runtime.Runtime) (component.Module, error) {
 			// the probe's own reason: this deployment gives the probe no next probe to call
 			return &Probe{rt: rt, v: v, instance: ids.New().String(), noNext: errs.Define(v.ID, "NO_NEXT_PROBE", errs.FailedPrecondition, 409,
