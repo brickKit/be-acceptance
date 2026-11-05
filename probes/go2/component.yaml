@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-go2
   name: Go probe (go2)
-  version: 3.2.37
+  version: 3.2.38
   description: "A variant of test/probe-go: the same code under its own component ID, ports and event stream"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -63,6 +63,9 @@ configSchema:
     PROBE_CRON:
       type: boolean
       description: "true: a cron job with a slot a minute, its runs recorded (Go since 3.2.32); SDK default false"
+    PROBE_UNDECLARED_ROUTE:
+      type: boolean
+      description: "true (with PROBE_GUARD): a route naming an operation the probe does not declare, so the start fails, for the suite's authorization profile (since 3.2.38); SDK default false"
     LOG_LEVEL:
       type: string
       enum: [debug, info, warn, error]

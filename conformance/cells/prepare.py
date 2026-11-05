@@ -84,7 +84,12 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
 PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing"}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
-PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the probes' operations (probe/defs.go, probe_py)
+PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the operations the load user is granted
+# every key a probe defines (probe/defs.go, probe_py): the registry must own them all, or the authorization member
+# refuses the probe's whole submission (DEFINITION_OWNER_MISMATCH); note since 3.2.22, pull since 3.2.31 (Go), the
+# entries of the authorization profile since 3.2.38
+PROBE_KEYS = PROBE_OPS + ["note", "pull"]
+PROBE_ENTRY_OPS = ["read", "create", "move", "approve", "export"]
 
 
 def probe_prefix(component: str) -> str:
@@ -238,8 +243,9 @@ def registry(c: Cell) -> str:
             rows += [f"{kind}\t{k}\t{comp}" for kind, ks in keys.items() for k in ks]
     for probe in c.probes:
         prefix = probe_prefix(probe)
-        rows.append(f"resource_type\t{prefix}\t{probe}")
-        rows += [f"permission\t{prefix}.{op}\t{probe}" for op in PROBE_OPS]
+        rows += [f"resource_type\t{prefix}\t{probe}", f"resource_type\t{prefix}.entry\t{probe}"]
+        rows += [f"permission\t{prefix}.{op}\t{probe}" for op in PROBE_KEYS]
+        rows += [f"permission\t{prefix}.entry.{op}\t{probe}" for op in PROBE_ENTRY_OPS]
     return "\n".join(rows) + "\n"
 
 

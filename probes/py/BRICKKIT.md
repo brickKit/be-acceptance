@@ -21,7 +21,7 @@
 
 ## 契约索引
 
-用户面 `/api/probe/echo`、`/work`、`/write`、`/call`、`/seen`；系统面 `/test.probe.v1.Probe/Echo`、`/Work`；事件 `test.probe.written.v1`，流 `test.probe_py`；资源类型与操作键的前缀 `test.probe_py`；`/call` 的回答带调用方测的这一跳耗时 `elapsed_us`。完整定义在 be-acceptance 仓库的 `probes/CONTRACT.md`。
+用户面 `/api/probe/echo`、`/work`、`/write`、`/call`、`/seen`；系统面 `/test.probe.v1.Probe/Echo`、`/Work`；事件 `test.probe.written.v1`，流 `test.probe_py`；资源类型与操作键的前缀 `test.probe_py`；`/call` 的回答带调用方测的这一跳耗时 `elapsed_us`。`PROBE_GUARD` 为真时另有一个四种维度的受保护资源 `<前缀>.entry`（`/api/probe/entries`：列表、单对象、新建、移动、高风险审批、导出，3.2.38 起），给一致性套件的授权剖面用。完整定义在 be-acceptance 仓库的 `probes/CONTRACT.md`。
 
 ## 外壳声明
 

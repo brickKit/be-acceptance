@@ -62,10 +62,25 @@
 
 每个 Go 变体另有一条水位来源的流 `<事件流>_wm`（2 个分区；`test.probe_go_wm` 等），给套件的水位来源剖面用（`conformance/profile/watermark.py`）。`POST /api/probe/write` 带 `"watermark": true` 时事件发到这条流，`besubjects` 为 `["probe:<写入的身份>"]`。补取方法 `be.source.v1.WatermarkService/Pull` 的操作是 `<前缀>.pull`，补取者是全部探针与套件自己的身份 `test/acceptance`。
 
+## 授权剖面的条目（3.2.38 起，两种探针）
+
+给套件的授权剖面用（`conformance/profile/authz.py`，CK-AZ-01..05）。只在 `PROBE_GUARD` 为真时注册，路由都受保护。资源 `<前缀>.entry` 每种维度一个：`legal_entity`（值集合，列 `legal_entity`）、`dept`（组织树，列 `dept_path`）、`owner`（主体，列 `owner_id`，角色 `owner`）、`amount`（金额，列 `amount` 与 `currency`）；字段 `id`、`number`、`legal_entity`、`dept_path`、`owner_id`、`amount`、`currency`、`approved` 普通，`cost` 受限（读取键 `<前缀>.entry.cost`），`note` 秘密。列为 SQL NULL 是已知的 null。
+
+| 方法与路径 | 请求 | 回答 | 操作 |
+| --- | --- | --- | --- |
+| `GET /api/probe/entries` | 查询参数：`number`、`legal_entity`、`dept_path`、`owner_id`、`amount`、`currency`、`cost` 任一为等值筛选；`sort=<字段>` 或 `-<字段>`（`number`、`cost`）；`readable_only=<字段>,…`；`limit`、`cursor` | `{"items", "next", "readable_only"?}`：每行按命中段的字段掩码（P8.31：不可读的字段为 `null` 并列在 `_masked`，秘密字段不出现） | `<前缀>.entry.read` |
+| `GET /api/probe/entries/{id}` | — | 单对象，同样掩码；看不见答 404 | `<前缀>.entry.read` |
+| `POST /api/probe/entries` | `{"number", "legal_entity", "dept_path", "owner_id", "amount", "currency", "cost", "note"}`（维度可为 `null`） | `201 {"id"}`；候选的新状态不在授权内答 403 `PERMISSION_DENIED` | `<前缀>.entry.create`（`create`） |
+| `POST /api/probe/entries/{id}/move` | 维度的新值（给出的才改） | 204；原状态先按读取与动作判断（看不见 404），新状态不在授权内答 403 `PERMISSION_DENIED`，条目不变 | `<前缀>.entry.move` |
+| `POST /api/probe/entries/{id}/approve` | `{"hold_ms": 0..2000}` | 204；高风险（`W_high`）；写入后事务再开着 `hold_ms`，提交前视图已过期则回滚并答 503 `AUTHORIZATION_VIEW_EXPIRED`（P8.12） | `<前缀>.entry.approve`（高风险） |
+| `GET /api/probe/entries/{id}/export` | — | 单对象，按导出操作自己的段掩码（P8.15） | `<前缀>.entry.export`（`export`） |
+
+`PROBE_UNDECLARED_ROUTE` 为真（且 `PROBE_GUARD` 为真）时另注册 `GET /api/probe/undeclared`，操作 `<前缀>.undeclared` 没有声明，启动失败（CK-AZ-01）。
+
 ## 资源与操作
 
 资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起）、`pull`（3.2.31 起，Go：水位来源的补取），风险均为低。
 
 ## 迁移
 
-`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。`0005_jobs`（扩展，3.2.30 起，Go）：后台工作项一节的 `probe_job_requests`、`probe_job_attempts`、`probe_job_effects`、`probe_job_calls`、`probe_job_dead`、`probe_steps`。`0006_cron`（扩展，3.2.32 起，Go）：`probe_cron`。
+`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。`0005_jobs`（扩展，3.2.30 起，Go）：后台工作项一节的 `probe_job_requests`、`probe_job_attempts`、`probe_job_effects`、`probe_job_calls`、`probe_job_dead`、`probe_steps`。`0006_cron`（扩展，3.2.32 起，Go）：`probe_cron`。`probe_entries`（扩展，3.2.38 起）：授权剖面的条目；Go 探针是 `0008_entries`，Python 探针是 `0005_entries`（Python 探针还没有后台工作项、cron 与水位来源的迁移，编号各走各的）。

@@ -19,7 +19,9 @@ OWN = {"PROBE_NEXT": "the component ID of the probe that call and relay go to; u
        "PROBE_NEXT_GRPC_URL": "the next probe's system surface: $endpoint:<its ID>:grpc (protocol P4.26); unset: no gRPC calls",
        "PROBE_GUARD": "true: the user routes need a credential and their operation instead of being public",
        "PROBE_STEPS_EVERY": "how often the steps singleton runs, for the suite's background work profile (Go since 3.2.30); 0: no such job",
-       "PROBE_CRON": "true: a cron job with a slot a minute, its runs recorded (Go since 3.2.32)"}
+       "PROBE_CRON": "true: a cron job with a slot a minute, its runs recorded (Go since 3.2.32)",
+       "PROBE_UNDECLARED_ROUTE": "true (with PROBE_GUARD): a route naming an operation the probe does not declare, so "
+                                 "the start fails, for the suite's authorization profile (since 3.2.38)"}
 
 
 def describe(k: Key) -> str:

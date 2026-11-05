@@ -12,7 +12,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.37"
+	Version     = "3.2.38"
 	WrittenType = "test.probe.written.v1"
 	NotedType   = "test.probe.noted.v1" // since 3.2.23: a write asked as "noted" (suite D, V3)
 	MaxLabel    = 64
@@ -69,6 +69,8 @@ func Keys() []config.Key {
 		{Name: "PROBE_STEPS_EVERY", Type: config.Duration, Default: time.Duration(0)},
 		// since 3.2.32: the cron job of the background work profile (a slot a minute); off by default
 		{Name: "PROBE_CRON", Type: config.Boolean, Default: false},
+		// since 3.2.38: a guarded route naming an operation the probe does not declare, so the start fails (CK-AZ-01)
+		{Name: "PROBE_UNDECLARED_ROUTE", Type: config.Boolean, Default: false},
 	}
 }
 
@@ -78,14 +80,16 @@ func Prefix(id string) string {
 	return strings.NewReplacer("/", ".", "-", "_").Replace(id)
 }
 
-// Authz declares a variant's one resource and its operations; they protect the user routes when PROBE_GUARD is on
-// and the system methods always.
+// Authz declares a variant's resources and their operations: the probe's own (it protects the user routes when
+// PROBE_GUARD is on and the system methods always) and, since 3.2.38, the entry of the authorization profile.
 func Authz(id string) *authz.Definitions {
 	p := Prefix(id)
 	ops := []authz.Operation{{Key: p + ".read", ResourceType: p, Purpose: "read", RiskClass: "low"}}
 	for _, op := range []string{"echo", "work", "write", "call", "note", "pull"} { // pull since 3.2.31
 		ops = append(ops, authz.Operation{Key: p + "." + op, ResourceType: p, Purpose: "action", RiskClass: "low"})
 	}
+	ops = append(ops, entryOperations(p)...) // since 3.2.38: the authorization profile's entries
 	return &authz.Definitions{Component: id, Operations: ops, Resources: []authz.Resource{{Type: p,
-		ViewOperation: p + ".read", Dimensions: map[string]authz.Dimension{}, Fields: map[string]authz.Field{}}}}
+		ViewOperation: p + ".read", Dimensions: map[string]authz.Dimension{}, Fields: map[string]authz.Field{}},
+		entryResource(p)}}
 }

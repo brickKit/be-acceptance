@@ -1,0 +1,699 @@
+{
+ "sdk": "go",
+ "undeclared": {
+  "started": false,
+  "log": "test/probe-go exited 1: {\"time\":\"2026-11-05T06:12:52.324Z\",\"level\":\"ERROR\",\"msg\":\"the member could not be built\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"operations used by routes or methods but not declared: test.probe_go.undeclared\"}\n"
+ },
+ "entries": [
+  "e1",
+  "e2",
+  "e3",
+  "e4",
+  "e5"
+ ],
+ "dimensions": {
+  "value_set": {
+   "want": [
+    "e1",
+    "e3",
+    "e5"
+   ],
+   "list_status": 200,
+   "rows": {
+    "e1": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "100",
+     "approved": false,
+     "cost": null,
+     "currency": "CNY",
+     "dept_path": "org1/org2",
+     "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+     "legal_entity": "LE1",
+     "number": "e1",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+    },
+    "e3": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "50",
+     "approved": false,
+     "cost": null,
+     "currency": "USD",
+     "dept_path": "org1/org22",
+     "id": "01a1aa56-c299-769a-847f-19809bbd1b97",
+     "legal_entity": "LE1",
+     "number": "e3",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000b2"
+    },
+    "e5": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "20000",
+     "approved": false,
+     "cost": null,
+     "currency": "CNY",
+     "dept_path": null,
+     "id": "01a1aa56-c2b1-7282-a61d-4ce21b4417e3",
+     "legal_entity": "LE1",
+     "number": "e5",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+    }
+   },
+   "single": {
+    "e1": {
+     "status": 200,
+     "body": {
+      "_masked": [
+       "cost"
+      ],
+      "amount": "100",
+      "approved": false,
+      "cost": null,
+      "currency": "CNY",
+      "dept_path": "org1/org2",
+      "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+      "legal_entity": "LE1",
+      "number": "e1",
+      "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+     },
+     "reason": ""
+    },
+    "e2": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    },
+    "e3": {
+     "status": 200,
+     "body": {
+      "_masked": [
+       "cost"
+      ],
+      "amount": "50",
+      "approved": false,
+      "cost": null,
+      "currency": "USD",
+      "dept_path": "org1/org22",
+      "id": "01a1aa56-c299-769a-847f-19809bbd1b97",
+      "legal_entity": "LE1",
+      "number": "e3",
+      "owner_id": "0190f3a1-0000-7000-8000-0000000000b2"
+     },
+     "reason": ""
+    },
+    "e4": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    },
+    "e5": {
+     "status": 200,
+     "body": {
+      "_masked": [
+       "cost"
+      ],
+      "amount": "20000",
+      "approved": false,
+      "cost": null,
+      "currency": "CNY",
+      "dept_path": null,
+      "id": "01a1aa56-c2b1-7282-a61d-4ce21b4417e3",
+      "legal_entity": "LE1",
+      "number": "e5",
+      "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+     },
+     "reason": ""
+    }
+   },
+   "filter_out": {
+    "status": 200,
+    "ids": []
+   },
+   "filter_in": {
+    "status": 200,
+    "ids": [
+     "e1",
+     "e3",
+     "e5"
+    ],
+    "want": [
+     "e1",
+     "e3",
+     "e5"
+    ]
+   },
+   "move_out": {
+    "status": 403,
+    "reason": "PERMISSION_DENIED",
+    "e1_after": {
+     "legal_entity": "LE1",
+     "dept_path": "org1/org2",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1",
+     "amount": "100"
+    }
+   },
+   "move_in": 204,
+   "refusals": [
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"5385b8ee0b39c40e13e2d0d385ab1a63\"}\n",
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"e60ead8160b958e188e73aa7d8271efd\"}\n",
+    "{\"type\":\"urn:be:be:PERMISSION_DENIED\",\"title\":\"Not allowed\",\"status\":403,\"detail\":\"the target state is outside the caller's authorization\",\"reason\":\"PERMISSION_DENIED\",\"domain\":\"be\",\"trace_id\":\"15eb6726aee47c02c0921b91248f232e\"}\n",
+    "{\"type\":\"urn:be:be:PERMISSION_DENIED\",\"title\":\"Not allowed\",\"status\":403,\"detail\":\"the target state is outside the caller's authorization\",\"reason\":\"PERMISSION_DENIED\",\"domain\":\"be\",\"trace_id\":\"480a5007ce982c009dfa364abdb6ccde\"}\n"
+   ],
+   "create_out": {
+    "status": 403,
+    "reason": "PERMISSION_DENIED",
+    "entries_after": 5
+   }
+  },
+  "org_tree": {
+   "want": [
+    "e1",
+    "e4"
+   ],
+   "list_status": 200,
+   "rows": {
+    "e1": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "100",
+     "approved": false,
+     "cost": null,
+     "currency": "CNY",
+     "dept_path": "org1/org2",
+     "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+     "legal_entity": "LE1",
+     "number": "e1",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+    },
+    "e4": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "75",
+     "approved": false,
+     "cost": null,
+     "currency": "CNY",
+     "dept_path": "org1/org2/org5",
+     "id": "01a1aa56-c2a2-77ee-898e-5fef273a8924",
+     "legal_entity": "LE2",
+     "number": "e4",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000b2"
+    }
+   },
+   "single": {
+    "e1": {
+     "status": 200,
+     "body": {
+      "_masked": [
+       "cost"
+      ],
+      "amount": "100",
+      "approved": false,
+      "cost": null,
+      "currency": "CNY",
+      "dept_path": "org1/org2",
+      "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+      "legal_entity": "LE1",
+      "number": "e1",
+      "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+     },
+     "reason": ""
+    },
+    "e2": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    },
+    "e3": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    },
+    "e4": {
+     "status": 200,
+     "body": {
+      "_masked": [
+       "cost"
+      ],
+      "amount": "75",
+      "approved": false,
+      "cost": null,
+      "currency": "CNY",
+      "dept_path": "org1/org2/org5",
+      "id": "01a1aa56-c2a2-77ee-898e-5fef273a8924",
+      "legal_entity": "LE2",
+      "number": "e4",
+      "owner_id": "0190f3a1-0000-7000-8000-0000000000b2"
+     },
+     "reason": ""
+    },
+    "e5": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    }
+   },
+   "filter_out": {
+    "status": 200,
+    "ids": []
+   },
+   "filter_in": {
+    "status": 200,
+    "ids": [
+     "e4"
+    ],
+    "want": [
+     "e4"
+    ]
+   },
+   "move_out": {
+    "status": 403,
+    "reason": "PERMISSION_DENIED",
+    "e1_after": {
+     "legal_entity": "LE1",
+     "dept_path": "org1/org2",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1",
+     "amount": "100"
+    }
+   },
+   "move_in": 204,
+   "refusals": [
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"8582f8f5b0d58a5e4fc92126321c340f\"}\n",
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"19456094e01ba6c38b1251dc4b88f9de\"}\n",
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"a6a832e6ca4929894dc163033bb0ccb5\"}\n",
+    "{\"type\":\"urn:be:be:PERMISSION_DENIED\",\"title\":\"Not allowed\",\"status\":403,\"detail\":\"the target state is outside the caller's authorization\",\"reason\":\"PERMISSION_DENIED\",\"domain\":\"be\",\"trace_id\":\"5b270ae57cdd72d85528a341682c552e\"}\n",
+    "{\"type\":\"urn:be:be:PERMISSION_DENIED\",\"title\":\"Not allowed\",\"status\":403,\"detail\":\"the target state is outside the caller's authorization\",\"reason\":\"PERMISSION_DENIED\",\"domain\":\"be\",\"trace_id\":\"7831ae57d945962ff71842eed2a3e716\"}\n"
+   ],
+   "create_out": {
+    "status": 403,
+    "reason": "PERMISSION_DENIED",
+    "entries_after": 5
+   }
+  },
+  "principal": {
+   "want": [
+    "e1",
+    "e5"
+   ],
+   "list_status": 200,
+   "rows": {
+    "e1": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "100",
+     "approved": false,
+     "cost": null,
+     "currency": "CNY",
+     "dept_path": "org1/org2",
+     "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+     "legal_entity": "LE1",
+     "number": "e1",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+    },
+    "e5": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "20000",
+     "approved": false,
+     "cost": null,
+     "currency": "CNY",
+     "dept_path": null,
+     "id": "01a1aa56-c2b1-7282-a61d-4ce21b4417e3",
+     "legal_entity": "LE1",
+     "number": "e5",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+    }
+   },
+   "single": {
+    "e1": {
+     "status": 200,
+     "body": {
+      "_masked": [
+       "cost"
+      ],
+      "amount": "100",
+      "approved": false,
+      "cost": null,
+      "currency": "CNY",
+      "dept_path": "org1/org2",
+      "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+      "legal_entity": "LE1",
+      "number": "e1",
+      "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+     },
+     "reason": ""
+    },
+    "e2": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    },
+    "e3": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    },
+    "e4": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    },
+    "e5": {
+     "status": 200,
+     "body": {
+      "_masked": [
+       "cost"
+      ],
+      "amount": "20000",
+      "approved": false,
+      "cost": null,
+      "currency": "CNY",
+      "dept_path": null,
+      "id": "01a1aa56-c2b1-7282-a61d-4ce21b4417e3",
+      "legal_entity": "LE1",
+      "number": "e5",
+      "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+     },
+     "reason": ""
+    }
+   },
+   "filter_out": {
+    "status": 200,
+    "ids": []
+   },
+   "filter_in": {
+    "status": 200,
+    "ids": [
+     "e1",
+     "e5"
+    ],
+    "want": [
+     "e1",
+     "e5"
+    ]
+   },
+   "move_out": {
+    "status": 403,
+    "reason": "PERMISSION_DENIED",
+    "e1_after": {
+     "legal_entity": "LE1",
+     "dept_path": "org1/org2",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1",
+     "amount": "100"
+    }
+   },
+   "move_in": 204,
+   "refusals": [
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"b972733e11f4f4471d6a549ce95bf04f\"}\n",
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"20caf4d4090e2d60bb6c91b207a28b45\"}\n",
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"c80edc42243d49a0b9a188d30ca2182f\"}\n",
+    "{\"type\":\"urn:be:be:PERMISSION_DENIED\",\"title\":\"Not allowed\",\"status\":403,\"detail\":\"the target state is outside the caller's authorization\",\"reason\":\"PERMISSION_DENIED\",\"domain\":\"be\",\"trace_id\":\"a5f7b61f38d41f85b71c55ebd3d3e935\"}\n",
+    "{\"type\":\"urn:be:be:PERMISSION_DENIED\",\"title\":\"Not allowed\",\"status\":403,\"detail\":\"the target state is outside the caller's authorization\",\"reason\":\"PERMISSION_DENIED\",\"domain\":\"be\",\"trace_id\":\"303707d13739038b224a2180f6748a30\"}\n"
+   ],
+   "create_out": {
+    "status": 403,
+    "reason": "PERMISSION_DENIED",
+    "entries_after": 5
+   }
+  },
+  "amount": {
+   "want": [
+    "e1",
+    "e4"
+   ],
+   "list_status": 200,
+   "rows": {
+    "e1": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "100",
+     "approved": false,
+     "cost": null,
+     "currency": "CNY",
+     "dept_path": "org1/org2",
+     "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+     "legal_entity": "LE1",
+     "number": "e1",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+    },
+    "e4": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "75",
+     "approved": false,
+     "cost": null,
+     "currency": "CNY",
+     "dept_path": "org1/org2/org5",
+     "id": "01a1aa56-c2a2-77ee-898e-5fef273a8924",
+     "legal_entity": "LE2",
+     "number": "e4",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000b2"
+    }
+   },
+   "single": {
+    "e1": {
+     "status": 200,
+     "body": {
+      "_masked": [
+       "cost"
+      ],
+      "amount": "100",
+      "approved": false,
+      "cost": null,
+      "currency": "CNY",
+      "dept_path": "org1/org2",
+      "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+      "legal_entity": "LE1",
+      "number": "e1",
+      "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+     },
+     "reason": ""
+    },
+    "e2": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    },
+    "e3": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    },
+    "e4": {
+     "status": 200,
+     "body": {
+      "_masked": [
+       "cost"
+      ],
+      "amount": "75",
+      "approved": false,
+      "cost": null,
+      "currency": "CNY",
+      "dept_path": "org1/org2/org5",
+      "id": "01a1aa56-c2a2-77ee-898e-5fef273a8924",
+      "legal_entity": "LE2",
+      "number": "e4",
+      "owner_id": "0190f3a1-0000-7000-8000-0000000000b2"
+     },
+     "reason": ""
+    },
+    "e5": {
+     "status": 404,
+     "body": null,
+     "reason": "NOT_FOUND"
+    }
+   },
+   "filter_out": {
+    "status": 200,
+    "ids": []
+   },
+   "filter_in": {
+    "status": 200,
+    "ids": [
+     "e1",
+     "e4"
+    ],
+    "want": [
+     "e1",
+     "e4"
+    ]
+   },
+   "move_out": {
+    "status": 403,
+    "reason": "PERMISSION_DENIED",
+    "e1_after": {
+     "legal_entity": "LE1",
+     "dept_path": "org1/org2",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1",
+     "amount": "100"
+    }
+   },
+   "move_in": 204,
+   "refusals": [
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"06c47ea2e4298784b7dfe4649d5f7a0b\"}\n",
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"c85bb1afcfb02824ee6bccc3336a4a4b\"}\n",
+    "{\"type\":\"urn:be:be:NOT_FOUND\",\"title\":\"Not found\",\"status\":404,\"detail\":\"not found\",\"reason\":\"NOT_FOUND\",\"domain\":\"be\",\"trace_id\":\"831485014939d6750340c427cbbee717\"}\n",
+    "{\"type\":\"urn:be:be:PERMISSION_DENIED\",\"title\":\"Not allowed\",\"status\":403,\"detail\":\"the target state is outside the caller's authorization\",\"reason\":\"PERMISSION_DENIED\",\"domain\":\"be\",\"trace_id\":\"af16bc3347c9a5d7c60b05ca16a7a998\"}\n",
+    "{\"type\":\"urn:be:be:PERMISSION_DENIED\",\"title\":\"Not allowed\",\"status\":403,\"detail\":\"the target state is outside the caller's authorization\",\"reason\":\"PERMISSION_DENIED\",\"domain\":\"be\",\"trace_id\":\"790f168042a1b9f223fa255befb52ef3\"}\n"
+   ],
+   "create_out": {
+    "status": 403,
+    "reason": "PERMISSION_DENIED",
+    "entries_after": 5
+   }
+  }
+ },
+ "overlap": {
+  "pages": [
+   {
+    "e1": {
+     "amount": "100",
+     "approved": false,
+     "cost": "7",
+     "currency": "CNY",
+     "dept_path": "org1/org2",
+     "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+     "legal_entity": "LE1",
+     "number": "e1",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+    }
+   },
+   {
+    "e3": {
+     "amount": "50",
+     "approved": false,
+     "cost": "9",
+     "currency": "USD",
+     "dept_path": "org1/org22",
+     "id": "01a1aa56-c299-769a-847f-19809bbd1b97",
+     "legal_entity": "LE1",
+     "number": "e3",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000b2"
+    }
+   },
+   {
+    "e4": {
+     "_masked": [
+      "cost"
+     ],
+     "amount": "75",
+     "approved": false,
+     "cost": null,
+     "currency": "CNY",
+     "dept_path": "org1/org2/org5",
+     "id": "01a1aa56-c2a2-77ee-898e-5fef273a8924",
+     "legal_entity": "LE2",
+     "number": "e4",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000b2"
+    }
+   },
+   {
+    "e5": {
+     "amount": "20000",
+     "approved": false,
+     "cost": "11",
+     "currency": "CNY",
+     "dept_path": null,
+     "id": "01a1aa56-c2b1-7282-a61d-4ce21b4417e3",
+     "legal_entity": "LE1",
+     "number": "e5",
+     "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+    }
+   }
+  ],
+  "narrowed": {
+   "status": 200,
+   "ids": [
+    "e5",
+    "e3",
+    "e1"
+   ],
+   "readable_only": [
+    "cost"
+   ]
+  },
+  "read": {
+   "amount": "100",
+   "approved": false,
+   "cost": "7",
+   "currency": "CNY",
+   "dept_path": "org1/org2",
+   "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+   "legal_entity": "LE1",
+   "number": "e1",
+   "owner_id": "0190f3a1-0000-7000-8000-0000000000a1"
+  },
+  "export": {
+   "status": 200,
+   "body": {
+    "_masked": [
+     "amount",
+     "approved",
+     "cost",
+     "currency",
+     "dept_path",
+     "legal_entity",
+     "owner_id"
+    ],
+    "amount": null,
+    "approved": null,
+    "cost": null,
+    "currency": null,
+    "dept_path": null,
+    "id": "01a1aa56-c287-7e1d-9b5a-4a983e4b3eeb",
+    "legal_entity": null,
+    "number": "e1",
+    "owner_id": null
+   }
+  }
+ },
+ "validity": {
+  "baseline": true,
+  "wrong_nonce": {
+   "approve": [
+    503,
+    "AUTHORIZATION_VIEW_EXPIRED"
+   ],
+   "verifications": 12,
+   "renewed": true
+  },
+  "held_write": {
+   "answer": [
+    503,
+    "AUTHORIZATION_VIEW_EXPIRED"
+   ],
+   "started_after": 3.3,
+   "approved_after": false
+  },
+  "stopped_high": {
+   "approve": [
+    503,
+    "AUTHORIZATION_VIEW_EXPIRED"
+   ],
+   "read": [
+    200,
+    ""
+   ]
+  },
+  "stopped_read": [
+   503,
+   "AUTHORIZATION_VIEW_EXPIRED"
+  ],
+  "restarted": true,
+  "rollback": [
+   503,
+   "AUTHORIZATION_VIEW_EXPIRED"
+  ],
+  "rollback_renewed": true
+ },
+ "log": "ON_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:19.540Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-2233-7ecd-9bbb-c2bba5d64811\",\"trace_id\":\"9154764700d9dcfed41d2a4c28932265\",\"method\":\"POST\",\"route\":\"/api/probe/entries/{id}/approve\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:19.799Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-2336-7cf3-b8ef-426eba47e17d\",\"trace_id\":\"25c92d48565c937d1743e0b1bd14d71c\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:19.799Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-2336-7cf3-b8ef-426eba47e17d\",\"trace_id\":\"25c92d48565c937d1743e0b1bd14d71c\",\"method\":\"POST\",\"route\":\"/api/probe/entries/{id}/approve\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:20.059Z\",\"level\":\"INFO\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-2439-7307-b484-caaa60b540e9\",\"trace_id\":\"2eb61a8aeb8566258acd5120cc02fd06\",\"method\":\"POST\",\"route\":\"/api/probe/entries/{id}/approve\",\"status\":204,\"duration_ms\":1}\n{\"time\":\"2026-11-05T06:13:25.156Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:27.752Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:27.805Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-3aaa-75a5-b0e2-981227c7b5b2\",\"trace_id\":\"fe79df9884b8a5226543a9a180b056b1\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: the authorization expired before the change could be committed\"}\n{\"time\":\"2026-11-05T06:13:27.805Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-3aaa-75a5-b0e2-981227c7b5b2\",\"trace_id\":\"fe79df9884b8a5226543a9a180b056b1\",\"method\":\"POST\",\"route\":\"/api/probe/entries/{id}/approve\",\"status\":503,\"duration_ms\":2002}\n{\"time\":\"2026-11-05T06:13:28.501Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-4535-7c31-aef2-b0383045c7f2\",\"trace_id\":\"6273235a9b21e33db8b1fc58af5b826d\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:28.501Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-4535-7c31-aef2-b0383045c7f2\",\"trace_id\":\"6273235a9b21e33db8b1fc58af5b826d\",\"method\":\"POST\",\"route\":\"/api/probe/entries/{id}/approve\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:28.509Z\",\"level\":\"INFO\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-453b-76eb-a17d-95193d971ffb\",\"trace_id\":\"f5da51acc218086b1a7edd0d5f59dbd1\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":200,\"duration_ms\":1}\n{\"time\":\"2026-11-05T06:13:30.253Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:32.754Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:35.256Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:37.757Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:40.259Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:42.766Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:45.267Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:47.769Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:50.269Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:52.772Z\",\"level\":\"WARN\",\"msg\":\"authorization view verification failed; the view stays valid only until it expires\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"error\":\"be/DEPENDENCY_UNAVAILABLE: a dependency is unavailable: rpc error: code = Unavailable desc = the authorization member is down\"}\n{\"time\":\"2026-11-05T06:13:53.504Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a6e0-79d9-a4ee-01f3f67744cc\",\"trace_id\":\"5dc148d609aac4728e8abbaaded029ea\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:53.504Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a6e0-79d9-a4ee-01f3f67744cc\",\"trace_id\":\"5dc148d609aac4728e8abbaaded029ea\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:53.510Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a6e6-751c-82b1-35f7183f08ec\",\"trace_id\":\"0964ebabe09735f2ffc2e702d9c1bb25\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:53.510Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a6e6-751c-82b1-35f7183f08ec\",\"trace_id\":\"0964ebabe09735f2ffc2e702d9c1bb25\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:53.774Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a7ed-7cc4-8aca-db8abe531f9d\",\"trace_id\":\"a5c2f9516e7bea00a84b91931f16a45f\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:53.774Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a7ed-7cc4-8aca-db8abe531f9d\",\"trace_id\":\"a5c2f9516e7bea00a84b91931f16a45f\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:54.030Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a8ee-7b6b-be5d-b5aeeeddaf42\",\"trace_id\":\"403003ca1a1cdc69a4b443581b7c7419\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:54.030Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a8ee-7b6b-be5d-b5aeeeddaf42\",\"trace_id\":\"403003ca1a1cdc69a4b443581b7c7419\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:54.288Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a9f0-727f-9581-6670f3ad3666\",\"trace_id\":\"cf3b64db5f8e117a5964388a3c291da7\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:54.288Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-a9f0-727f-9581-6670f3ad3666\",\"trace_id\":\"cf3b64db5f8e117a5964388a3c291da7\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:54.545Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-aaf1-73f7-9a92-ea50fd201cc8\",\"trace_id\":\"f02f28f35eff2b11f6ce866e72efee93\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:54.545Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-aaf1-73f7-9a92-ea50fd201cc8\",\"trace_id\":\"f02f28f35eff2b11f6ce866e72efee93\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:54.803Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-abf3-7522-9982-9bdbc9145a30\",\"trace_id\":\"ab906c2ceee481856dcb94c02addb2be\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:54.803Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-abf3-7522-9982-9bdbc9145a30\",\"trace_id\":\"ab906c2ceee481856dcb94c02addb2be\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:55.061Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-acf5-7076-b2f1-badfcc3e00cd\",\"trace_id\":\"87bc5c2f772d58145c92f995964edf0c\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:55.061Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-acf5-7076-b2f1-badfcc3e00cd\",\"trace_id\":\"87bc5c2f772d58145c92f995964edf0c\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:55.323Z\",\"level\":\"INFO\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-adf8-7e9a-ba9d-99c2e29c6c5e\",\"trace_id\":\"5b887b371bc6025d1aedd77cfb419ed5\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":200,\"duration_ms\":2}\n{\"time\":\"2026-11-05T06:13:55.332Z\",\"level\":\"INFO\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-ae03-78b2-86f2-267770ad4752\",\"trace_id\":\"fe13dd321e1db821b566812d19aa6e91\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":200,\"duration_ms\":1}\n{\"time\":\"2026-11-05T06:13:57.777Z\",\"level\":\"ERROR\",\"msg\":\"an authorization view answer was a rollback (an older recovery generation or another member instance); the views are suspended\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"held_generation\":1,\"answered_generation\":0,\"held_instance\":\"authz-test-1\",\"answered_instance\":\"authz-test-1\"}\n{\"time\":\"2026-11-05T06:13:57.810Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-b7b2-7961-8ef5-1457e1190a45\",\"trace_id\":\"7b4649e9efc661bff1e9ee1fcf9bdcfe\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:57.810Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-b7b2-7961-8ef5-1457e1190a45\",\"trace_id\":\"7b4649e9efc661bff1e9ee1fcf9bdcfe\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:57.819Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-b7ba-7d21-a533-9464635fb863\",\"trace_id\":\"21458d6cd4d3a6bba4a991d098b8c696\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:57.819Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-b7ba-7d21-a533-9464635fb863\",\"trace_id\":\"21458d6cd4d3a6bba4a991d098b8c696\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:58.077Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-b8bd-7880-a719-69b2a9ca50d0\",\"trace_id\":\"510469c6b2e20ff2d6055262b0f284e0\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:58.077Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-b8bd-7880-a719-69b2a9ca50d0\",\"trace_id\":\"510469c6b2e20ff2d6055262b0f284e0\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:58.338Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-b9c2-7536-9cb0-58409759606f\",\"trace_id\":\"2f5af15bc14350e4d2f6c2d5cfe1aa7c\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:58.338Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-b9c2-7536-9cb0-58409759606f\",\"trace_id\":\"2f5af15bc14350e4d2f6c2d5cfe1aa7c\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:58.595Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bac3-737a-b96b-2ff8c52d0492\",\"trace_id\":\"0e892fc035ccb6e654c29c052b74ec55\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:58.595Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bac3-737a-b96b-2ff8c52d0492\",\"trace_id\":\"0e892fc035ccb6e654c29c052b74ec55\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:58.855Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bbc7-7517-957b-c8e3cd0ab791\",\"trace_id\":\"c39e41fbe1035d8b5ee7dc58497cf468\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:58.855Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bbc7-7517-957b-c8e3cd0ab791\",\"trace_id\":\"c39e41fbe1035d8b5ee7dc58497cf468\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:59.113Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bcc9-742c-931e-435e492600fb\",\"trace_id\":\"be0fcba2910d1d424b0ed05cea3247a7\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:59.113Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bcc9-742c-931e-435e492600fb\",\"trace_id\":\"be0fcba2910d1d424b0ed05cea3247a7\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:59.370Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bdca-73ca-b77a-e729ba443d2a\",\"trace_id\":\"7fa4bf6225b59de0b46d6a1e788d281c\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:59.370Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bdca-73ca-b77a-e729ba443d2a\",\"trace_id\":\"7fa4bf6225b59de0b46d6a1e788d281c\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:59.626Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-beca-7ca7-ad7e-6be60cdc8280\",\"trace_id\":\"91c7c17ba9e00b1ff951404a1edf5c7c\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:59.626Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-beca-7ca7-ad7e-6be60cdc8280\",\"trace_id\":\"91c7c17ba9e00b1ff951404a1edf5c7c\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:13:59.883Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bfcb-709d-a552-9324328a2617\",\"trace_id\":\"1ba279f4dffd7a91645e191d9e19c92f\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:13:59.883Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-bfcb-709d-a552-9324328a2617\",\"trace_id\":\"1ba279f4dffd7a91645e191d9e19c92f\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:14:00.143Z\",\"level\":\"WARN\",\"msg\":\"request failed\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-c0cf-710a-9741-e4b171480e2c\",\"trace_id\":\"304e2295cf6ce21930f4506de6a2de73\",\"reason\":\"AUTHORIZATION_VIEW_EXPIRED\",\"domain\":\"be\",\"error\":\"be/AUTHORIZATION_VIEW_EXPIRED: no valid authorization view\"}\n{\"time\":\"2026-11-05T06:14:00.143Z\",\"level\":\"WARN\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-c0cf-710a-9741-e4b171480e2c\",\"trace_id\":\"304e2295cf6ce21930f4506de6a2de73\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":503,\"duration_ms\":0}\n{\"time\":\"2026-11-05T06:14:00.401Z\",\"level\":\"INFO\",\"msg\":\"access\",\"component\":\"test/probe-go\",\"version\":\"3.2.38\",\"request_id\":\"01a1aa57-c1d0-739a-afd9-c4b4d1f14043\",\"trace_id\":\"663094fac90481a74e2716410286bc92\",\"method\":\"GET\",\"route\":\"/api/probe/entries/{id}\",\"status\":200,\"duration_ms\":0}\n"
+}

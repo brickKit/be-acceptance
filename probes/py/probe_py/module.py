@@ -116,6 +116,13 @@ class Probe:
                                     ("GET", "seen", "read", self.seen), ("POST", "note", "note", self.note_http),
                                     ("GET", "written/{id}", "read", self.written_row)):
             r.add(Route(method, "/api/probe/" + path, h, f"{self.ops}.{op}" if guard else "", public=not guard))
+        if guard:  # the entries are always protected (since 3.2.38)
+            from probe_py.entries import Entries
+
+            Entries(self.rt, self.ops).routes(
+                lambda method, path, op, h: r.add(Route(method, "/api/probe/" + path, h, f"{self.ops}.{op}")))
+            if self.rt.config.bool("PROBE_UNDECLARED_ROUTE"):  # an operation nobody declared: the start fails (CK-AZ-01)
+                r.add(Route("GET", "/api/probe/undeclared", self.seen, f"{self.ops}.undeclared"))
 
     async def echo_http(self, c):
         body = await c.json()

@@ -39,12 +39,15 @@ def prefix(component_id: str) -> str:
 
 
 def authz(component_id: str) -> Definitions:
-    """A variant's one resource and its operations: they protect the user routes when PROBE_GUARD is on and the system
-    methods always."""
+    """A variant's resources and their operations: the probe's own (it protects the user routes when PROBE_GUARD is on
+    and the system methods always) and, since 3.2.38, the entry of the authorization profile."""
+    from probe_py import entries
+
     p = prefix(component_id)
     ops = [Operation(f"{p}.read", p, "read", "low")]
     ops += [Operation(f"{p}.{op}", p, "action", "low") for op in ("echo", "work", "write", "call", "note")]
-    return Definitions(component_id, [Resource(p, f"{p}.read", {}, {})], ops)
+    ops += entries.operations(p)  # since 3.2.38: the authorization profile's entries
+    return Definitions(component_id, [Resource(p, f"{p}.read", {}, {}), entries.resource(p)], ops)
 
 
 def definition(v: Variant = VARIANTS[0]) -> Definition:
@@ -59,7 +62,9 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
         # the common contract's key since 3.2.32; the Python probe has no jobs yet (foundations item 6) and reads it not
         Key("PROBE_STEPS_EVERY", Type.DURATION, default=timedelta(0)),
         # since 3.2.33, the same: the Go probe's cron job for the background work profile; not read here yet
-        Key("PROBE_CRON", Type.BOOLEAN, default=False)],
+        Key("PROBE_CRON", Type.BOOLEAN, default=False),
+        # since 3.2.38: a guarded route naming an operation the probe does not declare, so the start fails (CK-AZ-01)
+        Key("PROBE_UNDECLARED_ROUTE", Type.BOOLEAN, default=False)],
         migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4)],
         subscribes=True, authz=authz(v.id))
 

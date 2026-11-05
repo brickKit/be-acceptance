@@ -87,6 +87,12 @@ func (p *Probe) Routes(r *httpx.Routes) error {
 	add("GET", "written/:id", "read", p.writtenRow)
 	add("POST", "job", "write", p.enqueueJob)
 	add("POST", "steps", "write", p.setSteps)
+	if guard { // the entries are always protected (since 3.2.38)
+		p.entryRoutes(add)
+		if p.rt.Config.Bool("PROBE_UNDECLARED_ROUTE") {
+			add("GET", "undeclared", "undeclared", p.seen) // an operation nobody declared: the start fails (CK-AZ-01)
+		}
+	}
 	return nil
 }
 
