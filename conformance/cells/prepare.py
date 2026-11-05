@@ -90,6 +90,8 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.sales.price_list": ["legal_entity"], "erp.billing.invoice": ["legal_entity"]}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
 PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing"}
+# the security members' streams (their definition.go; not named after the component)
+INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
 PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the operations the load user is granted
 # every key a probe defines (probe/defs.go, probe_py): the registry must own them all, or the authorization member
@@ -208,9 +210,14 @@ async def clean_bus(c: Cell) -> None:
 
     tr = await jetstream.Transport.connect(need("BE_ACC_NATS_URL"), "cell-prepare")
     try:
-        for probe in [*c.probes, *c.mdm, *(e for e in c.erp if e in PRODUCERS)]:
+        streams = [stream_of(p) for p in [*c.probes, *c.mdm, *(e for e in c.erp if e in PRODUCERS)]]
+        # the security members' streams too: every run is a new deployment with a new implementation instance, and an
+        # earlier run's events left in the shared NATS make the authorization member judge the account source foreign
+        # (P9.11, blocked: the view closes and the install claim waits in vain; F3-S, items 3 and 4)
+        streams += [s for p in c.infra for s in INFRA_STREAMS.get(p, [])]
+        for stream in streams:
             try:
-                await tr.delete_stream(stream_of(probe))
+                await tr.delete_stream(stream)
             except Exception:  # noqa: BLE001 - not there
                 pass
     finally:
