@@ -34,9 +34,10 @@ INFRA_KEYS = {
                                          "infra.iam.account.read", "infra.iam.account.disable", "infra.iam.account.freeze",
                                          "infra.iam.account.enable", "infra.iam.account.logout",
                                          "infra.iam.account.reset_second_factor"]},
-    "infra/audit": {"resource_type": ["infra.audit.record", "infra.audit.intake"],
+    "infra/audit": {"resource_type": ["infra.audit.record", "infra.audit.intake", "infra.audit.evidence"],
                     "permission": ["infra.audit.record.read", "infra.audit.intake.read", "infra.audit.intake.submit",
-                                   "infra.audit.intake.watermark"]},
+                                   "infra.audit.intake.watermark", "infra.audit.evidence.append",
+                                   "infra.audit.evidence.list"]},
 }
 # The master data components' resource types and operations (their definition.go), for the registry and the grants.
 MDM_KEYS = {
