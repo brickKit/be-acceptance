@@ -1,10 +1,11 @@
 """A fake payment system for the external commands profile (be-protocol chapter 13; the assembly project's protocol
 10): POST /payments pays by the business reference, GET /payments/<reference> answers what it holds, GET
 /payments?from=&to= lists what it took in a time window (RFC 3339; an adapter's listing, P13.11). The suite scripts its
-faults, one per payment, in turn (`faults`), and whether it deduplicates by the reference; every payment it took is
-kept (`payments`), so a test sees a double payment for what it is. Standard library only: in the test's process, or
-on its own for a drill (`python3 fake.py --port N`), scripted then by POST /control with {"faults": [...],
-"dedupe": bool, "query_down": bool} and read by GET /control."""
+faults, one per payment, in turn (`faults`), or one per payment of a reference (`faults_by_reference`, met first), and
+whether it deduplicates by the reference; every payment it took is kept (`payments`), so a test sees a double payment
+for what it is. Standard library only: in the test's process, or on its own for a drill (`python3 fake.py --port N`),
+scripted then by POST /control with {"faults": [...], "faults_by_reference": {reference: [...]}, "dedupe": bool,
+"query_down": bool} and read by GET /control."""
 from __future__ import annotations
 
 import argparse
@@ -28,8 +29,16 @@ class Fake:
     dedupe: bool = False
     query_down: bool = False
     faults: list[str] = field(default_factory=list)
+    faults_by_reference: dict[str, list[str]] = field(default_factory=dict)
     payments: list[dict] = field(default_factory=list)  # every payment taken, duplicates included
     lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def fault(self, reference: str) -> str:
+        """The fault the next payment of this reference meets: its own first, else the next in turn (under the lock)."""
+        own = self.faults_by_reference.get(reference)
+        if own:
+            return own.pop(0)
+        return self.faults.pop(0) if self.faults else ""
 
     def held(self, reference: str) -> dict | None:
         found = [p for p in self.payments if p["reference"] == reference]
@@ -72,7 +81,7 @@ def serve(fake: Fake, host: str = "127.0.0.1", port: int = 0, control: bool = Fa
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
             if control and self.path == "/control":
                 with fake.lock:
-                    for k in ("faults", "dedupe", "query_down"):
+                    for k in ("faults", "faults_by_reference", "dedupe", "query_down"):
                         if k in body:
                             setattr(fake, k, body[k])
                 return self.answer(200, {"ok": True})
@@ -80,7 +89,7 @@ def serve(fake: Fake, host: str = "127.0.0.1", port: int = 0, control: bool = Fa
                 return self.answer(404, {"error": "no such path"})
             ref = body.get("reference", "")
             with fake.lock:
-                fault = fake.faults.pop(0) if fake.faults else ""
+                fault = fake.fault(ref)
                 if fault == CUT_UNRECORDED:
                     return self.cut()
                 if fault == REJECT:
@@ -102,7 +111,8 @@ def serve(fake: Fake, host: str = "127.0.0.1", port: int = 0, control: bool = Fa
             url = urlparse(self.path)
             if control and url.path == "/control":
                 with fake.lock:
-                    return self.answer(200, {"payments": fake.payments, "faults": fake.faults})
+                    return self.answer(200, {"payments": fake.payments, "faults": fake.faults,
+                                         "faults_by_reference": fake.faults_by_reference})
             if url.path == "/payments":  # the listing: what was taken in [from, to]
                 if fake.query_down:
                     return self.answer(503, {"error": "the query is down"})
