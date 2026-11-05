@@ -31,7 +31,7 @@ func Definition(v Variant) component.Definition {
 			// a watermark source's batch read and snapshot (P9.30, since 3.2.35): the writes made on this stream
 			Records: &events.Records{Operation: Prefix(v.ID) + ".read", Readers: append(append([]string{}, Callers...), Suite),
 				Read: readWatermarked, Page: pageWatermarked}}},
-		Subscribes: true, Authz: Authz(v.ID), Resend: Prefix(v.ID) + ".resend",
+		Subscribes: true, Authz: Authz(v.ID), Resend: Prefix(v.ID) + ".resend", Recovery: Prefix(v.ID) + ".recover",
 		// the payment (since 3.2.41): an irrevocable command; its issue record goes to the evidence store
 		// (AUDIT_GRPC_URL). Without Evidence: no alert channel keys, so the manifests of both probes agree (A144)
 		ExternalCommands: true,

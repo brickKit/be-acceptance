@@ -39,6 +39,8 @@
 
 允许的调用组件：全部探针（六个组件 ID）。
 
+标准系统方法另由 SDK 挂上（不在上表）：补发 `be.source.v1.ResendService`（`<前缀>.resend`）；整套恢复的核对 `be.recovery.v1.CheckService` 与外部对账 `be.external.v1.ReconcileService`（`<前缀>.recover`，只许恢复工具 `ops/recover`；3.2.42 起，Go；Python 探针随底层先行第 6 项）。
+
 ## 事件
 
 每个探针向自己的流发 `test.probe.written.v1`（见变体表，各 4 个分区），数据 `{"id", "relay", "blob"}`，有 `label` 时加上它；写入时要求 `noted` 的发 `test.probe.noted.v1`，数据相同。`PROBE_PEER_STREAM` 指向对方的流时消费它（两种类型；旧版只订阅 `written`，`noted` 由运输过滤掉，协议 P6.33）：记一行与它的类型；`relay` 为真时在事务之外调用 `PROBE_NEXT` 的 `Echo`（1 KiB）；数据里 `emit` 为真时（3.2.29 起，Go）在处理的事务里向自己的流再发一个 `written`（跳数比收到的多一，超过 10 时发不出、处理失败，协议 P6.15）。Go 探针用 SDK 的后台工作项，Python 探针用自己的转发队列（Python SDK 子集没有后台工作项；认领规则相同：`FOR UPDATE SKIP LOCKED`、租约到期再认领、每 0.5 秒轮询、并发 4）。

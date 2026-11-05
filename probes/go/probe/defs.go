@@ -12,7 +12,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.41"
+	Version     = "3.2.42"
 	WrittenType = "test.probe.written.v1"
 	NotedType   = "test.probe.noted.v1" // since 3.2.23: a write asked as "noted" (suite D, V3)
 	MaxLabel    = 64
@@ -85,7 +85,8 @@ func Prefix(id string) string {
 func Authz(id string) *authz.Definitions {
 	p := Prefix(id)
 	ops := []authz.Operation{{Key: p + ".read", ResourceType: p, Purpose: "read", RiskClass: "low"},
-		{Key: p + ".resend", ResourceType: p, Purpose: "read", RiskClass: "low"}} // the redelivery (P6.38, since 3.2.39)
+		{Key: p + ".resend", ResourceType: p, Purpose: "read", RiskClass: "low"}, // the redelivery (P6.38, since 3.2.39)
+		{Key: p + ".recover", ResourceType: p, Purpose: "read", RiskClass: "low"}} // a full recovery's checks (chapter 14, since 3.2.42)
 	for _, op := range []string{"echo", "work", "write", "call", "note", "pull", OpPay} { // pull since 3.2.31, pay since 3.2.41
 		ops = append(ops, authz.Operation{Key: p + "." + op, ResourceType: p, Purpose: "action", RiskClass: "low"})
 	}

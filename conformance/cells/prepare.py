@@ -28,36 +28,37 @@ INFRA_KEYS = {
                                    "infra.authz.security_disposition.read", "infra.authz.security_disposition.dispose",
                                    "infra.authz.security_disposition.release",
                                    "infra.authz.system.read", "infra.authz.system.verify", "infra.authz.system.submit",
-                                   "infra.authz.system.claim", "infra.authz.system.account_check", "infra.authz.system.replay"]},
+                                   "infra.authz.system.claim", "infra.authz.system.account_check", "infra.authz.system.replay",
+                                   "infra.authz.system.recover"]},
     "infra/iam-casdoor": {"resource_type": ["infra.iam.session", "infra.iam.account_status", "infra.iam.account"],
                           "permission": ["infra.iam.session.exchange", "infra.iam.session.ended",
                                          "infra.iam.account_status.pull", "infra.iam.account_status.read", "infra.iam.account_status.resend",
-                                         "infra.iam.account_status.replay",
+                                         "infra.iam.account_status.replay", "infra.iam.account_status.recover",
                                          "infra.iam.account.read", "infra.iam.account.disable", "infra.iam.account.freeze",
                                          "infra.iam.account.enable", "infra.iam.account.logout",
                                          "infra.iam.account.reset_second_factor"]},
-    "infra/audit": {"resource_type": ["infra.audit.record", "infra.audit.intake", "infra.audit.evidence"],
+    "infra/audit": {"resource_type": ["infra.audit.record", "infra.audit.intake", "infra.audit.evidence", "infra.audit.system"],
                     "permission": ["infra.audit.record.read", "infra.audit.intake.read", "infra.audit.intake.submit",
                                    "infra.audit.intake.watermark", "infra.audit.evidence.append",
-                                   "infra.audit.evidence.list"]},
+                                   "infra.audit.evidence.list", "infra.audit.system.read", "infra.audit.system.recover"]},
 }
 # The master data components' resource types and operations (their definition.go), for the registry and the grants.
 MDM_KEYS = {
     "mdm/org": {"resource_type": ["mdm.legal_entity", "mdm.org_unit", "mdm.org.system"],
                 "permission": ["mdm.legal_entity.read", "mdm.legal_entity.manage", "mdm.org_unit.read",
-                               "mdm.org_unit.manage", "mdm.org.system.read", "mdm.org.system.resend",
+                               "mdm.org_unit.manage", "mdm.org.system.read", "mdm.org.system.resend", "mdm.org.system.recover",
                                "mdm.org.system.replay"]},
     "mdm/currency": {"resource_type": ["mdm.currency", "mdm.exchange_rate", "mdm.currency.system"],
                      "permission": ["mdm.currency.read", "mdm.currency.manage", "mdm.exchange_rate.read",
                                     "mdm.exchange_rate.maintain", "mdm.currency.system.read",
-                                    "mdm.currency.system.resend"]},
+                                    "mdm.currency.system.resend", "mdm.currency.system.recover"]},
     "mdm/partner": {"resource_type": ["mdm.partner", "mdm.partner_role", "mdm.partner.system"],
                     "permission": ["mdm.partner.read", "mdm.partner.create", "mdm.partner.edit", "mdm.partner.merge",
                                    "mdm.partner_role.read", "mdm.partner_role.manage", "mdm.partner.system.read",
-                                   "mdm.partner.system.resend"]},
+                                   "mdm.partner.system.resend", "mdm.partner.system.recover"]},
     "mdm/product": {"resource_type": ["mdm.product", "mdm.product_category", "mdm.product.system"],
                     "permission": ["mdm.product.read", "mdm.product.edit", "mdm.product_category.read",
-                                   "mdm.product_category.manage", "mdm.product.system.read", "mdm.product.system.resend"]},
+                                   "mdm.product_category.manage", "mdm.product.system.read", "mdm.product.system.resend", "mdm.product.system.recover"]},
 }
 # The business components' and the print component's resource types, operations and each resource type's dimensions
 # (their definition.go and infra_print/__init__.py): for the registry, the grants and the segments' atoms.
@@ -68,22 +69,22 @@ ERP_KEYS = {
                                      "erp.inventory.stock.read", "erp.inventory.movement.read",
                                      "erp.inventory.movement.create", "erp.inventory.adjustment.create",
                                      "erp.inventory.system.read", "erp.inventory.system.reserve",
-                                     "erp.inventory.system.issue", "erp.inventory.system.resend"]},
+                                     "erp.inventory.system.issue", "erp.inventory.system.resend", "erp.inventory.system.recover"]},
     "erp/credit": {"resource_type": ["erp.credit.limit", "erp.credit.policy", "erp.credit.system"],
                    "permission": ["erp.credit.limit.read", "erp.credit.limit.manage", "erp.credit.limit.request",
                                   "erp.credit.policy.read", "erp.credit.policy.manage", "erp.credit.system.read",
-                                  "erp.credit.system.reserve", "erp.credit.system.resend"]},
+                                  "erp.credit.system.reserve", "erp.credit.system.resend", "erp.credit.system.recover"]},
     "erp/sales": {"resource_type": ["erp.sales.quotation", "erp.sales.order", "erp.sales.delivery", "erp.sales.price_list",
                                     "erp.sales.return", "erp.sales.system"],
                   "permission": ["erp.sales.quotation.read", "erp.sales.quotation.edit", "erp.sales.order.read",
                                  "erp.sales.order.edit", "erp.sales.order.confirm", "erp.sales.order.cancel",
                                  "erp.sales.delivery.read", "erp.sales.delivery.create", "erp.sales.price_list.read",
                                  "erp.sales.price_list.manage", "erp.sales.return.read", "erp.sales.return.edit",
-                                 "erp.sales.system.read", "erp.sales.system.billing", "erp.sales.system.resend"]},
+                                 "erp.sales.system.read", "erp.sales.system.billing", "erp.sales.system.resend", "erp.sales.system.recover"]},
     "erp/billing": {"resource_type": ["erp.billing.invoice", "erp.billing.system"],
                     "permission": ["erp.billing.invoice.read", "erp.billing.invoice.draft", "erp.billing.invoice.issue",
                                    "erp.billing.invoice.print", "erp.billing.system.read",
-                                   "erp.billing.system.resend"]},
+                                   "erp.billing.system.resend", "erp.billing.system.recover"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render"]},
@@ -103,7 +104,7 @@ PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the operations the load
 # every key a probe defines (probe/defs.go, probe_py): the registry must own them all, or the authorization member
 # refuses the probe's whole submission (DEFINITION_OWNER_MISMATCH); note since 3.2.22, pull since 3.2.31 (Go), the
 # entries of the authorization profile since 3.2.38
-PROBE_KEYS = PROBE_OPS + ["note", "pull", "resend", "pay"]  # resend: the redelivery since 3.2.39 (Go), P6.38; pay: the payment since 3.2.41 (Go)
+PROBE_KEYS = PROBE_OPS + ["note", "pull", "resend", "pay", "recover"]  # resend: the redelivery since 3.2.39 (Go), P6.38; pay: the payment since 3.2.41 (Go); recover: a full recovery's checks since 3.2.42 (Go)
 PROBE_ENTRY_OPS = ["read", "create", "move", "approve", "export"]
 
 
