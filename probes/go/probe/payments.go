@@ -113,6 +113,31 @@ func (a *payments) Query(ctx context.Context, c extcmd.Command) (extcmd.Answer, 
 	return extcmd.Answer{Found: true, State: out.State, ExternalID: out.ExternalID, Response: out.State}, nil
 }
 
+// List lists what the fake system took in a time window (extcmd.Lister, since 3.2.43): a full recovery's
+// reconciliation matches one listing instead of one query per command (be-protocol P13.11).
+func (a *payments) List(ctx context.Context, from, to time.Time) ([]extcmd.Record, error) {
+	h, err := a.client()
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Payments []struct {
+			Reference  string `json:"reference"`
+			State      string `json:"state"`
+			ExternalID string `json:"external_id"`
+		} `json:"payments"`
+	}
+	q := url.Values{"from": {from.UTC().Format(time.RFC3339Nano)}, "to": {to.UTC().Format(time.RFC3339Nano)}}
+	if err := h.Do(ctx, calls.Request{Method: "GET", Path: "/payments?" + q.Encode()}, &out); err != nil {
+		return nil, err
+	}
+	recs := make([]extcmd.Record, 0, len(out.Payments))
+	for _, p := range out.Payments {
+		recs = append(recs, extcmd.Record{Reference: p.Reference, State: p.State, ExternalID: p.ExternalID, Response: p.State})
+	}
+	return recs, nil
+}
+
 type payIn struct {
 	Reference string         `json:"reference"`
 	Params    map[string]any `json:"params"`

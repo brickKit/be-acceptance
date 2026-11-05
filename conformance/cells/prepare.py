@@ -100,7 +100,7 @@ PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
-PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the operations the load user is granted
+PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the operations the load user is granted (and pay on a Go probe, secure.py)
 # every key a probe defines (probe/defs.go, probe_py): the registry must own them all, or the authorization member
 # refuses the probe's whole submission (DEFINITION_OWNER_MISMATCH); note since 3.2.22, pull since 3.2.31 (Go), the
 # entries of the authorization profile since 3.2.38

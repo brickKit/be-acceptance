@@ -66,7 +66,7 @@
 
 ## 付款：对外命令（3.2.41 起，Go；Python 探针随底层先行第 6 项补齐）
 
-给套件的对外命令剖面用（`conformance/tests/test_external_profile.py`，假外部系统 `conformance/external/fake.py`；线协议第 13 章，装配项目协议 10）。付款是一条对外命令，经 SDK 的 `extcmd` 发到 `PROBE_EXTERNAL_URL` 的假外部系统；业务参考号就是外部的幂等键。声明的能力按配置：`PROBE_EXTERNAL_DEDUPE_WINDOW`（去重保留期，0 为不去重）、`PROBE_EXTERNAL_LAST_USE`（按最后使用计期）、`PROBE_EXTERNAL_MAX_PROCESSING`（最长处理时间）、`PROBE_EXTERNAL_IRREVOCABLE`（不可撤回，缺省真：发出前把发出记录交给证据存储，`AUDIT_GRPC_URL`；没有证据存储就不发）。没有 `PROBE_EXTERNAL_URL` 时付款发不出去（按“肯定没到达”退避）。两个探针的清单一样：Python 探针声明这几个键与 `EXTERNAL_COMMANDS_QUERY_ONLY` 但不读（A144）。
+给套件的对外命令剖面用（`conformance/tests/test_external_profile.py`，假外部系统 `conformance/external/fake.py`；线协议第 13 章，装配项目协议 10）。付款是一条对外命令，经 SDK 的 `extcmd` 发到 `PROBE_EXTERNAL_URL` 的假外部系统；业务参考号就是外部的幂等键。声明的能力按配置：`PROBE_EXTERNAL_DEDUPE_WINDOW`（去重保留期，0 为不去重）、`PROBE_EXTERNAL_LAST_USE`（按最后使用计期）、`PROBE_EXTERNAL_MAX_PROCESSING`（最长处理时间）、`PROBE_EXTERNAL_IRREVOCABLE`（不可撤回，缺省真：发出前把发出记录交给证据存储，`AUDIT_GRPC_URL`；没有证据存储就不发）。没有 `PROBE_EXTERNAL_URL` 时付款发不出去（按“肯定没到达”退避）。两个探针的清单一样：Python 探针声明这几个键与 `EXTERNAL_COMMANDS_QUERY_ONLY` 但不读（A144）。适配器（3.2.43 起）还能按时间窗列出假外部系统收到的付款（`GET /payments?from=&to=`），整套恢复的外部对账用一次列出代替逐条查询（线协议 P13.11）；假外部系统也可以单独起（`python3 fake.py --port N`，`POST /control` 设故障），演练用。
 
 | 方法与路径 | 请求 | 回答 | 操作 |
 | --- | --- | --- | --- |
