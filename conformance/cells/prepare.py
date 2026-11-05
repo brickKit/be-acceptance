@@ -38,7 +38,7 @@ INFRA_KEYS = {
                                          "infra.iam.account.enable", "infra.iam.account.logout",
                                          "infra.iam.account.reset_second_factor"]},
     "infra/audit": {"resource_type": ["infra.audit.record", "infra.audit.intake", "infra.audit.evidence", "infra.audit.system"],
-                    "permission": ["infra.audit.record.read", "infra.audit.intake.read", "infra.audit.intake.submit",
+                    "permission": ["infra.audit.record.read", "infra.audit.record.list", "infra.audit.intake.read", "infra.audit.intake.submit",
                                    "infra.audit.intake.watermark", "infra.audit.evidence.append",
                                    "infra.audit.evidence.list", "infra.audit.system.read", "infra.audit.system.recover"]},
 }
