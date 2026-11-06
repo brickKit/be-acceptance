@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import pathlib
 import secrets as secrets_mod
 import shutil
+import subprocess
 import uuid
 from urllib.parse import urlsplit
 
@@ -194,17 +196,48 @@ def install_claim(c: Cell) -> None:
     claim.chmod(0o644)  # mounted into the member's container, which runs as another user
 
 
+def be_ops() -> str:
+    """The be-ops binary: BE_OPS, or be-ops on the PATH (tools/be-ops of the assembly project: go build ./cmd/be-ops)."""
+    path = os.environ.get("BE_OPS") or shutil.which("be-ops")
+    if not path:
+        raise RuntimeError("a secured cell's certificates come from its issuer: set BE_OPS to a built be-ops")
+    return path
+
+
+def issuer(c: Cell, *args: str) -> None:
+    """One be-ops trust command for the cell: the deployment's issuer (be-protocol P12.24-P12.27), its CA's key in
+    .secrets/trust (never mounted into a component), its records in the run profile."""
+    sec = c.dir / ".secrets"
+    env = dict(os.environ, RUN_PROFILE_URL=need("BE_ACC_S3_URL"), RUN_PROFILE_BUCKET="be-run-profile",
+               RUN_PROFILE_ACCESS_KEY=need("BE_ACC_S3_ACCESS_KEY"), RUN_PROFILE_SECRET_KEY=need("BE_ACC_S3_SECRET_KEY"))
+    subprocess.run([be_ops(), "trust", *args, "--project", str(c.dir), "--deployment", c.deployment,
+                    "--dir", str(sec / "trust"), "--bundle", str(sec / "tls" / "ca.pem")],
+                   env=env, check=True, stdout=subprocess.DEVNULL)
+
+
 def certificates(c: Cell) -> None:
-    tls = c.dir / ".secrets" / "tls"
-    if tls.exists():
-        shutil.rmtree(tls)
+    """Every placed component's service credential and be-ops recover's own (ops/recover signs the run profile). A
+    secured cell's come from its issuer, a new CA per preparation, as a deployment's would; the others' from the SDK's
+    test world (no run profile)."""
+    sec = c.dir / ".secrets"
+    tls = sec / "tls"
+    for d in (tls, sec / "trust"):
+        if d.exists():
+            shutil.rmtree(d)
     tls.mkdir(parents=True)
-    world = testing.World(tls, c.deployment)
-    for probe in [*c.placed, "ops/recover"]:  # ops/recover: be-ops recover's own identity (signs the run profile)
-        cert, key, ca = world.certs(probe)
-        shutil.move(cert, tls / f"{file_of(probe)}.cert.pem")
-        shutil.move(key, tls / f"{file_of(probe)}.key.pem")
+    names = [*c.placed, "ops/recover"]
+    if c.secured:
+        issuer(c, "init")
+        for comp in names:
+            issuer(c, "issue", "--component", comp, "--name", file_of(comp), "--out", str(tls))
+    else:
+        world = testing.World(tls, c.deployment)
+        for comp in names:
+            cert, key, _ = world.certs(comp)
+            shutil.move(cert, tls / f"{file_of(comp)}.cert.pem")
+            shutil.move(key, tls / f"{file_of(comp)}.key.pem")
     # the files are mounted into containers that run as other users: readable, as a secret store would deliver them
+    # (the CA's key stays in .secrets/trust, which no component mounts)
     for f in tls.iterdir():
         f.chmod(0o644)
 
@@ -535,13 +568,13 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
 async def prepare(directory: str | pathlib.Path) -> Cell:
     c = Cell.load(directory)
     await databases(c)
+    await ensure_bucket()
+    if c.secured:
+        await ensure_bucket("be-run-profile", object_lock=True)  # before the certificates: the issuer records in it
     certificates(c)
     if c.secured:
         owner_key(c)
         install_claim(c)
-    await ensure_bucket()
-    if c.secured:
-        await ensure_bucket("be-run-profile", object_lock=True)
     await empty_prefixes([schema_of(p) + "/" for p in c.probes])  # the prefixes configs() gives the probes
     await clean_bus(c)
     configs(c)

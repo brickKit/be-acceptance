@@ -53,3 +53,31 @@ def test_a_key_declared_without_a_default_and_left_unset_is_named(tmp_path, monk
         "PG_SCHEMA": {"type": "string"}}})                                         # set by the cell
     prepare.configs(c)
     assert prepare.unset_keys(c) == ["erp/credit: CREDIT_NEW_KEY"]
+
+
+def test_a_secured_cells_certificates_come_from_its_issuer(tmp_path, monkeypatch):
+    """T13d (A148): a secured cell's CA and credentials come from the deployment's issuer (be-ops trust), so its run
+    profile holds the trust material a recovery judges records against; a new CA per preparation."""
+    c = cell(tmp_path, monkeypatch, {})
+    calls = []
+    monkeypatch.setattr(prepare, "issuer", lambda _c, *args: calls.append(args))
+    monkeypatch.setattr(prepare.testing, "World", lambda *_a: (_ for _ in ()).throw(AssertionError("the test world")))
+    (tmp_path / ".secrets" / "trust").mkdir()
+    (tmp_path / ".secrets" / "trust" / "ca.key.pem").write_text("a previous preparation's CA")
+    prepare.certificates(c)
+    assert not (tmp_path / ".secrets" / "trust").exists(), "a new CA per preparation"
+    assert calls[0] == ("init",)
+    issued = {a[2]: a[4] for a in calls[1:]}
+    assert issued == {comp: comp.replace("/", "-") for comp in [*c.placed, "ops/recover"]}
+    assert all(a[0] == "issue" and a[5:] == ("--out", str(tmp_path / ".secrets" / "tls")) for a in calls[1:])
+
+
+def test_an_unsecured_cells_certificates_come_from_the_test_world(tmp_path, monkeypatch):
+    monkeypatch.setenv("BE_ACC_PG_ADMIN", ADMIN)
+    (tmp_path / "cell.yaml").write_text("cell: U\nalone: [erp/credit@3.0.22]\nchain: []\n")
+    c = Cell.load(tmp_path)
+    assert not c.secured
+    monkeypatch.setattr(prepare, "issuer", lambda *_a: (_ for _ in ()).throw(AssertionError("the issuer")))
+    prepare.certificates(c)
+    assert (tmp_path / ".secrets" / "tls" / "erp-credit.cert.pem").exists()
+    assert (tmp_path / ".secrets" / "tls" / "ops-recover.key.pem").exists()
