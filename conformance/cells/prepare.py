@@ -356,6 +356,10 @@ def security_configs(c: Cell) -> None:
         if comp in c.placed:
             if declares(c, comp, "RECOVERY_PHASE"):  # the recovery phase (be-protocol P1.22): a shared variable
                 lines = [*lines, "RECOVERY_PHASE: $var:RECOVERY_PHASE"]
+            if declares(c, comp, "RUN_PROFILE_URL"):  # an evidence writer's alert channel (P12.7, P12.16): the run
+                # profile outside the recovery group; without it an intent the evidence store does not take is lost
+                lines = [*lines, "RUN_PROFILE_URL: $var:RUN_PROFILE_URL", "RUN_PROFILE_BUCKET: $var:RUN_PROFILE_BUCKET",
+                         "RUN_PROFILE_ACCESS_KEY: ${BE_ACC_S3_ACCESS_KEY}", "RUN_PROFILE_SECRET_KEY: ${BE_ACC_S3_SECRET_KEY}"]
             (cfg / f"{file_of(comp)}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
 
 
@@ -406,6 +410,9 @@ PG_DATABASE: {c.database}
 PG_MIGRATION_PORT: "5432"
 """ if c.pooler else "") + f"""OBJECT_STORE_URL: http://{c.base_host}:9000
 OBJECT_STORE_BUCKET: be-acceptance
+# the run profile (be-protocol chapter 12): an object lock bucket outside the recovery group
+RUN_PROFILE_URL: http://{c.base_host}:9000
+RUN_PROFILE_BUCKET: be-run-profile
 DEPLOYMENT_ID: {c.deployment}
 # the full recovery's phase (A140; be-ops recover sets it): empty while running
 RECOVERY_PHASE: ""
@@ -489,6 +496,8 @@ async def prepare(directory: str | pathlib.Path) -> Cell:
         owner_key(c)
         install_claim(c)
     await ensure_bucket()
+    if c.secured:
+        await ensure_bucket("be-run-profile", object_lock=True)
     await empty_prefixes([schema_of(p) + "/" for p in c.probes])  # the prefixes configs() gives the probes
     await clean_bus(c)
     configs(c)

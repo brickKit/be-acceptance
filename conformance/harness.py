@@ -216,8 +216,9 @@ async def fresh_bus(kind: str, streams: list[str]) -> Bus:
     return bus
 
 
-async def ensure_bucket(name: str = "be-acceptance") -> None:
-    """The object storage bucket of the probes' claim checks, provisioned as a deployment would."""
+async def ensure_bucket(name: str = "be-acceptance", object_lock: bool = False) -> None:
+    """The object storage bucket of the probes' claim checks, provisioned as a deployment would; with object_lock, the
+    run profile's (be-protocol P12.1: an object lock bucket, its records kept in compliance mode)."""
     import aioboto3
 
     async with aioboto3.Session().client("s3", endpoint_url=need("BE_ACC_S3_URL"), region_name="us-east-1",
@@ -226,7 +227,7 @@ async def ensure_bucket(name: str = "be-acceptance") -> None:
         try:
             await s3.head_bucket(Bucket=name)
         except Exception:  # noqa: BLE001 - missing
-            await s3.create_bucket(Bucket=name)
+            await s3.create_bucket(Bucket=name, **({"ObjectLockEnabledForBucket": True} if object_lock else {}))
 
 
 async def empty_prefixes(prefixes: list[str], name: str = "be-acceptance") -> int:

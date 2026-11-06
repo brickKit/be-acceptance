@@ -12,7 +12,7 @@ import (
 
 // The probe contract (be-acceptance probes/CONTRACT.md), the same in every language.
 const (
-	Version     = "3.2.44"
+	Version     = "3.2.45"
 	WrittenType = "test.probe.written.v1"
 	NotedType   = "test.probe.noted.v1" // since 3.2.23: a write asked as "noted" (suite D, V3)
 	MaxLabel    = 64
