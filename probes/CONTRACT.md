@@ -73,6 +73,15 @@
 | `POST /api/probe/payment` | `{"reference", "params": {…}, "expires_at"?}` | `{"command", "state"}`：在这个请求的事务里写命令；同一参考号、同样参数答原命令，参数不同答 409 `IDEMPOTENCY_KEY_REUSED` | `<前缀>.pay` |
 | `GET /api/probe/payment/{reference}` | — | `{"command", "state", "reason", "external_id", "resend_deadline", "attempts": [{"kind", "result", "reached"}]}` | `<前缀>.read` |
 
+## 归档：冷热转层（3.2.47 起，Go；Python 探针随底层先行第 6 项补齐）
+
+给套件的转层剖面用（装配项目协议 11，线协议第 15 章）。数据类别 `probe.archive`：根 `probe_archive` 有规范行认识的每种列类型（`text`、`int2`、`int4`、`int8`、`numeric`、`bool`、`date`、`jsonb`、`bytea`、`text[]`、`uuid`、`timestamptz`），子表 `probe_archive_part`，孙表 `probe_archive_piece`（两列主键）；按 `batch` 与关闭的月分组，关闭（`closed_at` 非空）就是终态，驻留 365 天（`TIERING_RESIDENCE_PROBE_ARCHIVE` 可改，不短于 `TIERING_LIST_DAYS`）。路线默认是温层，部署可以选对象存储（`TIERING_ROUTE_PROBE_ARCHIVE=object-parquet`，要 `TIERING_STORE_URL` 与三套凭据）。保留是待定的、没有可擦除的列，所以没有保全与批准的路由，不需要守卫。封存、转层、释放都由 SDK 自己的作业做（`TIERING_WINDOW`、转层每分钟、释放每小时且要运行档案的备份记录）。
+
+| 方法与路径 | 请求 | 回答 | 操作 |
+| --- | --- | --- | --- |
+| `POST /api/probe/archive` | `{"batch", "closed_days_ago", "parts"}`：`closed_days_ago` 为负是未关闭；`parts` 0–50，每部分两个碎片 | `{"id"}`；根在 500 天前创建 | `<前缀>.write` |
+| `GET /api/probe/archive/{id}` | — | `{"where", "root", "children"}`：`where` 是 `online` 或归档的路线；行都是规范行（线协议 P15.8），子表的行按规范文本排序，所以在线与归档后读出的相同 | `<前缀>.read` |
+
 ## 授权剖面的条目（3.2.38 起，两种探针）
 
 给套件的授权剖面用（`conformance/profile/authz.py`，CK-AZ-01..05）。只在 `PROBE_GUARD` 为真时注册，路由都受保护。资源 `<前缀>.entry` 每种维度一个：`legal_entity`（值集合，列 `legal_entity`）、`dept`（组织树，列 `dept_path`）、`owner`（主体，列 `owner_id`，角色 `owner`）、`amount`（金额，列 `amount` 与 `currency`）；字段 `id`、`number`、`legal_entity`、`dept_path`、`owner_id`、`amount`、`currency`、`approved` 普通，`cost` 受限（读取键 `<前缀>.entry.cost`），`note` 秘密。列为 SQL NULL 是已知的 null。
@@ -94,4 +103,4 @@
 
 ## 迁移
 
-`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。`0005_jobs`（扩展，3.2.30 起，Go）：后台工作项一节的 `probe_job_requests`、`probe_job_attempts`、`probe_job_effects`、`probe_job_calls`、`probe_job_dead`、`probe_steps`。`0006_cron`（扩展，3.2.32 起，Go）：`probe_cron`。`probe_entries`（扩展，3.2.38 起）：授权剖面的条目；Go 探针是 `0008_entries`，Python 探针是 `0005_entries`（Python 探针还没有后台工作项、cron 与水位来源的迁移，编号各走各的）。
+`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。`0005_jobs`（扩展，3.2.30 起，Go）：后台工作项一节的 `probe_job_requests`、`probe_job_attempts`、`probe_job_effects`、`probe_job_calls`、`probe_job_dead`、`probe_steps`。`0006_cron`（扩展，3.2.32 起，Go）：`probe_cron`。`0009_archive`（扩展，3.2.47 起，Go）：归档一节的 `probe_archive`、`probe_archive_part`、`probe_archive_piece`。`probe_entries`（扩展，3.2.38 起）：授权剖面的条目；Go 探针是 `0008_entries`，Python 探针是 `0005_entries`（Python 探针还没有后台工作项、cron 与水位来源的迁移，编号各走各的）。

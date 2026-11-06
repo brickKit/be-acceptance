@@ -19,6 +19,7 @@ import (
 	"github.com/brickKit/be-sdk-go/v3/httpx"
 	"github.com/brickKit/be-sdk-go/v3/ids"
 	"github.com/brickKit/be-sdk-go/v3/runtime"
+	"github.com/brickKit/be-sdk-go/v3/tiering"
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -32,6 +33,8 @@ func Definition(v Variant) component.Definition {
 			Records: &events.Records{Operation: Prefix(v.ID) + ".read", Readers: append(append([]string{}, Callers...), Suite),
 				Read: readWatermarked, Page: pageWatermarked}}},
 		Subscribes: true, Authz: Authz(v.ID), Resend: Prefix(v.ID) + ".resend", Recovery: Prefix(v.ID) + ".recover",
+		// the tiering profile's archive (since 3.2.47): the warm route unless the deployment picks the object store
+		Tiering: []tiering.Class{Archive()},
 		// the payment (since 3.2.41): an irrevocable command; its issue record goes to the evidence store
 		// (AUDIT_GRPC_URL). Without Evidence: no alert channel keys, so the manifests of both probes agree (A144)
 		ExternalCommands: true,
@@ -92,6 +95,8 @@ func (p *Probe) Routes(r *httpx.Routes) error {
 	add("POST", "steps", "write", p.setSteps)
 	add("POST", "payment", OpPay, p.payHTTP) // since 3.2.41: an external command (payments.go)
 	add("GET", "payment/:reference", "read", p.paymentHTTP)
+	add("POST", "archive", "write", p.archiveHTTP) // since 3.2.47: the tiering profile (archive.go)
+	add("GET", "archive/:id", "read", p.archiveRow)
 	if guard { // the entries are always protected (since 3.2.38)
 		p.entryRoutes(add)
 		if p.rt.Config.Bool("PROBE_UNDECLARED_ROUTE") {

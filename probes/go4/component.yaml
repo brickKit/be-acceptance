@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-go4
   name: Go probe (go4)
-  version: 3.2.46
+  version: 3.2.47
   description: "A variant of test/probe-go: the same code under its own component ID, ports and event stream"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -84,6 +84,61 @@ configSchema:
     EXTERNAL_COMMANDS_QUERY_ONLY:
       type: boolean
       description: "true: query the external commands, never send them (the Go SDK, P13.10); SDK default false"
+    ALERT_WEBHOOK_URL:
+      type: string
+    RUN_PROFILE_ACCESS_KEY:
+      type: string
+    RUN_PROFILE_BUCKET:
+      type: string
+    RUN_PROFILE_URL:
+      type: string
+    TIERING_STORE_URL:
+      type: string
+    TIERING_RESIDENCE_PROBE_ARCHIVE:
+      type: string
+    TIERING_RETENTION_PROBE_ARCHIVE:
+      type: string
+    TIERING_ROUTE_PROBE_ARCHIVE:
+      type: string
+    RUN_PROFILE_REGION:
+      type: string
+      description: "SDK default us-east-1"
+    RUN_PROFILE_SECRET_KEY:
+      type: string
+      secret: true
+    TIERING_BUCKET:
+      type: string
+      description: "SDK default be-tiering"
+    TIERING_COLD_CONCURRENCY:
+      type: integer
+      description: "SDK default 4"
+    TIERING_COLD_SYNC_LIMIT:
+      type: string
+      description: "a duration (e.g. 2s, 500ms); SDK default 10s"
+    TIERING_GRACE:
+      type: string
+      description: "a duration (e.g. 2s, 500ms); SDK default 604800s"
+    TIERING_LIST_DAYS:
+      type: integer
+      description: "SDK default 90"
+    TIERING_WINDOW:
+      type: string
+      description: "SDK default 0 2 * * *"
+    TIERING_WRITE_ACCESS_KEY:
+      type: string
+    TIERING_READ_ACCESS_KEY:
+      type: string
+    TIERING_DELETE_ACCESS_KEY:
+      type: string
+    TIERING_WRITE_SECRET_KEY:
+      type: string
+      secret: true
+    TIERING_READ_SECRET_KEY:
+      type: string
+      secret: true
+    TIERING_DELETE_SECRET_KEY:
+      type: string
+      secret: true
     LOG_LEVEL:
       type: string
       enum: [debug, info, warn, error]

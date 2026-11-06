@@ -73,7 +73,23 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
         Key("PROBE_EXTERNAL_LAST_USE", Type.BOOLEAN, default=False),
         Key("PROBE_EXTERNAL_MAX_PROCESSING", Type.DURATION, default=timedelta(0)),
         Key("PROBE_EXTERNAL_IRREVOCABLE", Type.BOOLEAN, default=True),
-        Key("EXTERNAL_COMMANDS_QUERY_ONLY", Type.BOOLEAN, default=False)],
+        Key("EXTERNAL_COMMANDS_QUERY_ONLY", Type.BOOLEAN, default=False),
+        # the Go probe's archive (since Go 3.2.47, the tiering profile: be-protocol chapter 15): the keys the Go SDK reads
+        # for its data class, the run profile's among them, declared here for the manifests to agree (A144); the
+        # Python probe has no archive until the Python SDK's tiering (foundations item 6)
+        *[Key(n, Type.STRING) for n in ("ALERT_WEBHOOK_URL", "RUN_PROFILE_ACCESS_KEY", "RUN_PROFILE_BUCKET",
+                                         "RUN_PROFILE_URL", "TIERING_STORE_URL", "TIERING_RESIDENCE_PROBE_ARCHIVE",
+                                         "TIERING_RETENTION_PROBE_ARCHIVE", "TIERING_ROUTE_PROBE_ARCHIVE")],
+        Key("RUN_PROFILE_REGION", Type.STRING, default="us-east-1"),
+        Key("RUN_PROFILE_SECRET_KEY", Type.STRING, secret=True),
+        Key("TIERING_BUCKET", Type.STRING, default="be-tiering"),
+        Key("TIERING_COLD_CONCURRENCY", Type.INTEGER, default=4, min=1),
+        Key("TIERING_COLD_SYNC_LIMIT", Type.DURATION, default=timedelta(seconds=10)),
+        Key("TIERING_GRACE", Type.DURATION, default=timedelta(days=7)),
+        Key("TIERING_LIST_DAYS", Type.INTEGER, default=90, min=1),
+        Key("TIERING_WINDOW", Type.STRING, default="0 2 * * *"),
+        *[Key(f"TIERING_{r}_ACCESS_KEY", Type.STRING) for r in ("WRITE", "READ", "DELETE")],
+        *[Key(f"TIERING_{r}_SECRET_KEY", Type.STRING, secret=True) for r in ("WRITE", "READ", "DELETE")]],
         migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4)],
         subscribes=True, authz=authz(v.id))
 
