@@ -283,8 +283,13 @@ def signing_key(path: pathlib.Path) -> None:
 
 
 def declares(c: Cell, comp: str, key: str) -> bool:
-    """Whether the version of comp the cell runs declares a configuration key: its manifest in BrickKit's cache (the
-    create stage fetched it), a shell member's version read from its shell's manifest. Unknown: no."""
+    """Whether the version of comp the cell runs declares a configuration key. Unknown: no."""
+    return key in schema_props(c, comp)
+
+
+def schema_props(c: Cell, comp: str) -> dict:
+    """The configuration keys the version of comp the cell runs declares: its manifest in BrickKit's cache (the create
+    stage fetched it), a shell member's version read from its shell's manifest. Unknown: none."""
     versions = dict(c.versions)
     cache = c.dir / ".brickkit" / "manifests"
     for shell, version in list(versions.items()):
@@ -294,9 +299,41 @@ def declares(c: Cell, comp: str, key: str) -> bool:
                 versions.setdefault(ref.split("@")[0], ref.split("@")[1])
     m = cache / comp / versions.get(comp, "") / "component.yaml"
     if not versions.get(comp) or not m.exists():
-        return False
-    props = (yaml.safe_load(m.read_text()).get("configSchema") or {}).get("properties") or {}
-    return key in props
+        return {}
+    return (yaml.safe_load(m.read_text()).get("configSchema") or {}).get("properties") or {}
+
+
+# The keys a cell leaves unset on purpose, with why. Any other key a member declares without a default and the cell
+# does not set fails the preparation (unset_keys): the run profile's keys went unset from T3 to T11 of foundations item
+# 4, so no cell ever had the alert channel, and nobody noticed.
+UNSET_ON_PURPOSE = {
+    "OTEL_URL": "no tracing backend in a cell",
+    "ALERT_WEBHOOK_URL": "no notifier in a cell; the alert channel's machine-readable copy is the run profile",
+    "AUTHZ_RECOVERY_KEY": "the deployment owner's administrator recovery is tested by infra/authz, not in cells",
+    "PG_MIGRATION_HOST": "set only behind a pooler (PG_HOST otherwise)",
+    "PG_MIGRATION_PORT": "set only behind a pooler (PG_PORT otherwise)",
+    "BUS_SUBSCRIPTION_CONCURRENCY": "the SDK's default unless a cell sets its concurrency",
+    "PROBE_NEXT": "a probe without a next one in its chain",
+    "PROBE_NEXT_URL": "a probe without a next one in its chain",
+    "PROBE_NEXT_GRPC_URL": "a probe without a next one in its chain",
+    "PROBE_PEER_STREAM": "a probe without a previous one in its chain",
+}
+
+
+def unset_keys(c: Cell) -> list[str]:
+    """Every "member: KEY" the cell's configuration leaves unset although the member's version declares it without a
+    default (its description names one when the SDK has it) and it is not unset on purpose."""
+    problems = []
+    for comp in [*c.placed, *c.shells]:
+        f = c.dir / "config" / f"{file_of(comp)}.yaml"
+        if not f.exists():
+            continue
+        conf = yaml.safe_load(f.read_text()) or {}
+        for key, prop in schema_props(c, comp).items():
+            if key in conf or key in UNSET_ON_PURPOSE or "default" in prop or "default" in (prop.get("description") or "").lower():
+                continue
+            problems.append(f"{comp}: {key}")
+    return problems
 
 
 def security_configs(c: Cell) -> None:
@@ -305,6 +342,7 @@ def security_configs(c: Cell) -> None:
     component. The install claim is a one-time code's digest (install_claim); secure.py presents the code."""
     cfg, sec = c.dir / "config", c.dir / ".secrets"
     signing_key(sec / "iam" / "signing-key.pem")
+    signing_key(sec / "iam" / "signing-key-next.pem")  # the standby the next rotation (and a recovery's 6.8) moves to
     (sec / "authz-registry.tsv").write_text(registry(c))
     (sec / "authz-registry.tsv").chmod(0o644)
     common = ["DEPLOYMENT_ID: $var:DEPLOYMENT_ID", *migration(c)]
@@ -323,6 +361,7 @@ def security_configs(c: Cell) -> None:
     files = {
         "infra/iam-casdoor": [*common, *db("infra/iam-casdoor"), "IAM_TOKEN_ISSUER: $var:IAM_ISSUER",
                               "IAM_SIGNING_KEY: file://.secrets/iam/signing-key.pem",
+                              "IAM_SIGNING_KEY_NEXT: file://.secrets/iam/signing-key-next.pem",
                               "IAM_CALLBACK_URL: http://localhost:8200/api/iam/callback", "IAM_COOKIE_SECURE: \"false\"",
                               f"CASDOOR_URL: http://{c.base_host}:8000", "CASDOOR_PUBLIC_URL: http://localhost:8000",
                               "CASDOOR_CLIENT_ID: be-iam-client", "CASDOOR_CLIENT_SECRET: ${BE_ACC_IAM_CLIENT_SECRET}",
@@ -360,6 +399,11 @@ def security_configs(c: Cell) -> None:
                 # profile outside the recovery group; without it an intent the evidence store does not take is lost
                 lines = [*lines, "RUN_PROFILE_URL: $var:RUN_PROFILE_URL", "RUN_PROFILE_BUCKET: $var:RUN_PROFILE_BUCKET",
                          "RUN_PROFILE_ACCESS_KEY: ${BE_ACC_S3_ACCESS_KEY}", "RUN_PROFILE_SECRET_KEY: ${BE_ACC_S3_SECRET_KEY}"]
+            if declares(c, comp, "OBJECT_STORE_URL"):  # a producer's large events travel by claim check (P6.14): the
+                # same object store for every member, its own prefix (as the probes have)
+                lines = [*lines, "OBJECT_STORE_URL: $var:OBJECT_STORE_URL", "OBJECT_STORE_BUCKET: $var:OBJECT_STORE_BUCKET",
+                         f"OBJECT_STORE_PREFIX: {schema_of(comp)}/", "OBJECT_STORE_ACCESS_KEY: ${BE_ACC_S3_ACCESS_KEY}",
+                         "OBJECT_STORE_SECRET_KEY: ${BE_ACC_S3_SECRET_KEY}"]
             (cfg / f"{file_of(comp)}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
 
 
@@ -501,4 +545,7 @@ async def prepare(directory: str | pathlib.Path) -> Cell:
     await empty_prefixes([schema_of(p) + "/" for p in c.probes])  # the prefixes configs() gives the probes
     await clean_bus(c)
     configs(c)
+    if problems := unset_keys(c):
+        raise ValueError("declared without a default and left unset by the cell (set them in prepare.py, or add them "
+                         "to UNSET_ON_PURPOSE with why): " + ", ".join(problems))
     return c
