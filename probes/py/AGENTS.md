@@ -7,7 +7,8 @@
 | 路径 | 内容 |
 | --- | --- |
 | `probe_py/__init__.py` | 定义：契约常量、配置键、流、资源与操作 |
-| `probe_py/module.py` | 模块：用户面、系统面、写入与事件、转发队列 |
+| `probe_py/module.py` | 模块：用户面、系统面、写入与事件；转发排入作业 `probe.relay` |
+| `probe_py/jobs.py` | 后台工作项（3.2.44 起）：转发、套件后台工作剖面用的作业、`probe.minutely`（`PROBE_CRON`）与 `probe.steps`（`PROBE_STEPS_EVERY`） |
 | `probe_py/entries.py` | 授权剖面的条目（3.2.38 起），与 Go 探针的 `probe/entries.go` 相同 |
 | `probe_py/__main__.py` | 单跑入口（`serve`、`migrate`），按 `COMPONENT_ID` 选变体；外壳不加载它 |
 | `probe_py/migrations/` | 迁移 |
@@ -22,7 +23,7 @@
 
 - 没有业务逻辑：测出的差异只来自语言、拓扑与引擎。
 - 用户面缺省公开（`PROBE_GUARD` 关）：探针没有受保护的数据，身份与授权组件就绪之前也能测通信；开启后测带守卫的路径。
-- 转发用自己的队列表 `probe_relay` 与模块的后台任务（Python SDK 子集没有后台工作项）；网络调用从不在事务内。
+- 转发用 SDK 的后台工作项（`probe.relay`，队列类，幂等的外部效果；3.2.44 起，原来的 `probe_relay` 表不再使用、按只加不删留着）；网络调用从不在事务内。
 - 没有组件依赖：下一个探针由部署指定，实验可以任意组合。
 
 ## 易错点

@@ -1,5 +1,6 @@
 """The probe module: the user surface (/api/probe/...), the system surface (/test.probe.v1.Probe/Echo, /Work and, since
-3.2.22, /Note), Write with its event, and the relay of the peer's events to the next probe."""
+3.2.22, /Note), Write with its event, the relay of the peer's events to the next probe and, since 3.2.44, the jobs
+of the background work profile (jobs.py)."""
 from __future__ import annotations
 
 import asyncio
@@ -13,7 +14,7 @@ import grpc
 from fastapi.responses import JSONResponse
 from google.protobuf import wrappers_pb2
 
-from besdk import errs, reqctx
+from besdk import errs
 from besdk.calls.client import options
 from besdk.events.consumer import Received, Sub
 from besdk.events.core import Event, Projection
@@ -23,7 +24,6 @@ from probe_py import (CALLERS, MAX_BYTES, MAX_LABEL, MAX_WORK_MS, NOTED_TYPE, RE
                       prefix)
 
 ECHO, WORK, NOTE = "/test.probe.v1.Probe/Echo", "/test.probe.v1.Probe/Work", "/test.probe.v1.Probe/Note"
-RELAY_POLL, RELAY_CONCURRENCY, RELAY_LEASE, RELAY_TIMEOUT = 0.5, 4, 30, 10.0
 
 
 def invalid(msg: str) -> errs.Error:
@@ -103,9 +103,10 @@ class Probe:
         self.no_next = errs.define(variant.id, "NO_NEXT_PROBE", errs.Code.FAILED_PRECONDITION, 409, errs.RETRY_NO,
                                    "No next probe is configured")
         self.next = rt.config.string("PROBE_NEXT")
-        self._tasks: list[asyncio.Task] = []
-        self._relay_ready = asyncio.Event()  # set after a commit that queued a relay
         self._burners = Burners()
+        from probe_py.jobs import Jobs
+
+        self._jobs = Jobs(self)
 
     # ------------------------------------------------------------------ user surface
 
@@ -114,7 +115,9 @@ class Probe:
         for method, path, op, h in (("POST", "echo", "echo", self.echo_http), ("POST", "work", "work", self.work_http),
                                     ("POST", "write", "write", self.write), ("POST", "call", "call", self.call),
                                     ("GET", "seen", "read", self.seen), ("POST", "note", "note", self.note_http),
-                                    ("GET", "written/{id}", "read", self.written_row)):
+                                    ("GET", "written/{id}", "read", self.written_row),
+                                    ("POST", "job", "write", self._jobs.enqueue_job),
+                                    ("POST", "steps", "write", self._jobs.set_steps)):
             r.add(Route(method, "/api/probe/" + path, h, f"{self.ops}.{op}" if guard else "", public=not guard))
         if guard:  # the entries are always protected (since 3.2.38)
             from probe_py.entries import Entries
@@ -254,56 +257,11 @@ class Probe:
         await tx.execute("INSERT INTO probe_seen (event_id, source, size, relay, type) VALUES ($1, $2, $3, $4, $5)",
                          uuid.UUID(e.id), e.source, len(w.get("blob", "")), bool(w.get("relay")), e.type)
         if w.get("relay"):
-            # the call to the next probe leaves the transaction through the relay queue (no network call inside it)
-            await tx.execute("INSERT INTO probe_relay (event_id) VALUES ($1)", uuid.UUID(e.id))
-            tx.after_commit(self._relay_ready.set)  # claim at once, not on the next poll (as P7.21 for work items)
+            # the call to the next probe leaves the transaction as a work item (no network call inside it)
+            await self.rt.work.enqueue(tx, "probe.relay", {"event": e.id})
 
-    async def start(self) -> None:
-        self._tasks.append(asyncio.create_task(self._relay_loop()))
+    def jobs(self, j) -> None:
+        self._jobs.declare(j)
 
     async def stop(self) -> None:
-        for t in self._tasks:
-            t.cancel()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
         await self._burners.close()
-
-    async def _relay_loop(self) -> None:
-        """Relays on a commit's wake and every RELAY_POLL for other replicas' rows and retries; cleared before each
-        claim, so a commit during the claim is not lost."""
-        while True:
-            self._relay_ready.clear()
-            try:
-                n = await self._relay_once()
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:  # noqa: BLE001 - the leases expire and the rows are claimed again
-                self.rt.logger.warn("the relay failed; it is retried", error=str(e))
-                n = 0
-            if n == 0:
-                try:
-                    await asyncio.wait_for(self._relay_ready.wait(), RELAY_POLL)
-                except TimeoutError:
-                    pass
-
-    async def _relay_once(self) -> int:
-        rows = await self.rt.db.background_tx(lambda tx: tx.fetch(
-            "UPDATE probe_relay SET leased_to = now() + make_interval(secs => $2), attempts = attempts + 1 "
-            "WHERE event_id IN (SELECT event_id FROM probe_relay WHERE leased_to IS NULL OR leased_to < now() "
-            "ORDER BY event_id LIMIT $1 FOR UPDATE SKIP LOCKED) RETURNING event_id", RELAY_CONCURRENCY, RELAY_LEASE))
-        await asyncio.gather(*(self._relay(r["event_id"]) for r in rows))
-        return len(rows)
-
-    async def _relay(self, event_id: uuid.UUID) -> None:
-        if self.next:
-            try:
-                with reqctx.deadline_scope(time.monotonic() + RELAY_TIMEOUT):  # calls need a deadline (P4.4)
-                    await self.echo_next(RELAY_BYTES)
-            except (errs.Error, RuntimeError) as e:
-                self.rt.logger.warn("a relay call failed; it is retried after its lease", error=str(e))
-                return
-
-        async def done(tx) -> None:
-            await tx.execute("DELETE FROM probe_relay WHERE event_id = $1", event_id)
-            await tx.execute("UPDATE probe_seen SET relayed_at = now() WHERE event_id = $1", event_id)
-
-        await self.rt.db.background_tx(done)
