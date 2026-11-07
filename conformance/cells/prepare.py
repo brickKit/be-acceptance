@@ -351,6 +351,12 @@ UNSET_ON_PURPOSE = {
     "PROBE_NEXT_GRPC_URL": "a probe without a next one in its chain",
     "PROBE_PEER_STREAM": "a probe without a previous one in its chain",
 }
+# The same for keys named after a data class (be-protocol chapter 15), by their prefix.
+UNSET_PREFIXES_ON_PURPOSE = {
+    "TIERING_RESIDENCE_": "the class's declared residence",
+    "TIERING_RETENTION_": "the retention is the customer's (TR24): pending in a cell, so nothing is ever destroyed",
+    "TIERING_ROUTE_": "the class's first route unless the cell's settings pick one",
+}
 
 
 def unset_keys(c: Cell) -> list[str]:
@@ -363,7 +369,8 @@ def unset_keys(c: Cell) -> list[str]:
             continue
         conf = yaml.safe_load(f.read_text()) or {}
         for key, prop in schema_props(c, comp).items():
-            if key in conf or key in UNSET_ON_PURPOSE or "default" in prop or "default" in (prop.get("description") or "").lower():
+            if key in conf or key in UNSET_ON_PURPOSE or key.startswith(tuple(UNSET_PREFIXES_ON_PURPOSE)) or \
+                    "default" in prop or "default" in (prop.get("description") or "").lower():
                 continue
             problems.append(f"{comp}: {key}")
     return problems
@@ -428,16 +435,35 @@ def security_configs(c: Cell) -> None:
         if comp in c.placed:
             if declares(c, comp, "RECOVERY_PHASE"):  # the recovery phase (be-protocol P1.22): a shared variable
                 lines = [*lines, "RECOVERY_PHASE: $var:RECOVERY_PHASE"]
-            if declares(c, comp, "RUN_PROFILE_URL"):  # an evidence writer's alert channel (P12.7, P12.16): the run
-                # profile outside the recovery group; without it an intent the evidence store does not take is lost
-                lines = [*lines, "RUN_PROFILE_URL: $var:RUN_PROFILE_URL", "RUN_PROFILE_BUCKET: $var:RUN_PROFILE_BUCKET",
-                         "RUN_PROFILE_ACCESS_KEY: ${BE_ACC_S3_ACCESS_KEY}", "RUN_PROFILE_SECRET_KEY: ${BE_ACC_S3_SECRET_KEY}"]
             if declares(c, comp, "OBJECT_STORE_URL"):  # a producer's large events travel by claim check (P6.14): the
                 # same object store for every member, its own prefix (as the probes have)
                 lines = [*lines, "OBJECT_STORE_URL: $var:OBJECT_STORE_URL", "OBJECT_STORE_BUCKET: $var:OBJECT_STORE_BUCKET",
                          f"OBJECT_STORE_PREFIX: {schema_of(comp)}/", "OBJECT_STORE_ACCESS_KEY: ${BE_ACC_S3_ACCESS_KEY}",
                          "OBJECT_STORE_SECRET_KEY: ${BE_ACC_S3_SECRET_KEY}"]
+            lines = [*lines, *profile_and_tiering(c, comp), *settings_of(c, comp)]
             (cfg / f"{file_of(comp)}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
+
+
+def profile_and_tiering(c: Cell, comp: str) -> list[str]:
+    """The run profile and the tiering's cold store, for a member (component or probe) that declares them."""
+    lines = []
+    if declares(c, comp, "RUN_PROFILE_URL"):  # an evidence writer's alert channel (P12.7, P12.16), and when the latest
+        # backup finished (P15.21: a tiering member releases online rows only after one): the run profile outside the
+        # recovery group; without it an intent the evidence store does not take is lost
+        lines += ["RUN_PROFILE_URL: $var:RUN_PROFILE_URL", "RUN_PROFILE_BUCKET: $var:RUN_PROFILE_BUCKET",
+                  "RUN_PROFILE_ACCESS_KEY: ${BE_ACC_S3_ACCESS_KEY}", "RUN_PROFILE_SECRET_KEY: ${BE_ACC_S3_SECRET_KEY}"]
+    if declares(c, comp, "TIERING_STORE_URL"):  # the cold tier's object store (be-protocol chapter 15): one bucket for
+        # the cell; the store's three identities (write, read, delete) are one credential here, separate in a deployment
+        lines += ["TIERING_STORE_URL: $var:OBJECT_STORE_URL", "TIERING_BUCKET: $var:TIERING_BUCKET"]
+        for role in ("WRITE", "READ", "DELETE"):
+            lines += [f"TIERING_{role}_ACCESS_KEY: ${{BE_ACC_S3_ACCESS_KEY}}",
+                      f"TIERING_{role}_SECRET_KEY: ${{BE_ACC_S3_SECRET_KEY}}"]
+    return lines
+
+
+def settings_of(c: Cell, comp: str) -> list[str]:
+    """The cell's extra settings of this member (cell.yaml's settings)."""
+    return [f"{key}: {json.dumps(value)}" for key, value in c.settings.get(comp, {}).items()]
 
 
 def migration(c: Cell) -> list[str]:
@@ -490,6 +516,8 @@ OBJECT_STORE_BUCKET: be-acceptance
 # the run profile (be-protocol chapter 12): an object lock bucket outside the recovery group
 RUN_PROFILE_URL: http://{c.base_host}:9000
 RUN_PROFILE_BUCKET: be-run-profile
+# the cold tier's bucket (be-protocol chapter 15)
+TIERING_BUCKET: be-tiering
 DEPLOYMENT_ID: {c.deployment}
 # the full recovery's phase (A140; be-ops recover sets it): empty while running
 RECOVERY_PHASE: ""
@@ -528,8 +556,7 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
             lines.append(f"PROBE_PEER_STREAM: {stream_of(prev)}")
         if c.concurrency != 1:
             lines.append(f"BUS_SUBSCRIPTION_CONCURRENCY: {c.concurrency}")
-        for key, value in c.settings.get(probe, {}).items():  # the cell's extra settings of this probe
-            lines.append(f"{key}: {json.dumps(value)}")
+        lines += [*profile_and_tiering(c, probe), *settings_of(c, probe)]
         if c.secured:  # the routes need a token and their operation; the view and the audit records are real
             lines += ["PROBE_GUARD: \"true\"", "IAM_ISSUER: $var:IAM_ISSUER", "IAM_JWKS_URL: $var:IAM_JWKS_URL",
                       "AUTHZ_GRPC_URL: $var:AUTHZ_GRPC_URL", "AUDIT_GRPC_URL: $var:AUDIT_GRPC_URL"]
@@ -569,6 +596,7 @@ async def prepare(directory: str | pathlib.Path) -> Cell:
     c = Cell.load(directory)
     await databases(c)
     await ensure_bucket()
+    await ensure_bucket("be-tiering")  # the cold tier's (profile_and_tiering)
     if c.secured:
         await ensure_bucket("be-run-profile", object_lock=True)  # before the certificates: the issuer records in it
     certificates(c)

@@ -55,6 +55,33 @@ def test_a_key_declared_without_a_default_and_left_unset_is_named(tmp_path, monk
     assert prepare.unset_keys(c) == ["erp/credit: CREDIT_NEW_KEY"]
 
 
+def test_a_member_with_data_classes_is_given_the_cold_store(tmp_path, monkeypatch):
+    """Foundations item 5, T10e: a member that declares the cold tier's store gets the cell's bucket and the store's
+    three identities; the keys named after its classes are its own (residence, retention, route), unset on purpose."""
+    c = cell(tmp_path, monkeypatch, {"infra/audit": {
+        "TIERING_STORE_URL": {"type": "string"}, "TIERING_BUCKET": {"type": "string"},
+        "TIERING_WRITE_SECRET_KEY": {"type": "string"}, "TIERING_RETENTION_INFRA_AUDIT_RECORDS": {"type": "string"},
+        "TIERING_RESIDENCE_INFRA_AUDIT_RECORDS": {"type": "string"},
+        "TIERING_ROUTE_INFRA_AUDIT_RECORDS": {"type": "string"}}})
+    prepare.configs(c)
+    audit = yaml.safe_load((tmp_path / "config" / "infra-audit.yaml").read_text())
+    assert audit["TIERING_STORE_URL"] == "$var:OBJECT_STORE_URL" and audit["TIERING_BUCKET"] == "$var:TIERING_BUCKET"
+    assert {audit[f"TIERING_{r}_SECRET_KEY"] for r in ("WRITE", "READ", "DELETE")} == {"${BE_ACC_S3_SECRET_KEY}"}
+    assert yaml.safe_load((tmp_path / "config" / "vars.yaml").read_text())["TIERING_BUCKET"] == "be-tiering"
+    assert prepare.unset_keys(c) == []
+
+
+def test_the_cells_settings_reach_any_member(tmp_path, monkeypatch):
+    """A cell's settings (cell.yaml) reach a component as they reach a probe: T10e makes the tiering due within
+    minutes (TIERING_WINDOW, TIERING_GRACE)."""
+    c = cell(tmp_path, monkeypatch, {})
+    c.settings = {"infra/audit": {"TIERING_WINDOW": "* * * * *", "TIERING_GRACE": "0s"}}
+    prepare.configs(c)
+    audit = yaml.safe_load((tmp_path / "config" / "infra-audit.yaml").read_text())
+    assert audit["TIERING_WINDOW"] == "* * * * *" and audit["TIERING_GRACE"] == "0s"
+    assert "TIERING_WINDOW" not in yaml.safe_load((tmp_path / "config" / "erp-credit.yaml").read_text())
+
+
 def test_a_secured_cells_certificates_come_from_its_issuer(tmp_path, monkeypatch):
     """T13d (A148): a secured cell's CA and credentials come from the deployment's issuer (be-ops trust), so its run
     profile holds the trust material a recovery judges records against; a new CA per preparation."""

@@ -77,7 +77,8 @@ class Cell:
     # suite E: components whose schema is not in `database` on the first instance, id -> "[instance/]database"
     # (instance: INSTANCES, default main); cells/homes.py
     databases: dict[str, str] = field(default_factory=dict)
-    # extra configuration of one probe, id -> {key: value} (foundations item 1, T10: PROBE_CRON on one probe)
+    # extra configuration of one member (a probe or a component), id -> {key: value} (foundations item 1, T10:
+    # PROBE_CRON on one probe; item 5, T10e: the tiering due within minutes)
     settings: dict[str, dict[str, str]] = field(default_factory=dict)
     # the P row's Podman: "" rootless, or "rootful" (compose through root's socket); units "" compose, or "quadlet"
     # (Podman Quadlet units, FRR-025)
