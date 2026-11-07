@@ -20,7 +20,7 @@ from besdk.events.consumer import Received, Sub
 from besdk.events.core import Event, Projection
 from besdk.http import Route
 from besdk.system import Method
-from probe_py import watermark
+from probe_py import payments, watermark
 from probe_py import (CALLERS, MAX_BYTES, MAX_LABEL, MAX_WORK_MS, NOTED_TYPE, RELAY_BYTES, WRITTEN_TYPE, Variant,
                       prefix)
 
@@ -112,6 +112,10 @@ class Probe:
 
     # ------------------------------------------------------------------ user surface
 
+    def external_commands(self):
+        """The payment's adapter and its configured capabilities (be-protocol chapter 13, since 3.2.48)."""
+        return payments.Payments(self.rt), payments.capabilities(self.rt.config)
+
     def routes(self, r) -> None:
         guard = self.rt.config.bool("PROBE_GUARD")
         for method, path, op, h in (("POST", "echo", "echo", self.echo_http), ("POST", "work", "work", self.work_http),
@@ -119,7 +123,11 @@ class Probe:
                                     ("GET", "seen", "read", self.seen), ("POST", "note", "note", self.note_http),
                                     ("GET", "written/{id}", "read", self.written_row),
                                     ("POST", "job", "write", self._jobs.enqueue_job),
-                                    ("POST", "steps", "write", self._jobs.set_steps)):
+                                    ("POST", "steps", "write", self._jobs.set_steps),
+                                    # the payment (since 3.2.48, Go 3.2.41): an external command
+                                    ("POST", "payment", "pay", lambda c: payments.pay(self.rt, self.v.id, c)),
+                                    ("GET", "payment/{reference}", "read",
+                                     lambda c: payments.payment(self.rt, self.v.id, c))):
             r.add(Route(method, "/api/probe/" + path, h, f"{self.ops}.{op}" if guard else "", public=not guard))
         if guard:  # the entries are always protected (since 3.2.38)
             from probe_py.entries import Entries

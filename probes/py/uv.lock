@@ -149,8 +149,8 @@ wheels = [
 
 [[package]]
 name = "be-sdk"
-version = "3.0.0a56"
-source = { git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a56#8ec0daf6fcc120694c73065abf27c0d190e2bdff" }
+version = "3.0.0a57"
+source = { git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a57#4deba250ed9d5b6d37e36271d70bce22ec659b24" }
 dependencies = [
     { name = "aiohttp" },
     { name = "asyncpg" },
@@ -176,14 +176,14 @@ dependencies = [
 
 [[package]]
 name = "be-test-probe-py"
-version = "3.2.47"
+version = "3.2.48"
 source = { editable = "." }
 dependencies = [
     { name = "be-sdk" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a56" }]
+requires-dist = [{ name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a57" }]
 
 [[package]]
 name = "certifi"
@@ -297,8 +297,8 @@ wheels = [
 
 [[package]]
 name = "contract-infra-audit"
-version = "3.0.0a1"
-source = { git = "https://github.com/brickKit/infra-audit?subdirectory=contract%2Fpython&rev=contract%2Fv3.0.0-alpha.1#93b4a8fc651174fdc2848f4c0fabf8b8f544859f" }
+version = "3.0.0a3"
+source = { git = "https://github.com/brickKit/infra-audit?subdirectory=contract%2Fpython&rev=contract%2Fv3.0.0-alpha.3#3f67ba619807168687057feaa01fc2313a367242" }
 dependencies = [
     { name = "grpcio" },
     { name = "protobuf" },

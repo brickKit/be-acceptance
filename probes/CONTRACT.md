@@ -39,7 +39,7 @@
 
 允许的调用组件：全部探针（六个组件 ID）。
 
-标准系统方法另由 SDK 挂上（不在上表）：补发 `be.source.v1.ResendService`（`<前缀>.resend`；Go 3.2.39、Python 3.2.45 起）；整套恢复的核对 `be.recovery.v1.CheckService` 与外部对账 `be.external.v1.ReconcileService`（`<前缀>.recover`，只许恢复工具 `ops/recover`；3.2.42 起，Go；Python 探针随底层先行第 6 项）。
+标准系统方法另由 SDK 挂上（不在上表）：补发 `be.source.v1.ResendService`（`<前缀>.resend`；Go 3.2.39、Python 3.2.45 起）；整套恢复的核对 `be.recovery.v1.CheckService` 与外部对账 `be.external.v1.ReconcileService`（`<前缀>.recover`，只许恢复工具 `ops/recover`；Go 3.2.42 起；Python 3.2.48 起有外部对账，核对随底层先行第 6 项的 T9）。
 
 ## 事件
 
@@ -64,9 +64,9 @@
 
 每个变体另有一条水位来源的流 `<事件流>_wm`（2 个分区；`test.probe_go_wm`、`test.probe_py_wm` 等），给套件的水位来源剖面用（`conformance/profile/watermark.py`）。`POST /api/probe/write` 带 `"watermark": true` 时事件发到这条流，`besubjects` 为 `["probe:<写入的身份>"]`。补取方法 `be.source.v1.WatermarkService/Pull` 的操作是 `<前缀>.pull`，补取者是全部探针与套件自己的身份 `test/acceptance`。这条流同时声明它的记录读取（`be.source.v1.RecordService` 的 `Read` 与 `Snapshot`，线协议 P9.30；Go 3.2.35、Python 3.2.47 起）：操作 `<前缀>.read`，读者与补取者相同；记录就是写到这条流上的写入，内容与它的事件载荷相同，从不删除，探针没写过的身份答已清除。
 
-## 付款：对外命令（3.2.41 起，Go；Python 探针随底层先行第 6 项补齐）
+## 付款：对外命令（Go 3.2.41 起，Python 3.2.48 起）
 
-给套件的对外命令剖面用（`conformance/tests/test_external_profile.py`，假外部系统 `conformance/external/fake.py`；线协议第 13 章，装配项目协议 10）。付款是一条对外命令，经 SDK 的 `extcmd` 发到 `PROBE_EXTERNAL_URL` 的假外部系统；业务参考号就是外部的幂等键。声明的能力按配置：`PROBE_EXTERNAL_DEDUPE_WINDOW`（去重保留期，0 为不去重）、`PROBE_EXTERNAL_LAST_USE`（按最后使用计期）、`PROBE_EXTERNAL_MAX_PROCESSING`（最长处理时间）、`PROBE_EXTERNAL_IRREVOCABLE`（不可撤回，缺省真：发出前把发出记录交给证据存储，`AUDIT_GRPC_URL`；没有证据存储就不发）。没有 `PROBE_EXTERNAL_URL` 时付款发不出去（按“肯定没到达”退避）。两个探针的清单一样：Python 探针声明这几个键与 `EXTERNAL_COMMANDS_QUERY_ONLY` 但不读（A144）。适配器（3.2.43 起）还能按时间窗列出假外部系统收到的付款（`GET /payments?from=&to=`），整套恢复的外部对账用一次列出代替逐条查询（线协议 P13.11）；假外部系统也可以单独起（`python3 fake.py --port N`，`POST /control` 设故障，套件 1.0.55 起可以只对一个参考号设，`faults_by_reference`），演练用。
+给套件的对外命令剖面用（`conformance/tests/test_external_profile.py`，假外部系统 `conformance/external/fake.py`；线协议第 13 章，装配项目协议 10）。付款是一条对外命令，经 SDK 的 `extcmd` 发到 `PROBE_EXTERNAL_URL` 的假外部系统；业务参考号就是外部的幂等键。声明的能力按配置：`PROBE_EXTERNAL_DEDUPE_WINDOW`（去重保留期，0 为不去重）、`PROBE_EXTERNAL_LAST_USE`（按最后使用计期）、`PROBE_EXTERNAL_MAX_PROCESSING`（最长处理时间）、`PROBE_EXTERNAL_IRREVOCABLE`（不可撤回，缺省真：发出前把发出记录交给证据存储，`AUDIT_GRPC_URL`；没有证据存储就不发）。没有 `PROBE_EXTERNAL_URL` 时付款发不出去（按“肯定没到达”退避）。两个探针的清单一样（`EXTERNAL_COMMANDS_QUERY_ONLY` 由两种 SDK 随对外命令加上）。适配器（3.2.43 起）还能按时间窗列出假外部系统收到的付款（`GET /payments?from=&to=`），整套恢复的外部对账用一次列出代替逐条查询（线协议 P13.11）；假外部系统也可以单独起（`python3 fake.py --port N`，`POST /control` 设故障，套件 1.0.55 起可以只对一个参考号设，`faults_by_reference`），演练用。
 
 | 方法与路径 | 请求 | 回答 | 操作 |
 | --- | --- | --- | --- |
@@ -99,7 +99,7 @@
 
 ## 资源与操作
 
-资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起）、`pull`（Go 3.2.31、Python 3.2.47 起：水位来源的补取）、`pay`（3.2.41 起，Go：付款），风险均为低。
+资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起）、`pull`（Go 3.2.31、Python 3.2.47 起：水位来源的补取）、`pay`（Go 3.2.41、Python 3.2.48 起：付款），查看操作另有 `<前缀>.recover`（整套恢复的系统方法），风险均为低。
 
 ## 迁移
 

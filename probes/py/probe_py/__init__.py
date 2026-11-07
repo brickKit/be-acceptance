@@ -45,9 +45,11 @@ def authz(component_id: str) -> Definitions:
 
     p = prefix(component_id)
     ops = [Operation(f"{p}.read", p, "read", "low"),
-           Operation(f"{p}.resend", p, "read", "low")]  # the redelivery (P6.38; Go since 3.2.39, Python 3.2.44)
+           Operation(f"{p}.resend", p, "read", "low"),  # the redelivery (P6.38; Go since 3.2.39, Python 3.2.44)
+           # a full recovery's checks and the external reconciliation (chapters 13, 14; Go since 3.2.42, Python 3.2.48)
+           Operation(f"{p}.recover", p, "read", "low")]
     ops += [Operation(f"{p}.{op}", p, "action", "low") for op in ("echo", "work", "write", "call", "note",
-                                                                "pull")]  # pull: since 3.2.47 (Go 3.2.31)
+                                                                "pull", "pay")]  # pull since 3.2.47, pay 3.2.48
     ops += entries.operations(p)  # since 3.2.38: the authorization profile's entries
     return Definitions(component_id, [Resource(p, f"{p}.read", {}, {}), entries.resource(p)], ops)
 
@@ -67,15 +69,13 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
         Key("PROBE_CRON", Type.BOOLEAN, default=False),
         # since 3.2.38: a guarded route naming an operation the probe does not declare, so the start fails (CK-AZ-01)
         Key("PROBE_UNDECLARED_ROUTE", Type.BOOLEAN, default=False),
-        # since 3.2.41, the common contract's keys of the Go probe's payment (an external command, be-protocol chapter
-        # 13): be-sdk-python implements external commands with foundations item 6; until then they are not read here,
-        # and EXTERNAL_COMMANDS_QUERY_ONLY (the Go SDK's own key) is declared here for the manifests to agree (A144)
+        # the payment (an external command, be-protocol chapter 13; Go since 3.2.41, Python 3.2.48): the fake payment
+        # system and the capabilities it declares (EXTERNAL_COMMANDS_QUERY_ONLY is the SDK's, with external_commands)
         Key("PROBE_EXTERNAL_URL", Type.STRING),
         Key("PROBE_EXTERNAL_DEDUPE_WINDOW", Type.DURATION, default=timedelta(0)),
         Key("PROBE_EXTERNAL_LAST_USE", Type.BOOLEAN, default=False),
         Key("PROBE_EXTERNAL_MAX_PROCESSING", Type.DURATION, default=timedelta(0)),
         Key("PROBE_EXTERNAL_IRREVOCABLE", Type.BOOLEAN, default=True),
-        Key("EXTERNAL_COMMANDS_QUERY_ONLY", Type.BOOLEAN, default=False),
         # the Go probe's archive (since Go 3.2.47, the tiering profile: be-protocol chapter 15): the keys the Go SDK reads
         # for its data class, the run profile's among them, declared here for the manifests to agree (A144); the
         # Python probe has no archive until the Python SDK's tiering (foundations item 6)
@@ -95,7 +95,7 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
         migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4),
                                                                        # since 3.2.47 (Go 3.2.31): the watermark source
                                                                        watermark.stream(v.stream, prefix(v.id), CALLERS)],
-        subscribes=True, authz=authz(v.id))
+        subscribes=True, authz=authz(v.id), external_commands=True, recovery=prefix(v.id) + ".recover")
 
 
 def definitions() -> list[Definition]:

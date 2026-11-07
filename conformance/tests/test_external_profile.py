@@ -1,10 +1,13 @@
 """The external commands profile (foundations item 4, T9b; be-protocol chapter 13; the assembly project's protocol 10)
-against the Go probe's payment and the suite's fake payment system (external/fake.py): a result the caller cannot know
+against each probe's payment and the suite's fake payment system (external/fake.py): a result the caller cannot know
 is queried before anything is sent again, a reference the fake deduplicates is sent again only within its window, a
-payment is never doubled, and an irrevocable payment without its issue record is never sent. Three variants of the Go
-probe declare three capabilities: go no dedupe, go2 a 24-hour dedupe, go3 irrevocable (and no evidence store here).
-The Python probe's payment comes with be-sdk-python's chapter 13 (foundations item 6, A144)."""
+payment is never doubled, and an irrevocable payment is sent only after its issue record reached the evidence store.
+Each probe declares three capabilities: no dedupe, a 24-hour dedupe, irrevocable (the test deployment's evidence store
+down, then up). The Go probe has a variant for each (go, go2, go3); the Python probe has two, so the first (py) is
+started again irrevocable for the last part (its payment since 3.2.48, foundations item 6 T8)."""
 import asyncio
+
+import pytest
 
 from external.fake import CUT_RECORDED, CUT_UNRECORDED, LIMIT, REJECT, Fake, serve
 from harness import Deployment, fresh_bus
@@ -29,16 +32,17 @@ async def pay(p, ref: str) -> None:
     assert r.status_code == 200, r.text
 
 
-async def test_the_go_probe_conforms_to_the_external_commands_profile(specs, world, tmp_path):
+@pytest.mark.parametrize("kind", ["go", "py"])
+async def test_the_probe_conforms_to_the_external_commands_profile(kind, specs, world, tmp_path):
     fake = Fake()
     server, url = serve(fake)
-    go, go2, go3 = specs["go"], specs["go2"], specs["go3"]
-    d = Deployment(world, await fresh_bus("jetstream", [go.stream, go2.stream, go3.stream]), tmp_path)
+    first, second = specs[kind], specs[kind + "2"]
+    third = specs["go3"] if kind == "go" else first  # the Python probe's first variant again, irrevocable
+    d = Deployment(world, await fresh_bus("jetstream", list({first.stream, second.stream, third.stream})), tmp_path)
     try:
         common = {"PROBE_EXTERNAL_URL": url, "PROBE_EXTERNAL_IRREVOCABLE": "false"}
-        plain = await d.start(go, await d.env(go, common))
-        dedupe = await d.start(go2, await d.env(go2, {**common, "PROBE_EXTERNAL_DEDUPE_WINDOW": "24h"}))
-        irrevocable = await d.start(go3, await d.env(go3, {"PROBE_EXTERNAL_URL": url}))
+        plain = await d.start(first, await d.env(first, common))
+        dedupe = await d.start(second, await d.env(second, {**common, "PROBE_EXTERNAL_DEDUPE_WINDOW": "24h"}))
 
         # a payment: sent once, final
         await pay(plain, "r-ok")
@@ -88,11 +92,22 @@ async def test_the_go_probe_conforms_to_the_external_commands_profile(specs, wor
         assert (await state_of(plain, "r-query-down"))["state"] == "unknown"
         fake.query_down = False
 
-        # P13.4: irrevocable, no evidence store to take the issue record: never sent
+        # P13.4: irrevocable, the evidence store down and no alert channel: the issue record is taken nowhere, the
+        # payment is never sent; with the store back, the issue record first, then the payment
+        if third is first:
+            await plain.stop()
+        world.evidence_down = True  # the test deployment's evidence store (besdk.testing, be-sdk-python a57)
+        irrevocable = await d.start(third, await d.env(third, {"PROBE_EXTERNAL_URL": url}))
         await pay(irrevocable, "r-irrevocable")
         got = await state_of(irrevocable, "r-irrevocable", "retry_wait")
         assert fake.taken("r-irrevocable") == 0
         assert "issue record" in got["reason"]
+        world.evidence_down = False
+        await pay(irrevocable, "r-irrevocable-2")
+        await state_of(irrevocable, "r-irrevocable-2", "succeeded")
+        assert fake.taken("r-irrevocable-2") == 1
+        issued = [k for k in world.evidence if k.endswith("/intent")]
+        assert issued, "the issue record reached the evidence store before the payment"
     finally:
         server.shutdown()
         await d.stop()
