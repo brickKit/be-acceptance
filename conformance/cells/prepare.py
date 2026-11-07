@@ -350,6 +350,7 @@ UNSET_ON_PURPOSE = {
     "PROBE_NEXT_URL": "a probe without a next one in its chain",
     "PROBE_NEXT_GRPC_URL": "a probe without a next one in its chain",
     "PROBE_PEER_STREAM": "a probe without a previous one in its chain",
+    "PROBE_EXTERNAL_URL": "a probe that pays no external system: only the recovery drills' cells set it (A144)",
 }
 # The same for keys named after a data class (be-protocol chapter 15), by their prefix.
 UNSET_PREFIXES_ON_PURPOSE = {

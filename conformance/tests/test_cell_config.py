@@ -49,6 +49,7 @@ def test_a_key_declared_without_a_default_and_left_unset_is_named(tmp_path, monk
     c = cell(tmp_path, monkeypatch, {"erp/credit": {
         "CREDIT_NEW_KEY": {"type": "string"},                                      # new, nobody set it: named
         "OTEL_URL": {"type": "string"},                                            # unset on purpose
+        "PROBE_EXTERNAL_URL": {"type": "string"},                                  # unset on purpose
         "PG_STATEMENT_TIMEOUT": {"type": "string", "description": "SDK default 5s"},  # has a default
         "PG_SCHEMA": {"type": "string"}}})                                         # set by the cell
     prepare.configs(c)
