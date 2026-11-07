@@ -3,7 +3,7 @@ name = "be-acceptance-conformance"
 version = "0.0.0"
 description = "Runs probes and components from outside: the probe tests and the conformance profile"
 requires-python = ">=3.15,<3.16"
-dependencies = ["be-sdk", "pytest", "pytest-asyncio", "httpx", "asyncpg", "pyyaml", "aioboto3"]  # aioboto3: the harness provisions and empties buckets
+dependencies = ["be-sdk", "pytest", "pytest-asyncio", "httpx", "asyncpg", "pyyaml", "aioboto3", "pyarrow"]  # aioboto3: the harness provisions and empties buckets; pyarrow: the cold tier's third-party reader (tierread.py)
 
 [tool.uv]
 package = false

@@ -611,6 +611,10 @@ async def prepare(directory: str | pathlib.Path) -> Cell:
         owner_key(c)
         install_claim(c)
     await empty_prefixes([schema_of(p) + "/" for p in c.probes])  # the prefixes configs() gives the probes
+    # the cold tier's prefixes (the SDK's: the component ID, "/" as "-"): a deployment's recovery check lists its
+    # prefix, and objects another cell or the tiering profile left there are orphans to it (T10e)
+    await empty_prefixes(sorted({comp.replace("/", "-") + "/" for comp in c.placed
+                                 if declares(c, comp, "TIERING_STORE_URL")}), name="be-tiering")
     await clean_bus(c)
     configs(c)
     if problems := unset_keys(c):
