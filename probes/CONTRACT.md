@@ -60,9 +60,9 @@
 
 `probe.steps` 每次运行读 `probe_steps` 的任务，没有就完成；有就从已提交的进度之后一步一段：每步记一次尝试，用 `Checkpoint` 把这一步的效果与进度一起提交，最后一步用 `Complete` 并删掉任务。第一个走到 `hold_step` 的进程在那一步等（至多 120 秒），套件趁机杀掉它。
 
-## 水位来源（3.2.31 起，Go；Python 探针随底层先行第 6 项补齐）
+## 水位来源（Go 3.2.31 起，Python 3.2.47 起）
 
-每个 Go 变体另有一条水位来源的流 `<事件流>_wm`（2 个分区；`test.probe_go_wm` 等），给套件的水位来源剖面用（`conformance/profile/watermark.py`）。`POST /api/probe/write` 带 `"watermark": true` 时事件发到这条流，`besubjects` 为 `["probe:<写入的身份>"]`。补取方法 `be.source.v1.WatermarkService/Pull` 的操作是 `<前缀>.pull`，补取者是全部探针与套件自己的身份 `test/acceptance`。
+每个变体另有一条水位来源的流 `<事件流>_wm`（2 个分区；`test.probe_go_wm`、`test.probe_py_wm` 等），给套件的水位来源剖面用（`conformance/profile/watermark.py`）。`POST /api/probe/write` 带 `"watermark": true` 时事件发到这条流，`besubjects` 为 `["probe:<写入的身份>"]`。补取方法 `be.source.v1.WatermarkService/Pull` 的操作是 `<前缀>.pull`，补取者是全部探针与套件自己的身份 `test/acceptance`。这条流同时声明它的记录读取（`be.source.v1.RecordService` 的 `Read` 与 `Snapshot`，线协议 P9.30；Go 3.2.35、Python 3.2.47 起）：操作 `<前缀>.read`，读者与补取者相同；记录就是写到这条流上的写入，内容与它的事件载荷相同，从不删除，探针没写过的身份答已清除。
 
 ## 付款：对外命令（3.2.41 起，Go；Python 探针随底层先行第 6 项补齐）
 
@@ -99,8 +99,8 @@
 
 ## 资源与操作
 
-资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起）、`pull`（3.2.31 起，Go：水位来源的补取）、`pay`（3.2.41 起，Go：付款），风险均为低。
+资源 `<前缀>`（无维度），查看操作 `<前缀>.read`，动作 `<前缀>.echo`、`work`、`write`、`call`、`note`（自同上的版本起）、`pull`（Go 3.2.31、Python 3.2.47 起：水位来源的补取）、`pay`（3.2.41 起，Go：付款），风险均为低。
 
 ## 迁移
 
-`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。`0005_jobs`（扩展，Go 3.2.30 起；Python 是 3.2.44 起的 `0006_jobs`）：后台工作项一节的 `probe_job_requests`、`probe_job_attempts`、`probe_job_effects`、`probe_job_calls`、`probe_job_dead`、`probe_steps`。`0006_cron`（扩展，Go 3.2.32 起；Python 是 3.2.44 起的 `0007_cron`）：`probe_cron`。`0009_archive`（扩展，3.2.47 起，Go）：归档一节的 `probe_archive`、`probe_archive_part`、`probe_archive_piece`。`probe_entries`（扩展，3.2.38 起）：授权剖面的条目；Go 探针是 `0008_entries`，Python 探针是 `0005_entries`（Python 探针后加的迁移排在后面，编号各走各的；表与列相同）。
+`0001_probe`：`probe_writes`、`probe_seen`、`probe_relay`（Python）。`0002_label`（扩展，自同上的版本起）：`probe_writes.label`、`probe_seen.type`，都可空；旧版探针在加了这两列的结构上照常读写。`0003_bytes`（收缩，3.2.24（Go）、3.2.23（Python）起）：`probe_writes.size` 改名为 `bytes`；更早的探针在这个结构上写入会失败，只用于套件 D 的反例。`0004_received_by`（扩展，3.2.26（Go）、3.2.25（Python）起）：`probe_seen.received_by`，可空，探针不读写它；只为套件 D 在新 SDK 上复测 V1。`0005_jobs`（扩展，Go 3.2.30 起；Python 是 3.2.44 起的 `0006_jobs`）：后台工作项一节的 `probe_job_requests`、`probe_job_attempts`、`probe_job_effects`、`probe_job_calls`、`probe_job_dead`、`probe_steps`。`0006_cron`（扩展，Go 3.2.32 起；Python 是 3.2.44 起的 `0007_cron`）：`probe_cron`。水位来源的记录读取要的 `probe_writes.watermark`、`relay`（扩展：Go 3.2.35 起的 `0007_watermark_records`，Python 3.2.47 起的 `0008_watermark_records`）。`0009_archive`（扩展，3.2.47 起，Go）：归档一节的 `probe_archive`、`probe_archive_part`、`probe_archive_piece`。`probe_entries`（扩展，3.2.38 起）：授权剖面的条目；Go 探针是 `0008_entries`，Python 探针是 `0005_entries`（Python 探针后加的迁移排在后面，编号各走各的；表与列相同）。

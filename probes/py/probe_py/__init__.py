@@ -46,12 +46,14 @@ def authz(component_id: str) -> Definitions:
     p = prefix(component_id)
     ops = [Operation(f"{p}.read", p, "read", "low"),
            Operation(f"{p}.resend", p, "read", "low")]  # the redelivery (P6.38; Go since 3.2.39, Python 3.2.44)
-    ops += [Operation(f"{p}.{op}", p, "action", "low") for op in ("echo", "work", "write", "call", "note")]
+    ops += [Operation(f"{p}.{op}", p, "action", "low") for op in ("echo", "work", "write", "call", "note",
+                                                                "pull")]  # pull: since 3.2.47 (Go 3.2.31)
     ops += entries.operations(p)  # since 3.2.38: the authorization profile's entries
     return Definitions(component_id, [Resource(p, f"{p}.read", {}, {}), entries.resource(p)], ops)
 
 
 def definition(v: Variant = VARIANTS[0]) -> Definition:
+    from probe_py import watermark
     from probe_py.module import Probe
 
     return Definition(v.id, VERSION, lambda rt: Probe(rt, v), resend=prefix(v.id) + ".resend", keys=[
@@ -90,7 +92,9 @@ def definition(v: Variant = VARIANTS[0]) -> Definition:
         Key("TIERING_WINDOW", Type.STRING, default="0 2 * * *"),
         *[Key(f"TIERING_{r}_ACCESS_KEY", Type.STRING) for r in ("WRITE", "READ", "DELETE")],
         *[Key(f"TIERING_{r}_SECRET_KEY", Type.STRING, secret=True) for r in ("WRITE", "READ", "DELETE")]],
-        migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4)],
+        migrations=files("probe_py") / "migrations", grpc_port=v.grpc_port, streams=[Stream(v.stream, 4),
+                                                                       # since 3.2.47 (Go 3.2.31): the watermark source
+                                                                       watermark.stream(v.stream, prefix(v.id), CALLERS)],
         subscribes=True, authz=authz(v.id))
 
 

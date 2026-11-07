@@ -20,6 +20,7 @@ from besdk.events.consumer import Received, Sub
 from besdk.events.core import Event, Projection
 from besdk.http import Route
 from besdk.system import Method
+from probe_py import watermark
 from probe_py import (CALLERS, MAX_BYTES, MAX_LABEL, MAX_WORK_MS, NOTED_TYPE, RELAY_BYTES, WRITTEN_TYPE, Variant,
                       prefix)
 
@@ -142,6 +143,7 @@ class Probe:
     async def write(self, c):
         body = await c.json()
         n, relay = number(body, "bytes", MAX_BYTES), bool(body.get("relay", False))
+        wm = bool(body.get("watermark", False))  # since 3.2.47 (Go 3.2.31): to the watermark stream
         label, event = body.get("label", ""), body.get("event", "")  # both since 3.2.22, optional
         # since 3.2.44 (Go 3.2.29), for the suite's events profile: fail rolls the whole transaction back after the
         # event was emitted (CK-EV-01); hold_ms keeps it open that long after emitting, so later writes commit first
@@ -152,10 +154,13 @@ class Probe:
         rid = str(uuid.uuid7())
 
         async def fn(tx):
-            await tx.execute("INSERT INTO probe_writes (id, bytes, label) VALUES ($1, $2, $3)", uuid.UUID(rid), n,
-                             label or None)
-            data = {"id": rid, "relay": relay, **({"blob": "w" * n} if n else {}), **({"label": label} if label else {})}
-            await self.rt.events.emit(tx, self.v.stream, Event(typ, rid, 1, Projection.FULL, data))
+            await tx.execute("INSERT INTO probe_writes (id, bytes, label, watermark, relay) VALUES ($1, $2, $3, $4, $5)",
+                             uuid.UUID(rid), n, label or None, wm, relay)
+            stream, subjects = self.v.stream, None
+            if wm:
+                stream, subjects = self.v.stream + "_wm", ["probe:" + rid]
+            await self.rt.events.emit(tx, stream, Event(typ, rid, 1, Projection.FULL,
+                                                        watermark.data(rid, n, label or None, relay), subjects=subjects))
             if hold:
                 await asyncio.sleep(hold / 1000)
             if fail:

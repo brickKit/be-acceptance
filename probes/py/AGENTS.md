@@ -9,6 +9,7 @@
 | `probe_py/__init__.py` | 定义：契约常量、配置键、流、资源与操作 |
 | `probe_py/module.py` | 模块：用户面、系统面、写入与事件；转发排入作业 `probe.relay` |
 | `probe_py/jobs.py` | 后台工作项（3.2.44 起）：转发、套件后台工作剖面用的作业、`probe.minutely`（`PROBE_CRON`）与 `probe.steps`（`PROBE_STEPS_EVERY`） |
+| `probe_py/watermark.py` | 水位来源的流 `<事件流>_wm`（3.2.47 起）：补取者与读者、记录的按身份读取与快照（写到这条流上的写入，内容与事件载荷相同） |
 | `probe_py/entries.py` | 授权剖面的条目（3.2.38 起），与 Go 探针的 `probe/entries.go` 相同 |
 | `probe_py/__main__.py` | 单跑入口（`serve`、`migrate`），按 `COMPONENT_ID` 选变体；外壳不加载它 |
 | `probe_py/migrations/` | 迁移 |

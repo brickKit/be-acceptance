@@ -1,16 +1,19 @@
-"""The watermark source profile (foundations item 1, T8) against the Go probe's watermark stream: the suite pulls it
-as a declared puller and as a stranger, and tampers with the outbox the way an unadvanced restore would (SK17). Every
-check's self-test catches its known violation first."""
+"""The watermark source profile (foundations item 1, T8) against each probe's watermark stream (the Python probe's
+since 3.2.47, foundations item 6 T7): the suite pulls it as a declared puller and as a stranger, and tampers with the
+outbox the way an unadvanced restore would (SK17). Every check's self-test catches its known violation first."""
 import json
 import platform
+
+import pytest
 
 from harness import Deployment, fresh_bus
 from profile import observe, watermark
 from profile.model import SUITE_VERSION, Report, Verdict, run
 
 
-async def test_the_go_probe_conforms_to_the_watermark_source_profile(specs, world, tmp_path):
-    spec = specs["go"]
+@pytest.mark.parametrize("kind", ["go", "py"])
+async def test_the_probe_conforms_to_the_watermark_source_profile(kind, specs, world, tmp_path):
+    spec = specs[kind]
     d = Deployment(world, await fresh_bus("jetstream", [spec.stream, watermark.stream_of(spec)]), tmp_path)
     try:
         env = await d.env(spec, {})
