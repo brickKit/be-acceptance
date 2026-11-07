@@ -42,7 +42,11 @@ INFRA_KEYS = {
     "infra/audit": {"resource_type": ["infra.audit.record", "infra.audit.intake", "infra.audit.evidence", "infra.audit.system"],
                     "permission": ["infra.audit.record.read", "infra.audit.record.list", "infra.audit.intake.read", "infra.audit.intake.submit",
                                    "infra.audit.intake.watermark", "infra.audit.evidence.append",
-                                   "infra.audit.evidence.list", "infra.audit.system.read", "infra.audit.system.recover"]},
+                                   "infra.audit.evidence.list", "infra.audit.system.read", "infra.audit.system.recover",
+                                   # the records as a data class (3.0.30): the legal hold, the destruction's approval, the
+                                   # replay of the destructions
+                                   "infra.audit.record.hold", "infra.audit.record.approve_destruction",
+                                   "infra.audit.system.replay"]},
 }
 # The master data components' resource types and operations (their definition.go), for the registry and the grants.
 MDM_KEYS = {
@@ -82,7 +86,9 @@ ERP_KEYS = {
                                  "erp.sales.order.edit", "erp.sales.order.confirm", "erp.sales.order.cancel",
                                  "erp.sales.delivery.read", "erp.sales.delivery.create", "erp.sales.price_list.read",
                                  "erp.sales.price_list.manage", "erp.sales.return.read", "erp.sales.return.edit",
-                                 "erp.sales.system.read", "erp.sales.system.billing", "erp.sales.system.resend", "erp.sales.system.recover"]},
+                                 "erp.sales.system.read", "erp.sales.system.billing", "erp.sales.system.resend", "erp.sales.system.recover",
+                                 # the ended orders as a data class (3.0.35): the hold, the destruction's approval, the replay
+                                 "erp.sales.system.order_hold", "erp.sales.system.order_destruction", "erp.sales.system.replay"]},
     "erp/billing": {"resource_type": ["erp.billing.invoice", "erp.billing.system"],
                     "permission": ["erp.billing.invoice.read", "erp.billing.invoice.draft", "erp.billing.invoice.issue",
                                    "erp.billing.invoice.print", "erp.billing.system.read",
