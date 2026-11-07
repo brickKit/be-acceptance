@@ -95,7 +95,8 @@ ERP_KEYS = {
                                    "erp.billing.system.resend", "erp.billing.system.recover"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
-                                   "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render"]},
+                                   "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
+                                   "infra.print.system.recover"]},
 }
 SALES_DOCUMENT = ["legal_entity", "department", "owner"]
 DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inventory.stock": ["legal_entity", "warehouse"],
