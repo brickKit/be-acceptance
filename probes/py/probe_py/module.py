@@ -23,6 +23,7 @@ from besdk.system import Method
 from probe_py import (CALLERS, MAX_BYTES, MAX_LABEL, MAX_WORK_MS, NOTED_TYPE, RELAY_BYTES, WRITTEN_TYPE, Variant,
                       prefix)
 
+MAX_HOLD_MS = 2000  # under the transaction timeouts: a write never ties a connection up for long
 ECHO, WORK, NOTE = "/test.probe.v1.Probe/Echo", "/test.probe.v1.Probe/Work", "/test.probe.v1.Probe/Note"
 
 
@@ -142,8 +143,11 @@ class Probe:
         body = await c.json()
         n, relay = number(body, "bytes", MAX_BYTES), bool(body.get("relay", False))
         label, event = body.get("label", ""), body.get("event", "")  # both since 3.2.22, optional
+        # since 3.2.44 (Go 3.2.29), for the suite's events profile: fail rolls the whole transaction back after the
+        # event was emitted (CK-EV-01); hold_ms keeps it open that long after emitting, so later writes commit first
+        fail, hold = bool(body.get("fail", False)), number(body, "hold_ms", MAX_HOLD_MS)
         if not isinstance(label, str) or len(label.encode()) > MAX_LABEL or event not in ("", "noted"):
-            raise invalid("bytes must be 0..524288, label at most 64 bytes, event empty or noted")
+            raise invalid("bytes must be 0..524288, label at most 64 bytes, event empty or noted, hold_ms 0..2000")
         typ = NOTED_TYPE if event == "noted" else WRITTEN_TYPE
         rid = str(uuid.uuid7())
 
@@ -152,6 +156,10 @@ class Probe:
                              label or None)
             data = {"id": rid, "relay": relay, **({"blob": "w" * n} if n else {}), **({"label": label} if label else {})}
             await self.rt.events.emit(tx, self.v.stream, Event(typ, rid, 1, Projection.FULL, data))
+            if hold:
+                await asyncio.sleep(hold / 1000)
+            if fail:
+                raise invalid("rolled back as asked (fail)")
 
         await self.rt.db.tx(fn)
         return JSONResponse({"id": rid}, status_code=201)
@@ -256,6 +264,12 @@ class Probe:
         w = e.decode()
         await tx.execute("INSERT INTO probe_seen (event_id, source, size, relay, type) VALUES ($1, $2, $3, $4, $5)",
                          uuid.UUID(e.id), e.source, len(w.get("blob", "")), bool(w.get("relay")), e.type)
+        if w.get("emit"):
+            # since 3.2.44 (Go 3.2.29, CK-EV-07): in the handling transaction the SDK counts this event one hop
+            # further, and past the limit (P6.15) the emit fails, so does the handling
+            wid = str(uuid.uuid7())
+            await tx.execute("INSERT INTO probe_writes (id, bytes) VALUES ($1, 0)", uuid.UUID(wid))
+            await self.rt.events.emit(tx, self.v.stream, Event(WRITTEN_TYPE, wid, 1, Projection.FULL, {"id": wid}))
         if w.get("relay"):
             # the call to the next probe leaves the transaction as a work item (no network call inside it)
             await self.rt.work.enqueue(tx, "probe.relay", {"event": e.id})

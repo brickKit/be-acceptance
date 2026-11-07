@@ -44,7 +44,8 @@ def authz(component_id: str) -> Definitions:
     from probe_py import entries
 
     p = prefix(component_id)
-    ops = [Operation(f"{p}.read", p, "read", "low")]
+    ops = [Operation(f"{p}.read", p, "read", "low"),
+           Operation(f"{p}.resend", p, "read", "low")]  # the redelivery (P6.38; Go since 3.2.39, Python 3.2.44)
     ops += [Operation(f"{p}.{op}", p, "action", "low") for op in ("echo", "work", "write", "call", "note")]
     ops += entries.operations(p)  # since 3.2.38: the authorization profile's entries
     return Definitions(component_id, [Resource(p, f"{p}.read", {}, {}), entries.resource(p)], ops)
@@ -53,15 +54,14 @@ def authz(component_id: str) -> Definitions:
 def definition(v: Variant = VARIANTS[0]) -> Definition:
     from probe_py.module import Probe
 
-    return Definition(v.id, VERSION, lambda rt: Probe(rt, v), keys=[
+    return Definition(v.id, VERSION, lambda rt: Probe(rt, v), resend=prefix(v.id) + ".resend", keys=[
         Key("PROBE_NEXT", Type.STRING),  # the probe that call and relay go to; empty: none
         Key("PROBE_NEXT_URL", Type.STRING),  # its user surface ($endpoint:<id>), protocol P4.26
         Key("PROBE_NEXT_GRPC_URL", Type.STRING),  # its system surface ($endpoint:<id>:grpc)
         Key("PROBE_PEER_STREAM", Type.STRING),  # the peer's event stream to consume; empty: none
         Key("PROBE_GUARD", Type.BOOLEAN, default=False),
-        # the common contract's key since 3.2.32; the Python probe has no jobs yet (foundations item 6) and reads it not
+        # the steps singleton and the minutely cron job of the background work profile (both probes since 3.2.44)
         Key("PROBE_STEPS_EVERY", Type.DURATION, default=timedelta(0)),
-        # since 3.2.33, the same: the Go probe's cron job for the background work profile; not read here yet
         Key("PROBE_CRON", Type.BOOLEAN, default=False),
         # since 3.2.38: a guarded route naming an operation the probe does not declare, so the start fails (CK-AZ-01)
         Key("PROBE_UNDECLARED_ROUTE", Type.BOOLEAN, default=False),

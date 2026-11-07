@@ -149,8 +149,8 @@ wheels = [
 
 [[package]]
 name = "be-sdk"
-version = "3.0.0a53"
-source = { git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a53#f7dda537ca219f4f6deb152b79073af33f0ca27c" }
+version = "3.0.0a54"
+source = { git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a54#6047db29727bea6edba03e173c7a156449007d13" }
 dependencies = [
     { name = "aiohttp" },
     { name = "asyncpg" },
@@ -176,14 +176,14 @@ dependencies = [
 
 [[package]]
 name = "be-test-probe-py"
-version = "3.2.44"
+version = "3.2.45"
 source = { editable = "." }
 dependencies = [
     { name = "be-sdk" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a53" }]
+requires-dist = [{ name = "be-sdk", git = "https://github.com/brickKit/be-sdk-python?tag=v3.0.0a54" }]
 
 [[package]]
 name = "certifi"

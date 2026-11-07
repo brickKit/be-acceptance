@@ -23,7 +23,7 @@
 | --- | --- | --- | --- |
 | `POST /api/probe/echo` | `{"payload": "<字符串>"}` | 原样回送 | `<前缀>.echo` |
 | `POST /api/probe/work` | `{"ms": 0..1000}` | 消耗这么多毫秒的 CPU 后 `{"ms": n}`；不阻塞同一进程里的其他请求（Go 在请求自己的 goroutine 里做，Python 在工作进程里做：外壳里成员共用一个事件循环，线程仍争 GIL；Python 3.2.28 起） | `<前缀>.work` |
-| `POST /api/probe/write` | `{"bytes": 0..524288, "relay": 布尔}`；3.2.23（Go）、3.2.22（Python）起可选 `"label"`（至多 64 字节）与 `"event": "noted"`；3.2.29（Go；Python 探针随底层先行第 6 项补齐）起可选 `"fail": 布尔` 与 `"hold_ms": 0..2000` | 一个事务内写一行并发一个事件，`201 {"id"}`；载荷超过 64 KiB 走对象存储的凭证检查（大事件）；`"event": "noted"` 时发 `test.probe.noted.v1` 而不是 `written`；`fail` 为真时事件发出后整个事务回滚，答 400 `REQUEST_INVALID`；`hold_ms` 让事务在发出事件后再开着这么久（套件的事件剖面用） | `<前缀>.write` |
+| `POST /api/probe/write` | `{"bytes": 0..524288, "relay": 布尔}`；3.2.23（Go）、3.2.22（Python）起可选 `"label"`（至多 64 字节）与 `"event": "noted"`；3.2.29（Go）、3.2.45（Python）起可选 `"fail": 布尔` 与 `"hold_ms": 0..2000` | 一个事务内写一行并发一个事件，`201 {"id"}`；载荷超过 64 KiB 走对象存储的凭证检查（大事件）；`"event": "noted"` 时发 `test.probe.noted.v1` 而不是 `written`；`fail` 为真时事件发出后整个事务回滚，答 400 `REQUEST_INVALID`；`hold_ms` 让事务在发出事件后再开着这么久（套件的事件剖面用） | `<前缀>.write` |
 | `POST /api/probe/call` | `{"op": "echo"\|"work"\|"note"（`note` 自同上的版本起）, "surface": "grpc"\|"http", "bytes", "ms"}` | 调用下一个探针的同一操作（`PROBE_NEXT` 是它的组件 ID，`PROBE_NEXT_URL`、`PROBE_NEXT_GRPC_URL` 是它的两个地址，部署用 `$endpoint:<ID>` 与 `$endpoint:<ID>:grpc` 填入，协议 P4.26），`{"ok": true, "elapsed_us": n}`：`elapsed_us` 是调用方自己测的这一跳（从发出到收到回答），不含驱动到调用方的那一跳；没有下一个探针答 409 `NO_NEXT_PROBE` | `<前缀>.call` |
 | `GET /api/probe/seen` | — | `{"count", "big", "relayed", "noted"}`：收到的对方事件数、其中超过 64 KiB 的数、已转发成调用的数、其中 `noted` 类型的数（自同上的版本起） | `<前缀>.read` |
 | `POST /api/probe/note` | `{"payload": "<字符串>"}` | `{"payload": "noted:<字符串>"}`（自同上的版本起） | `<前缀>.note` |
@@ -39,11 +39,11 @@
 
 允许的调用组件：全部探针（六个组件 ID）。
 
-标准系统方法另由 SDK 挂上（不在上表）：补发 `be.source.v1.ResendService`（`<前缀>.resend`）；整套恢复的核对 `be.recovery.v1.CheckService` 与外部对账 `be.external.v1.ReconcileService`（`<前缀>.recover`，只许恢复工具 `ops/recover`；3.2.42 起，Go；Python 探针随底层先行第 6 项）。
+标准系统方法另由 SDK 挂上（不在上表）：补发 `be.source.v1.ResendService`（`<前缀>.resend`；Go 3.2.39、Python 3.2.45 起）；整套恢复的核对 `be.recovery.v1.CheckService` 与外部对账 `be.external.v1.ReconcileService`（`<前缀>.recover`，只许恢复工具 `ops/recover`；3.2.42 起，Go；Python 探针随底层先行第 6 项）。
 
 ## 事件
 
-每个探针向自己的流发 `test.probe.written.v1`（见变体表，各 4 个分区），数据 `{"id", "relay", "blob"}`，有 `label` 时加上它；写入时要求 `noted` 的发 `test.probe.noted.v1`，数据相同。`PROBE_PEER_STREAM` 指向对方的流时消费它（两种类型；旧版只订阅 `written`，`noted` 由运输过滤掉，协议 P6.33）：记一行与它的类型；`relay` 为真时在事务之外调用 `PROBE_NEXT` 的 `Echo`（1 KiB）；数据里 `emit` 为真时（3.2.29 起，Go）在处理的事务里向自己的流再发一个 `written`（跳数比收到的多一，超过 10 时发不出、处理失败，协议 P6.15）。Go 探针用 SDK 的后台工作项，Python 探针用自己的转发队列（Python SDK 子集没有后台工作项；认领规则相同：`FOR UPDATE SKIP LOCKED`、租约到期再认领、每 0.5 秒轮询、并发 4）。
+每个探针向自己的流发 `test.probe.written.v1`（见变体表，各 4 个分区），数据 `{"id", "relay", "blob"}`，有 `label` 时加上它；写入时要求 `noted` 的发 `test.probe.noted.v1`，数据相同。`PROBE_PEER_STREAM` 指向对方的流时消费它（两种类型；旧版只订阅 `written`，`noted` 由运输过滤掉，协议 P6.33）：记一行与它的类型；`relay` 为真时在事务之外调用 `PROBE_NEXT` 的 `Echo`（1 KiB）；数据里 `emit` 为真时（Go 3.2.29、Python 3.2.45 起）在处理的事务里向自己的流再发一个 `written`（跳数比收到的多一，超过 10 时发不出、处理失败，协议 P6.15）。两个探针都用 SDK 的后台工作项（作业 `probe.relay`；Python 自 3.2.44 起，原来的转发表不再用）。
 
 ## 后台工作项（Go 3.2.30 起，Python 3.2.44 起）
 

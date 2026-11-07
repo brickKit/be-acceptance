@@ -1,5 +1,6 @@
-"""The events profile (foundations item 1, T4) against the Go probe, on both transports: the probe produces on its own
-stream and consumes one the suite injects into. Every check's self-test catches its known violation first."""
+"""The events profile (foundations item 1, T4; the Python probe since foundations item 6, T5) against both probes, on
+both transports: the probe produces on its own stream and consumes one the suite injects into. Every check's
+self-test catches its known violation first."""
 import json
 import platform
 
@@ -10,9 +11,10 @@ from profile import events, observe
 from profile.model import SUITE_VERSION, Report, Verdict, run
 
 
+@pytest.mark.parametrize("kind", ["go", "py"])
 @pytest.mark.parametrize("bus", ["jetstream", "pgqueue"])
-async def test_the_go_probe_conforms_to_the_events_profile(bus, specs, world, tmp_path):
-    spec = specs["go"]
+async def test_the_probe_conforms_to_the_events_profile(bus, kind, specs, world, tmp_path):
+    spec = specs[kind]
     d = Deployment(world, await fresh_bus(bus, [spec.stream, events.INJECTED]), tmp_path)
     try:
         await events.ensure_injected(d.bus)
