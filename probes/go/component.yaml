@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-go
   name: Go probe
-  version: 3.2.49
+  version: 3.2.50
   description: "The acceptance suite's Go probe: communication only (echo, CPU work, a write with its event, relay), for measuring paths"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -155,6 +155,10 @@ configSchema:
     STOP_TIMEOUT:
       type: string
       description: "a duration (e.g. 2s, 500ms); SDK default 30s"
+    RECOVERY_PHASE:
+      type: string
+      enum: [frozen, redelivering, replaying, verifying, read_only]
+      description: "process-level: the same for every member of a shell"
     DEPLOYMENT_ID:
       type: string
       description: "process-level: the same for every member of a shell"

@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: test/probe-py2
   name: Python probe (py2)
-  version: 3.2.42
+  version: 3.2.43
   description: "A variant of test/probe-py: the same code under its own component ID, ports and event stream"
   repository: https://github.com/brickKit/be-acceptance
 
@@ -152,6 +152,10 @@ configSchema:
     STOP_TIMEOUT:
       type: string
       description: "a duration (e.g. 2s, 500ms); SDK default 30s"
+    RECOVERY_PHASE:
+      type: string
+      enum: [frozen, redelivering, replaying, verifying, read_only]
+      description: "process-level: the same for every member of a shell"
     DEPLOYMENT_ID:
       type: string
       description: "process-level: the same for every member of a shell"
