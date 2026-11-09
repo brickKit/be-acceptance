@@ -21,6 +21,7 @@ from besdk.events.core import Event, Projection
 from besdk.http import Route
 from besdk.system import Method
 from probe_py import payments, watermark
+from probe_py.archive import Archives
 from probe_py import (CALLERS, MAX_BYTES, MAX_LABEL, MAX_WORK_MS, NOTED_TYPE, RELAY_BYTES, WRITTEN_TYPE, Variant,
                       prefix)
 
@@ -109,6 +110,7 @@ class Probe:
         from probe_py.jobs import Jobs
 
         self._jobs = Jobs(self)
+        self._archives = Archives(rt)
 
     # ------------------------------------------------------------------ user surface
 
@@ -127,7 +129,10 @@ class Probe:
                                     # the payment (since 3.2.48, Go 3.2.41): an external command
                                     ("POST", "payment", "pay", lambda c: payments.pay(self.rt, self.v.id, c)),
                                     ("GET", "payment/{reference}", "read",
-                                     lambda c: payments.payment(self.rt, self.v.id, c))):
+                                     lambda c: payments.payment(self.rt, self.v.id, c)),
+                                    # the tiering profile's archive (since 3.2.50, Go 3.2.47)
+                                    ("POST", "archive", "write", self._archives.make),
+                                    ("GET", "archive/{id}", "read", self._archives.row)):
             r.add(Route(method, "/api/probe/" + path, h, f"{self.ops}.{op}" if guard else "", public=not guard))
         if guard:  # the entries are always protected (since 3.2.38)
             from probe_py.entries import Entries

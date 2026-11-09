@@ -513,8 +513,11 @@ def judge_bus_start(obs: dict) -> list[str]:
 
 def _late_held(o: dict) -> None:
     n = o["numbering"]
-    held = next(x for x in n["rows"] if x["record_id"] == n["held"])
-    first = next(x for x in n["rows"] if x["record_id"] in n["quick"] and x["partition"] == held["partition"])
+    held = next((x for x in n["rows"] if x["record_id"] == n["held"]), None)
+    first = held and next((x for x in n["rows"] if x["record_id"] in n["quick"] and x["partition"] == held["partition"]),
+                          None)
+    if first is None:  # no row to swap: judge_numbering already reports why (the held row missing, or "rerun");
+        return         # crashing here hid that as "the check failed to run" (1.0.73)
     held["seq"], first["seq"] = first["seq"], held["seq"]
 
 
