@@ -109,3 +109,21 @@ def test_an_unsecured_cells_certificates_come_from_the_test_world(tmp_path, monk
     prepare.certificates(c)
     assert (tmp_path / ".secrets" / "tls" / "erp-credit.cert.pem").exists()
     assert (tmp_path / ".secrets" / "tls" / "ops-recover.key.pem").exists()
+
+
+def test_a_lone_probe_that_declares_the_recovery_phase_is_given_it(tmp_path, monkeypatch):
+    """Foundations item 6, T11: the probes declare RECOVERY_PHASE since Go 3.2.50 and Python 3.2.43; every earlier cell
+    ran an older probe alone, and the first cell with a newer one stopped at create (declared, left unset)."""
+    monkeypatch.setenv("BE_ACC_PG_ADMIN", ADMIN)
+    (tmp_path / "config").mkdir()
+    (tmp_path / ".secrets").mkdir()
+    (tmp_path / "cell.yaml").write_text("cell: T\nalone: [test/probe-py@3.2.51, test/probe-go@3.2.49]\nchain: []\n")
+    props = {"test/probe-py": {"RECOVERY_PHASE": {"type": "string", "enum": ["frozen"]}}}
+    monkeypatch.setattr(prepare, "schema_props", lambda _c, comp: props.get(comp, {}))
+    c = Cell.load(tmp_path)
+    prepare.configs(c)
+    py = yaml.safe_load((tmp_path / "config" / "test-probe-py.yaml").read_text())
+    go = yaml.safe_load((tmp_path / "config" / "test-probe-go.yaml").read_text())
+    assert py["RECOVERY_PHASE"] == "$var:RECOVERY_PHASE"
+    assert "RECOVERY_PHASE" not in go, "a probe that does not declare it gets none"
+    assert prepare.unset_keys(c) == []

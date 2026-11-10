@@ -109,7 +109,7 @@ PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
-PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the operations the load user is granted (and pay on a Go probe, secure.py)
+PROBE_OPS = ["read", "echo", "work", "write", "call"]  # the operations the load user is granted (and pay, secure.py)
 # every key a probe defines (probe/defs.go, probe_py): the registry must own them all, or the authorization member
 # refuses the probe's whole submission (DEFINITION_OWNER_MISMATCH); note since 3.2.22, pull since 3.2.31 (Go), the
 # entries of the authorization profile since 3.2.38
@@ -357,7 +357,7 @@ UNSET_ON_PURPOSE = {
     "PROBE_NEXT_URL": "a probe without a next one in its chain",
     "PROBE_NEXT_GRPC_URL": "a probe without a next one in its chain",
     "PROBE_PEER_STREAM": "a probe without a previous one in its chain",
-    "PROBE_EXTERNAL_URL": "a probe that pays no external system: only the recovery drills' cells set it (A144)",
+    "PROBE_EXTERNAL_URL": "a probe that pays no external system: only the recovery drills' cells set it",
 }
 # The same for keys named after a data class (be-protocol chapter 15), by their prefix.
 UNSET_PREFIXES_ON_PURPOSE = {
@@ -564,6 +564,9 @@ PG_SHELL_PASSWORD: file://.secrets/db/{role}
             lines.append(f"PROBE_PEER_STREAM: {stream_of(prev)}")
         if c.concurrency != 1:
             lines.append(f"BUS_SUBSCRIPTION_CONCURRENCY: {c.concurrency}")
+        if declares(c, probe, "RECOVERY_PHASE"):  # the recovery phase (P1.22) since Go 3.2.50, Python 3.2.43: alone, a
+            # probe reads it like any member (in a shell the shell's own does)
+            lines.append("RECOVERY_PHASE: $var:RECOVERY_PHASE")
         lines += [*profile_and_tiering(c, probe), *settings_of(c, probe)]
         if c.secured:  # the routes need a token and their operation; the view and the audit records are real
             lines += ["PROBE_GUARD: \"true\"", "IAM_ISSUER: $var:IAM_ISSUER", "IAM_JWKS_URL: $var:IAM_JWKS_URL",

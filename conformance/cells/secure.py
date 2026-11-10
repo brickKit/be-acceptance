@@ -92,7 +92,7 @@ async def secure(directory: str | pathlib.Path) -> dict:
         start = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         segments = [{"resource_type": probe_prefix(p), "operation": f"{probe_prefix(p)}.{op}", "atoms": {}, "read_fields": [],
                      "valid": {"from": start}} for p in c.probes
-                    for op in [*PROBE_OPS, *(["pay"] if p.startswith("test/probe-go") else [])]]  # the payment: Go only (A144)
+                    for op in [*PROBE_OPS, "pay"]]  # the payment: both languages since 3.2.48
         # the master data components' operations too: the seed data goes through their user surfaces
         segments += [{"resource_type": op.rsplit(".", 1)[0], "operation": op, "atoms": {}, "read_fields": [],
                       "valid": {"from": start}} for comp in c.mdm for op in MDM_KEYS[comp]["permission"]
