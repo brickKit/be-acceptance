@@ -13,7 +13,8 @@ PROBE_PORTS = {"test/probe-go": (8600, 9600), "test/probe-go2": (8602, 9602), "t
 # the security members a cell may run (alone or in a shell): their user port and system port (0: none)
 INFRA_PORTS = {"infra/iam-casdoor": (8200, 0), "infra/authz": (8223, 9223), "infra/audit": (8206, 9206)}
 # the master data components (step 6), with the security members always
-MDM_PORTS = {"mdm/org": (8083, 9093), "mdm/currency": (8226, 9226), "mdm/partner": (8225, 9225), "mdm/product": (8082, 9092)}
+MDM_PORTS = {"mdm/org": (8083, 9093), "mdm/currency": (8226, 9226), "mdm/partner": (8225, 9225), "mdm/product": (8082, 9092),
+             "mdm/employee": (8227, 9227)}
 # the business components of step 7 (the trading chain) and the print component
 ERP_PORTS = {"erp/inventory": (8086, 9096), "erp/credit": (8088, 9088), "erp/sales": (8084, 9094),
              "erp/billing": (8089, 9089), "infra/print": (8400, 9400)}

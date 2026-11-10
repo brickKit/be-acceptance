@@ -17,7 +17,8 @@ from measure.backlog import jetstream as backlog
 from measure.series import Window
 
 # the business components that publish events (cells/prepare.py PRODUCERS, and the master data)
-STREAMED = ("mdm/org", "mdm/currency", "mdm/partner", "mdm/product", "erp/inventory", "erp/credit", "erp/sales", "erp/billing")
+STREAMED = ("mdm/org", "mdm/currency", "mdm/partner", "mdm/product", "mdm/employee", "erp/inventory", "erp/credit", "erp/sales",
+            "erp/billing")
 
 
 def containers(c: Cell) -> list[str]:

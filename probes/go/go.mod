@@ -5,7 +5,7 @@ go 1.27.0
 toolchain go1.27.2
 
 require (
-	github.com/brickKit/be-sdk-go/v3 v3.0.0-alpha.119
+	github.com/brickKit/be-sdk-go/v3 v3.0.0-alpha.121
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
 	google.golang.org/grpc v1.83.2
@@ -18,7 +18,7 @@ require (
 	github.com/andybalholm/brotli v1.1.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/brickKit/be-protocol/v3 v3.0.0-alpha.117 // indirect
-	github.com/brickKit/contract-infra-authz/v3 v3.0.0-alpha.3 // indirect
+	github.com/brickKit/contract-infra-authz/v3 v3.0.0-alpha.6 // indirect
 	github.com/brickKit/infra-audit/contract/v3 v3.0.0-alpha.2 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect

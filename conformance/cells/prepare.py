@@ -65,6 +65,15 @@ MDM_KEYS = {
     "mdm/product": {"resource_type": ["mdm.product", "mdm.product_category", "mdm.product.system"],
                     "permission": ["mdm.product.read", "mdm.product.edit", "mdm.product_category.read",
                                    "mdm.product_category.manage", "mdm.product.system.read", "mdm.product.system.resend", "mdm.product.system.recover"]},
+    # C1 (3.0.1): employees, appointments and account links; its stream a watermark source the authorization member
+    # pulls
+    "mdm/employee": {"resource_type": ["mdm.employee", "mdm.employee.appointment", "mdm.employee.account_link",
+                                       "mdm.employee.system"],
+                     "permission": ["mdm.employee.read", "mdm.employee.manage", "mdm.employee.appointment.read",
+                                    "mdm.employee.appointment.manage", "mdm.employee.account_link.read",
+                                    "mdm.employee.account_link.manage", "mdm.employee.system.read",
+                                    "mdm.employee.system.pull", "mdm.employee.system.resend", "mdm.employee.system.recover",
+                                    "mdm.employee.system.replay"]},
 }
 # The business components' and the print component's resource types, operations and each resource type's dimensions
 # (their definition.go and infra_print/__init__.py): for the registry, the grants and the segments' atoms.
@@ -103,7 +112,9 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.inventory.movement": ["legal_entity", "warehouse"], "erp.credit.limit": ["legal_entity"],
               "erp.credit.policy": ["legal_entity"], "erp.sales.quotation": SALES_DOCUMENT,
               "erp.sales.order": SALES_DOCUMENT, "erp.sales.delivery": SALES_DOCUMENT, "erp.sales.return": SALES_DOCUMENT,
-              "erp.sales.price_list": ["legal_entity"], "erp.billing.invoice": ["legal_entity"]}
+              "erp.sales.price_list": ["legal_entity"], "erp.billing.invoice": ["legal_entity"],
+              "mdm.employee": ["legal_entity"], "mdm.employee.appointment": ["legal_entity", "department"],
+              "mdm.employee.account_link": ["legal_entity"]}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
 PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing"}
 # the security members' streams (their definition.go; not named after the component)
@@ -427,7 +438,10 @@ def security_configs(c: Cell) -> None:
                         "AUTHZ_INSTALL_CLAIM: file://.secrets/install-claim",
                         # 3.0.16 on: the identity member's account status, a watermark source (security 03)
                         "IAM_GRPC_URL: $var:IAM_GRPC_URL", "IAM_COMPONENT: $var:IAM_COMPONENT",
-                        "BUS_URL: file://.secrets/bus"],
+                        "BUS_URL: file://.secrets/bus",
+                        # 3.0.46 on: the employee member, the second internal source (links and appointments)
+                        *(["EMPLOYEE_GRPC_URL: $endpoint:mdm/employee:grpc", "EMPLOYEE_COMPONENT: mdm/employee"]
+                          if "mdm/employee" in c.placed else [])],
         "infra/audit": [*common, *db("infra/audit"), *guarded("infra/audit")],
     }
     for comp in c.mdm:  # the master data components: a database, the bus, a service identity, guarded routes

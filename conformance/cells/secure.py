@@ -30,7 +30,8 @@ ADMIN, LOAD_USER = "test.alice", "test.bob"
 # component's view (not visible), 400 once it has (the operation is checked before the body). A read does not tell:
 # a list answers 200 with nothing in it to a user without the read operation.
 MDM_WRITE = {"mdm/org": ("POST", "/api/org/legal-entities"), "mdm/currency": ("PUT", "/api/currency/rate-types/x"),
-             "mdm/partner": ("POST", "/api/partner/partners"), "mdm/product": ("POST", "/api/product/products")}
+             "mdm/partner": ("POST", "/api/partner/partners"), "mdm/product": ("POST", "/api/product/products"),
+             "mdm/employee": ("POST", "/api/employee/employees")}
 
 
 async def ready(base: str, limit: float = 120) -> None:
@@ -94,7 +95,9 @@ async def secure(directory: str | pathlib.Path) -> dict:
                      "valid": {"from": start}} for p in c.probes
                     for op in [*PROBE_OPS, "pay"]]  # the payment: both languages since 3.2.48
         # the master data components' operations too: the seed data goes through their user surfaces
-        segments += [{"resource_type": op.rsplit(".", 1)[0], "operation": op, "atoms": {}, "read_fields": [],
+        # (a resource with dimensions gets every one of them open: a segment without one is not usable, FX01)
+        segments += [{"resource_type": op.rsplit(".", 1)[0], "operation": op,
+                      "atoms": {d: {"kind": "all"} for d in DIMENSIONS.get(op.rsplit(".", 1)[0], [])}, "read_fields": [],
                       "valid": {"from": start}} for comp in c.mdm for op in MDM_KEYS[comp]["permission"]
                      if not op.endswith(".system.read")]
         # the business components' user operations, every dimension open: the L3 scenario and the seed data go
