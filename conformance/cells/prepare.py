@@ -50,9 +50,9 @@ INFRA_KEYS = {
 }
 # The master data components' resource types and operations (their definition.go), for the registry and the grants.
 MDM_KEYS = {
-    "mdm/org": {"resource_type": ["mdm.legal_entity", "mdm.org_unit", "mdm.org.system"],
+    "mdm/org": {"resource_type": ["mdm.legal_entity", "mdm.org_unit", "mdm.org_position", "mdm.org.system"],
                 "permission": ["mdm.legal_entity.read", "mdm.legal_entity.manage", "mdm.org_unit.read",
-                               "mdm.org_unit.manage", "mdm.org.system.read", "mdm.org.system.resend", "mdm.org.system.recover",
+                               "mdm.org_unit.manage", "mdm.org_position.read", "mdm.org_position.manage", "mdm.org.system.read", "mdm.org.system.resend", "mdm.org.system.recover",
                                "mdm.org.system.replay"]},
     "mdm/currency": {"resource_type": ["mdm.currency", "mdm.exchange_rate", "mdm.currency.system"],
                      "permission": ["mdm.currency.read", "mdm.currency.manage", "mdm.exchange_rate.read",
