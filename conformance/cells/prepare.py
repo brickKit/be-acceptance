@@ -84,7 +84,9 @@ ERP_KEYS = {
                                      "erp.inventory.stock.read", "erp.inventory.movement.read",
                                      "erp.inventory.movement.create", "erp.inventory.adjustment.create",
                                      "erp.inventory.system.read", "erp.inventory.system.reserve",
-                                     "erp.inventory.system.issue", "erp.inventory.system.resend", "erp.inventory.system.recover"]},
+                                     "erp.inventory.system.issue", "erp.inventory.system.resend", "erp.inventory.system.recover",
+                                     # 3.0.37: the purchase component's receipts and returns
+                                     "erp.inventory.system.receive"]},
     "erp/credit": {"resource_type": ["erp.credit.limit", "erp.credit.policy", "erp.credit.system"],
                    "permission": ["erp.credit.limit.read", "erp.credit.limit.manage", "erp.credit.limit.request",
                                   "erp.credit.policy.read", "erp.credit.policy.manage", "erp.credit.system.read",
