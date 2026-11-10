@@ -2,6 +2,8 @@
 (the run profile's keys: its intents go there when the evidence store does not take them, P12.16), a producer's object
 store; and every key declared without a default is either set or unset on purpose. T11's drill found the cells had
 configured no run profile at all since the members declared it."""
+import pathlib
+
 import yaml
 
 from cells import prepare
@@ -126,4 +128,34 @@ def test_a_lone_probe_that_declares_the_recovery_phase_is_given_it(tmp_path, mon
     go = yaml.safe_load((tmp_path / "config" / "test-probe-go.yaml").read_text())
     assert py["RECOVERY_PHASE"] == "$var:RECOVERY_PHASE"
     assert "RECOVERY_PHASE" not in go, "a probe that does not declare it gets none"
+    assert prepare.unset_keys(c) == []
+
+
+PROBES = sorted(p.parent for p in (pathlib.Path(__file__).resolve().parents[2] / "probes").glob("*/component.yaml"))
+
+
+def real_props(comp: str) -> dict:
+    """A probe's configuration keys from its manifest in this repository (the version the next release carries)."""
+    for d in PROBES:
+        m = yaml.safe_load((d / "component.yaml").read_text())
+        if m["metadata"]["id"] == comp:
+            return (m.get("configSchema") or {}).get("properties") or {}
+    return {}
+
+
+def test_every_probe_as_it_is_now_gets_every_key_it_declares(tmp_path, monkeypatch):
+    """Foundations item 6, retrospective P1: the probes' real manifests, alone in a secured cell: a key a probe starts
+    to declare that the cells neither set nor leave unset on purpose fails here, before a real cell meets it (the
+    probes declared RECOVERY_PHASE three days before a cell ran a new probe alone)."""
+    probes = [yaml.safe_load((d / "component.yaml").read_text())["metadata"] for d in PROBES]
+    assert len(probes) >= 6, "the test reads the probes' manifests"
+    monkeypatch.setenv("BE_ACC_PG_ADMIN", ADMIN)
+    (tmp_path / "config").mkdir()
+    (tmp_path / ".secrets").mkdir()
+    alone = ", ".join(f"{p['id']}@{p['version']}" for p in probes)
+    (tmp_path / "cell.yaml").write_text(f"cell: T\nalone: [infra/iam-casdoor@3.0.42, infra/authz@3.0.45, "
+                                        f"infra/audit@3.0.37, {alone}]\nchain: []\n")
+    monkeypatch.setattr(prepare, "schema_props", lambda _c, comp: real_props(comp))
+    c = Cell.load(tmp_path)
+    prepare.configs(c)
     assert prepare.unset_keys(c) == []
