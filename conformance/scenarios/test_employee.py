@@ -51,9 +51,17 @@ def test_an_appointments_end_ends_what_it_bound(login, bob):
     # the administrator grants on it: the account reads the employee while the appointment is open
     candidate = {"record_type": "grant", "governance_unit": root_unit(alice), "grantee": cn.principal,
                  "appointment": appt["id"], "segments": [employee_read()]}
-    granted = alice.post("infra/authz", "/api/authz/changes", {"change_key": f"l3-appt-{uuid.uuid4()}", "direction": "widen",
-                                                                "candidate": candidate,
-                                                                "candidate_digest": canon.digest("be.security.grant", 1, candidate)})
+    # the authorization member applies the new appointment from the employee member's stream a moment later: until then
+    # it answers 503 (not provable, the change key left free) and the same request goes again
+    change = {"change_key": f"l3-appt-{uuid.uuid4()}", "direction": "widen", "candidate": candidate,
+              "candidate_digest": canon.digest("be.security.grant", 1, candidate)}
+
+    def grant():
+        r = alice.call("POST", "infra/authz", "/api/authz/changes", change)
+        assert r.status_code in (200, 503), f"{r.status_code} {r.text[:300]}"
+        return r.json() if r.status_code == 200 else None
+
+    granted = eventually(grant, seconds=30)
     eventually(lambda: reads() == 200, seconds=30)
     # the appointment ends: nothing at once (the next verification), and the books end the grant
     bob.post("mdm/employee", f"/api/employee/appointments/{appt['id']}/end")
