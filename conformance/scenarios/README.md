@@ -8,6 +8,7 @@
 | `test_expectations.py` | 协议 04、05 里能从用户面驱动的独立预期，测试名带编号（下表） | `erp/sales`、`erp/inventory`、`erp/credit`、`erp/billing` |
 | `test_scope.py` | 谁看得到、谁能写：没有授予的账号什么都看不到；销售只看自己法人与部门的单、范围外读不到也写不了；只有出账角色能开具 | 同上，`mdm/org` |
 | `test_employee.py` | 绑定任职的授予：任职在职时给、结束后立即不给并记为结束，新任职不自动有；处置一个账号时同一个人（关联同一员工）的另一个账号也被挡住，解除后恢复。格里没有 `mdm/employee` 时跳过 | `mdm/employee`、`infra/authz`、`mdm/org` |
+| `test_purchase.py` | 采购到入库再退回：经运行中的库存收货，库存增加、流水带收货行参考、订单的已收等于流水、收足即完成；从那条流水退货，库存减少；超过法人的超收比例整笔拒绝、库存不动；提交人不能批准；采购员只看采购部的订单。格里没有 `erp/purchase` 时跳过 | `erp/purchase`、`erp/inventory`、`infra/authz`、`mdm/org` |
 
 测试名写出对方组件（测试规范的命名规则），用 `-k` 按名字只跑两个组件之间的。
 

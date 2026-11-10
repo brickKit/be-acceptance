@@ -104,6 +104,14 @@ ERP_KEYS = {
                     "permission": ["erp.billing.invoice.read", "erp.billing.invoice.draft", "erp.billing.invoice.issue",
                                    "erp.billing.invoice.print", "erp.billing.system.read",
                                    "erp.billing.system.resend", "erp.billing.system.recover"]},
+    "erp/purchase": {"resource_type": ["erp.purchase.requisition", "erp.purchase.order", "erp.purchase.receipt",
+                                       "erp.purchase.return", "erp.purchase.policy", "erp.purchase.system"],
+                     "permission": ["erp.purchase.requisition.read", "erp.purchase.requisition.edit",
+                                    "erp.purchase.requisition.approve", "erp.purchase.order.read",
+                                    "erp.purchase.order.edit", "erp.purchase.order.approve", "erp.purchase.receipt.read",
+                                    "erp.purchase.receipt.create", "erp.purchase.return.read", "erp.purchase.return.edit",
+                                    "erp.purchase.policy.read", "erp.purchase.policy.manage", "erp.purchase.system.read",
+                                    "erp.purchase.system.resend", "erp.purchase.system.recover"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -116,9 +124,11 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.sales.order": SALES_DOCUMENT, "erp.sales.delivery": SALES_DOCUMENT, "erp.sales.return": SALES_DOCUMENT,
               "erp.sales.price_list": ["legal_entity"], "erp.billing.invoice": ["legal_entity"],
               "mdm.employee": ["legal_entity"], "mdm.employee.appointment": ["legal_entity", "department"],
-              "mdm.employee.account_link": ["legal_entity"]}
+              "mdm.employee.account_link": ["legal_entity"], "erp.purchase.requisition": SALES_DOCUMENT,
+              "erp.purchase.order": SALES_DOCUMENT, "erp.purchase.receipt": SALES_DOCUMENT,
+              "erp.purchase.return": SALES_DOCUMENT, "erp.purchase.policy": ["legal_entity"]}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
-PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing"}
+PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
