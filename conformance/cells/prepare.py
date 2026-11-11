@@ -112,6 +112,17 @@ ERP_KEYS = {
                                     "erp.purchase.receipt.create", "erp.purchase.return.read", "erp.purchase.return.edit",
                                     "erp.purchase.policy.read", "erp.purchase.policy.manage", "erp.purchase.system.read",
                                     "erp.purchase.system.resend", "erp.purchase.system.recover"]},
+    # C4 (3.0.0): the ledger, the open items and the supplier invoices; the system surface's claims are erp/payment's
+    "erp/finance": {"resource_type": ["erp.finance.account", "erp.finance.voucher", "erp.finance.period",
+                                      "erp.finance.open_item", "erp.finance.supplier_invoice", "erp.finance.system"],
+                    "permission": ["erp.finance.account.read", "erp.finance.account.manage", "erp.finance.voucher.read",
+                                   "erp.finance.voucher.edit", "erp.finance.voucher.approve",
+                                   "erp.finance.period.read", "erp.finance.period.close",
+                                   "erp.finance.open_item.read", "erp.finance.open_item.edit",
+                                   "erp.finance.open_item.approve", "erp.finance.supplier_invoice.read",
+                                   "erp.finance.supplier_invoice.edit", "erp.finance.supplier_invoice.approve",
+                                   "erp.finance.system.read", "erp.finance.system.claim", "erp.finance.system.resend",
+                                   "erp.finance.system.recover"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -126,9 +137,12 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "mdm.employee": ["legal_entity"], "mdm.employee.appointment": ["legal_entity", "department"],
               "mdm.employee.account_link": ["legal_entity"], "erp.purchase.requisition": SALES_DOCUMENT,
               "erp.purchase.order": SALES_DOCUMENT, "erp.purchase.receipt": SALES_DOCUMENT,
-              "erp.purchase.return": SALES_DOCUMENT, "erp.purchase.policy": ["legal_entity"]}
+              "erp.purchase.return": SALES_DOCUMENT, "erp.purchase.policy": ["legal_entity"],
+              "erp.finance.account": ["legal_entity"], "erp.finance.voucher": ["legal_entity"],
+              "erp.finance.period": ["legal_entity"], "erp.finance.open_item": ["legal_entity", "department"],
+              "erp.finance.supplier_invoice": ["legal_entity", "department"]}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
-PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase"}
+PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
@@ -381,6 +395,10 @@ UNSET_ON_PURPOSE = {
     "PROBE_NEXT_GRPC_URL": "a probe without a next one in its chain",
     "PROBE_PEER_STREAM": "a probe without a previous one in its chain",
     "PROBE_EXTERNAL_URL": "a probe that pays no external system: only the recovery drills' cells set it",
+    "CLAIM_PERIOD": "erp/finance's payment claims last 7 days when unset",
+    "MATCH_TOLERANCES": "erp/finance's tolerances are 0 in every legal entity when unset (the L3 mismatch and the "
+                        "seed's price difference rely on it)",
+    "FINANCE_FACT_SOURCES": "no fund or accounting fact source (erp/payment) in a cell yet: erp/finance subscribes to none",
 }
 # The same for keys named after a data class (be-protocol chapter 15), by their prefix.
 UNSET_PREFIXES_ON_PURPOSE = {
