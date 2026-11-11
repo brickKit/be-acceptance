@@ -133,6 +133,10 @@ ERP_KEYS = {
                                    "erp.payment.entry.read", "erp.payment.entry.edit", "erp.payment.entry.approve",
                                    "erp.payment.statement.read", "erp.payment.statement.reconcile",
                                    "erp.payment.system.read", "erp.payment.system.resend", "erp.payment.system.recover"]},
+    # C5 (3.0.0): the value of stock by the valuation sequence; the cost facts for erp/finance
+    "erp/costing": {"resource_type": ["erp.costing.policy", "erp.costing.valuation", "erp.costing.system"],
+                    "permission": ["erp.costing.policy.read", "erp.costing.policy.manage", "erp.costing.valuation.read",
+                                   "erp.costing.system.read", "erp.costing.system.resend", "erp.costing.system.recover"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -153,9 +157,11 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.finance.supplier_invoice": ["legal_entity", "department"],
               "erp.payment.bank_account": ["legal_entity"], "erp.payment.receipt": ["legal_entity"],
               "erp.payment.request": ["legal_entity", "department"], "erp.payment.entry": ["legal_entity"],
-              "erp.payment.statement": ["legal_entity"]}
+              "erp.payment.statement": ["legal_entity"], "erp.costing.policy": ["legal_entity"],
+              "erp.costing.valuation": ["legal_entity"]}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
-PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance", "erp/payment"}
+PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance", "erp/payment",
+             "erp/costing"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
