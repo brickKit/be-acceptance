@@ -17,7 +17,7 @@ MDM_PORTS = {"mdm/org": (8083, 9093), "mdm/currency": (8226, 9226), "mdm/partner
              "mdm/employee": (8227, 9227)}
 # the business components of step 7 (the trading chain) and the print component
 ERP_PORTS = {"erp/inventory": (8086, 9096), "erp/credit": (8088, 9088), "erp/sales": (8084, 9094),
-             "erp/billing": (8089, 9089), "erp/purchase": (8085, 9095), "erp/finance": (8087, 9097), "infra/print": (8400, 9400)}
+             "erp/billing": (8089, 9089), "erp/purchase": (8085, 9095), "erp/finance": (8087, 9097), "erp/payment": (8228, 9228), "infra/print": (8400, 9400)}
 PORTS = {**PROBE_PORTS, **INFRA_PORTS, **MDM_PORTS, **ERP_PORTS}
 SHELL_ROLES = {"be/go-core": "shell_go_core", "be/go-infra": "shell_go_infra", "be/py-render": "shell_py_render"}
 SHELL_PORTS = {"be/go-core": 8090, "be/go-infra": 8224, "be/py-render": 8402}

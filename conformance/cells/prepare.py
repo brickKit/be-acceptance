@@ -123,6 +123,16 @@ ERP_KEYS = {
                                    "erp.finance.supplier_invoice.edit", "erp.finance.supplier_invoice.approve",
                                    "erp.finance.system.read", "erp.finance.system.claim", "erp.finance.system.resend",
                                    "erp.finance.system.recover"]},
+    # C3 (3.0.0): receipts, payment requests that claim erp/finance's open items, transfers and bank entries, statements
+    "erp/payment": {"resource_type": ["erp.payment.bank_account", "erp.payment.receipt", "erp.payment.request",
+                                      "erp.payment.entry", "erp.payment.statement", "erp.payment.system"],
+                    "permission": ["erp.payment.bank_account.read", "erp.payment.bank_account.manage",
+                                   "erp.payment.receipt.read", "erp.payment.receipt.register",
+                                   "erp.payment.receipt.reverse", "erp.payment.request.read", "erp.payment.request.edit",
+                                   "erp.payment.request.approve", "erp.payment.request.execute",
+                                   "erp.payment.entry.read", "erp.payment.entry.edit", "erp.payment.entry.approve",
+                                   "erp.payment.statement.read", "erp.payment.statement.reconcile",
+                                   "erp.payment.system.read", "erp.payment.system.resend", "erp.payment.system.recover"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -140,9 +150,12 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.purchase.return": SALES_DOCUMENT, "erp.purchase.policy": ["legal_entity"],
               "erp.finance.account": ["legal_entity"], "erp.finance.voucher": ["legal_entity"],
               "erp.finance.period": ["legal_entity"], "erp.finance.open_item": ["legal_entity", "department"],
-              "erp.finance.supplier_invoice": ["legal_entity", "department"]}
+              "erp.finance.supplier_invoice": ["legal_entity", "department"],
+              "erp.payment.bank_account": ["legal_entity"], "erp.payment.receipt": ["legal_entity"],
+              "erp.payment.request": ["legal_entity", "department"], "erp.payment.entry": ["legal_entity"],
+              "erp.payment.statement": ["legal_entity"]}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
-PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance"}
+PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance", "erp/payment"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
