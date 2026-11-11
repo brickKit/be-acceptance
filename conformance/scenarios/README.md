@@ -10,6 +10,7 @@
 | `test_employee.py` | 绑定任职的授予：任职在职时给、结束后立即不给并记为结束，新任职不自动有；处置一个账号时同一个人（关联同一员工）的另一个账号也被挡住，解除后恢复。格里没有 `mdm/employee` 时跳过 | `mdm/employee`、`infra/authz`、`mdm/org` |
 | `test_purchase.py` | 采购到入库再退回：经运行中的库存收货，库存增加、流水带收货行参考、订单的已收等于流水、收足即完成；从那条流水退货，库存减少；超过法人的超收比例整笔拒绝、库存不动；提交人不能批准；采购员只看采购部的订单。格里没有 `erp/purchase` 时跳过 | `erp/purchase`、`erp/inventory`、`infra/authz`、`mdm/org` |
 | `test_finance.py` | 从订单到凭证：开具的账单（出账的事件）形成应收与已过账的凭证（应收借、收入与销项税贷，凭证号连续）；采购收货后登记供应商票据，多于已收进入差异、登记人不能批准，改成已收数量后匹配、过账成应付与凭证；会计制单不能审批、主管审批取号，会计看不到别的法人的凭证。格里没有 `erp/finance` 时跳过 | `erp/finance`、`erp/billing`、`erp/sales`、`erp/purchase`、`erp/inventory`、`infra/authz` |
+| `test_payment.py` | 收付款：为开具的账单登记收款，财务按资金事实核销这位客户的应收（最早到期的先分，已核销合计增加到账的金额）；采购收货、供应商票据过账后，付款申请提交时认领应付（认领中、可用为零），申请人不能批准，主管批准、出纳放行与登记执行后财务把应付核销到零。格里没有 `erp/payment` 或 `erp/finance` 时跳过 | `erp/payment`、`erp/finance`、`erp/billing`、`erp/sales`、`erp/purchase`、`erp/inventory` |
 
 测试名写出对方组件（测试规范的命名规则），用 `-k` 按名字只跑两个组件之间的。
 

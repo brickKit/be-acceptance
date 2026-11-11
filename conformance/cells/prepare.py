@@ -411,7 +411,7 @@ UNSET_ON_PURPOSE = {
     "CLAIM_PERIOD": "erp/finance's payment claims last 7 days when unset",
     "MATCH_TOLERANCES": "erp/finance's tolerances are 0 in every legal entity when unset (the L3 mismatch and the "
                         "seed's price difference rely on it)",
-    "FINANCE_FACT_SOURCES": "no fund or accounting fact source (erp/payment) in a cell yet: erp/finance subscribes to none",
+    "FINANCE_FACT_SOURCES": "set when the cell places erp/payment (configs); without it erp/finance subscribes to none",
 }
 # The same for keys named after a data class (be-protocol chapter 15), by their prefix.
 UNSET_PREFIXES_ON_PURPOSE = {
@@ -496,6 +496,10 @@ def security_configs(c: Cell) -> None:
             files[comp] += ["BUS_URL: file://.secrets/bus", f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"]
     if "mdm/org" in files:
         files["mdm/org"].append("DEFAULT_LEGAL_ENTITY_TIMEZONE: Asia/Shanghai")
+    if "erp/finance" in files and "erp/payment" in c.placed:  # the assembly's fact sources (erp/finance's ST01, AF01)
+        sources = [{"stream": "erp.payment", "type": "erp.payment.fund_fact.v1"},
+                   {"stream": "erp.payment", "type": "erp.payment.accounting_fact.v1"}]
+        files["erp/finance"].append(f"FINANCE_FACT_SOURCES: {json.dumps(json.dumps(sources))}")
     for comp, lines in files.items():
         if comp in c.placed:
             if declares(c, comp, "RECOVERY_PHASE"):  # the recovery phase (be-protocol P1.22): a shared variable
