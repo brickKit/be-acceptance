@@ -82,7 +82,7 @@ ERP_KEYS = {
                                         "erp.inventory.system"],
                       "permission": ["erp.inventory.warehouse.read", "erp.inventory.warehouse.manage",
                                      "erp.inventory.stock.read", "erp.inventory.movement.read",
-                                     "erp.inventory.movement.create", "erp.inventory.adjustment.create",
+                                     "erp.inventory.movement.create", "erp.inventory.movement.adjust",
                                      "erp.inventory.system.read", "erp.inventory.system.reserve",
                                      "erp.inventory.system.issue", "erp.inventory.system.resend", "erp.inventory.system.recover",
                                      # 3.0.37: the purchase component's receipts and returns

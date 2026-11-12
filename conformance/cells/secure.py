@@ -104,7 +104,7 @@ async def secure(directory: str | pathlib.Path) -> dict:
         # through their user surfaces (system operations are for services; adjustments are not in this version)
         for comp in c.erp:
             for op in ERP_KEYS[comp]["permission"]:
-                if ".system." in op or op == "erp.inventory.adjustment.create":
+                if ".system." in op or op == "erp.inventory.movement.adjust":
                     continue
                 rt = op.rsplit(".", 1)[0]
                 segments.append({"resource_type": rt, "operation": op,
