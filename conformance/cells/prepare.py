@@ -137,6 +137,11 @@ ERP_KEYS = {
     "erp/costing": {"resource_type": ["erp.costing.policy", "erp.costing.valuation", "erp.costing.system"],
                     "permission": ["erp.costing.policy.read", "erp.costing.policy.manage", "erp.costing.valuation.read",
                                    "erp.costing.system.read", "erp.costing.system.resend", "erp.costing.system.recover"]},
+    # C6 (3.0.0): opportunities, their stages and quote requests to erp/sales; the funnel
+    "crm/opportunity": {"resource_type": ["crm.opportunity", "crm.opportunity.system"],
+                        "permission": ["crm.opportunity.read", "crm.opportunity.edit", "crm.opportunity.close",
+                                       "crm.opportunity.assign", "crm.opportunity.system.resend",
+                                       "crm.opportunity.system.recover"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -158,10 +163,10 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.payment.bank_account": ["legal_entity"], "erp.payment.receipt": ["legal_entity"],
               "erp.payment.request": ["legal_entity", "department"], "erp.payment.entry": ["legal_entity"],
               "erp.payment.statement": ["legal_entity"], "erp.costing.policy": ["legal_entity"],
-              "erp.costing.valuation": ["legal_entity"]}
+              "erp.costing.valuation": ["legal_entity"], "crm.opportunity": ["legal_entity", "owner"]}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
 PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance", "erp/payment",
-             "erp/costing"}
+             "erp/costing", "crm/opportunity"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
