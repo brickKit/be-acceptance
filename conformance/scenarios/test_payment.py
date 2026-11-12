@@ -91,7 +91,7 @@ def test_payment_finance_request_claims_and_settles_the_payable(bob, login, worl
     item = bob.get("erp/finance", f"/api/finance/open-items/{payable}")
     assert Decimal(item["pay_claimed"]) == Decimal("45.2") and Decimal(item["available"]) == 0, item
     r = bob.call("POST", "erp/payment", f"{path}/approve", {})
-    assert r.status_code == 409 and r.json()["reason"] == "APPROVER_IS_SUBMITTER", r.text
+    assert r.status_code == 403 and r.json()["reason"] == "SELF_APPROVAL", r.text  # the flow kernel's check (C7)
     assert lead.post("erp/payment", f"{path}/approve")["state"] == "approved"
     assert cashier.post("erp/payment", f"{path}/release")["state"] == "ready"
     paid = cashier.post("erp/payment", f"{path}/execute", {"paid_amount": "45.2", "paid_on": date.today().isoformat(),

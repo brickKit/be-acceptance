@@ -13,6 +13,7 @@
 | `test_payment.py` | 收付款：为开具的账单登记收款，财务按资金事实核销这位客户的应收（最早到期的先分，已核销合计增加到账的金额）；采购收货、供应商票据过账后，付款申请提交时认领应付（认领中、可用为零），申请人不能批准，主管批准、出纳放行与登记执行后财务把应付核销到零。格里没有 `erp/payment` 或 `erp/finance` 时跳过 | `erp/payment`、`erp/finance`、`erp/billing`、`erp/sales`、`erp/purchase`、`erp/inventory` |
 | `test_costing.py` | 存货成本：采购收货的成本层按收货计价依据（订单价）计价、发存货借暂估贷的成本事实；更高价的供应商票据经主管批准差异、过账后替换依据，在库单位的差额出向上调整，两条成本事实都在财务过成凭证；销售交货后计价范围的数量跟上法人的库存（CN01 移动平均）；ES01 先进先出：交货取走全部旧库存与新收货的一个单位，采购退货问成本组件，两个被拒（`RETURN_EXCEEDS_COST_LAYER`）、在库的一个退回并按层价出退货事实。格里没有 `erp/costing` 时跳过 | `erp/costing`、`erp/purchase`、`erp/finance`、`erp/sales`、`erp/inventory`、`erp/credit` |
 | `test_opportunity.py` | 商机到订单（A71）：商机请求报价，销售生成一张没有明细、带商机参考与请求身份的报价草稿（商机上的请求变成已生成）；没有明细不能发出，补上明细后发出、接受成订单（订单带商机参考），确认订单后商机按订单的不含税合计自动赢单（格设 `OPPORTUNITY_AUTO_WIN=order_confirmed`，操作者 `system`）；`test.sales.cn` 只看到、只算自己的商机，别人的答 404。格里没有 `crm/opportunity` 时跳过 | `crm/opportunity`、`erp/sales`、`erp/inventory`、`erp/credit` |
+| `test_workflow.py` | 统一待办里的审批（C7）：提交的采购申请出现在采购主管（`test.buyer.lead`，任 CN01 的 `PUR-MGR`）的待办里，动作入口是 `erp/purchase` 的标准路由；提交人自己审批答 `SELF_APPROVAL`；主管的决定直达采购组件，同一个幂等键重试答同一个结果、只有一个决定；批准后订单能取用申请行；任务离开待办、进了已办。银行手续费的任务在财务主管（`test.finance.lead`，任 `FIN-MGR`）的待办里：没有意见的驳回答 `REQUEST_INVALID`，带意见驳回回草稿，再提交是新任务，批准即过账。格里没有 `infra/workflow`、`erp/purchase`、`erp/payment` 或 `mdm/employee` 时跳过 | `infra/workflow`、`erp/purchase`、`erp/payment`、`mdm/employee` |
 
 测试名写出对方组件（测试规范的命名规则），用 `-k` 按名字只跑两个组件之间的。
 

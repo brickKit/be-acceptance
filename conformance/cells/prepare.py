@@ -146,6 +146,10 @@ ERP_KEYS = {
                         "permission": ["crm.opportunity.read", "crm.opportunity.edit", "crm.opportunity.close",
                                        "crm.opportunity.assign", "crm.opportunity.system.resend",
                                        "crm.opportunity.system.recover"]},
+    # C7 (3.0.0): the unified worklist; its resources have no dimension (the candidates bound what one sees)
+    "infra/workflow": {"resource_type": ["infra.workflow.task", "infra.workflow.projection", "infra.workflow.system"],
+                       "permission": ["infra.workflow.task.read", "infra.workflow.admin",
+                                      "infra.workflow.system.recover"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -167,8 +171,11 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.payment.bank_account": ["legal_entity"], "erp.payment.receipt": ["legal_entity"],
               "erp.payment.request": ["legal_entity", "department"], "erp.payment.entry": ["legal_entity"],
               "erp.payment.statement": ["legal_entity"], "erp.payment.policy": ["legal_entity"],
-              "erp.purchase.flow": [], "erp.payment.flow": [], "erp.costing.policy": ["legal_entity"],
+              "erp.purchase.flow": [], "erp.payment.flow": [], "infra.workflow.task": [],
+              "infra.workflow.projection": [], "erp.costing.policy": ["legal_entity"],
               "erp.costing.valuation": ["legal_entity"], "crm.opportunity": ["legal_entity", "owner"]}
+# the components that only consume events: the bus, an implementation instance, no stream of their own to clean
+CONSUMERS = {"infra/workflow"}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
 PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance", "erp/payment",
              "erp/costing", "crm/opportunity"}
@@ -429,6 +436,9 @@ UNSET_ON_PURPOSE = {
                         "seed's price difference rely on it)",
     "FINANCE_FACT_SOURCES": "set when the cell places erp/payment or erp/costing (configs); without it erp/finance "
                             "subscribes to none",
+    "WORKFLOW_TASK_SOURCES": "set when the cell places erp/purchase or erp/payment (configs); without them the worklist "
+                             "subscribes to none",
+    "WORKFLOW_STALE_AFTER": "infra/workflow marks a silent publisher's tasks after 15 minutes when unset",
     "VALUATION_GAP_WAIT": "erp/costing waits 5 minutes for a gap in a valuation sequence when unset (protocol 05b)",
     "VALUATION_BASIS_WAIT": "erp/costing waits 5 minutes for a purchase receipt's valuation basis when unset (protocol 05b; "
                             "erp/purchase publishes the basis before it receives, so a cell does not wait)",
@@ -512,12 +522,19 @@ def security_configs(c: Cell) -> None:
                        f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"]
     for comp in c.erp:  # the business components and print: a database, a service identity, guarded routes
         files[comp] = [*common, *db(comp), *guarded(comp)]
-        if comp in PRODUCERS:
+        if comp in PRODUCERS or comp in CONSUMERS:
             files[comp] += ["BUS_URL: file://.secrets/bus", f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"]
     if "mdm/org" in files:
         files["mdm/org"].append("DEFAULT_LEGAL_ENTITY_TIMEZONE: Asia/Shanghai")
     if "crm/opportunity" in files:  # the L3 scenario wins an opportunity by its confirmed order (OP08)
         files["crm/opportunity"].append("OPPORTUNITY_AUTO_WIN: order_confirmed")
+    tasks = []  # the worklist's chosen publishers (infra/workflow WF08): the flow managers the cell places
+    if "erp/purchase" in c.placed:
+        tasks += ["erp.purchase.order.approval=erp/purchase", "erp.purchase.requisition.approval=erp/purchase"]
+    if "erp/payment" in c.placed:
+        tasks += ["erp.payment.request.approval=erp/payment", "erp.payment.entry.approval=erp/payment"]
+    if "infra/workflow" in files and tasks:
+        files["infra/workflow"].append(f"WORKFLOW_TASK_SOURCES: {','.join(tasks)}")
     sources = []  # the assembly's fact sources (erp/finance's ST01, AF01)
     if "erp/payment" in c.placed:
         sources += [{"stream": "erp.payment", "type": "erp.payment.fund_fact.v1"},
