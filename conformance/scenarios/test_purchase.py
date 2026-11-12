@@ -96,7 +96,7 @@ def test_purchase_authz_approver_is_not_the_submitter_and_the_buyer_sees_its_dep
     o = bob.post("erp/purchase", "/api/purchase/orders", body)
     bob.post("erp/purchase", f"/api/purchase/orders/{o['id']}/submit")
     r = bob.call("POST", "erp/purchase", f"/api/purchase/orders/{o['id']}/approve")
-    assert r.status_code == 409 and r.json()["reason"] == "APPROVER_IS_SUBMITTER", r.text
+    assert r.status_code == 403 and r.json()["reason"] == "SELF_APPROVAL", r.text  # the flow kernel's check (C7)
 
     buyer = login("test.buyer.cn")
     mine = bob.post("erp/purchase", "/api/purchase/orders", {**body, "department_id": world.departments["PUR-RAW"]})
