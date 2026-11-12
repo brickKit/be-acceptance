@@ -150,6 +150,13 @@ ERP_KEYS = {
     "infra/workflow": {"resource_type": ["infra.workflow.task", "infra.workflow.projection", "infra.workflow.system"],
                        "permission": ["infra.workflow.task.read", "infra.workflow.projection.read",
                                       "infra.workflow.system.recover"]},
+    # C8 (3.0.0): notifications; messages and preferences have no dimension (every one is the caller's own)
+    "infra/notification": {"resource_type": ["infra.notification.message", "infra.notification.preference",
+                                             "infra.notification.rejection", "infra.notification.system"],
+                           "permission": ["infra.notification.message.read", "infra.notification.message.mark",
+                                          "infra.notification.preference.read", "infra.notification.preference.manage",
+                                          "infra.notification.rejection.read", "infra.notification.system.recover",
+                                          "infra.notification.system.resend"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -172,13 +179,14 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.payment.request": ["legal_entity", "department"], "erp.payment.entry": ["legal_entity"],
               "erp.payment.statement": ["legal_entity"], "erp.payment.policy": ["legal_entity"],
               "erp.purchase.flow": [], "erp.payment.flow": [], "infra.workflow.task": [],
-              "infra.workflow.projection": [], "erp.costing.policy": ["legal_entity"],
+              "infra.workflow.projection": [], "infra.notification.message": [], "infra.notification.preference": [],
+              "infra.notification.rejection": [], "erp.costing.policy": ["legal_entity"],
               "erp.costing.valuation": ["legal_entity"], "crm.opportunity": ["legal_entity", "owner"]}
 # the components that only consume events: the bus, an implementation instance, no stream of their own to clean
 CONSUMERS = {"infra/workflow"}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
 PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance", "erp/payment",
-             "erp/costing", "crm/opportunity"}
+             "erp/costing", "crm/opportunity", "infra/notification"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
@@ -438,6 +446,8 @@ UNSET_ON_PURPOSE = {
                             "subscribes to none",
     "WORKFLOW_TASK_SOURCES": "set when the cell places erp/purchase or erp/payment (configs); without them the worklist "
                              "subscribes to none",
+    "NOTIFICATION_INTENT_SOURCES": "set when the cell places erp/purchase or erp/payment (configs); without them the "
+                                   "notification component subscribes to none",
     "WORKFLOW_STALE_AFTER": "infra/workflow marks a silent publisher's tasks after 15 minutes when unset",
     "VALUATION_GAP_WAIT": "erp/costing waits 5 minutes for a gap in a valuation sequence when unset (protocol 05b)",
     "VALUATION_BASIS_WAIT": "erp/costing waits 5 minutes for a purchase receipt's valuation basis when unset (protocol 05b; "
@@ -535,6 +545,9 @@ def security_configs(c: Cell) -> None:
         tasks += ["erp.payment.request.approval=erp/payment", "erp.payment.entry.approval=erp/payment"]
     if "infra/workflow" in files and tasks:
         files["infra/workflow"].append(f"WORKFLOW_TASK_SOURCES: {','.join(tasks)}")
+    senders = [s for s in ("erp/payment", "erp/purchase") if s in c.placed]  # their flow kernels send (P18.10)
+    if "infra/notification" in files and senders:
+        files["infra/notification"].append(f"NOTIFICATION_INTENT_SOURCES: {','.join(senders)}")
     sources = []  # the assembly's fact sources (erp/finance's ST01, AF01)
     if "erp/payment" in c.placed:
         sources += [{"stream": "erp.payment", "type": "erp.payment.fund_fact.v1"},
