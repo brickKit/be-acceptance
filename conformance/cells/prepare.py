@@ -511,6 +511,8 @@ def security_configs(c: Cell) -> None:
             files[comp] += ["BUS_URL: file://.secrets/bus", f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"]
     if "mdm/org" in files:
         files["mdm/org"].append("DEFAULT_LEGAL_ENTITY_TIMEZONE: Asia/Shanghai")
+    if "crm/opportunity" in files:  # the L3 scenario wins an opportunity by its confirmed order (OP08)
+        files["crm/opportunity"].append("OPPORTUNITY_AUTO_WIN: order_confirmed")
     sources = []  # the assembly's fact sources (erp/finance's ST01, AF01)
     if "erp/payment" in c.placed:
         sources += [{"stream": "erp.payment", "type": "erp.payment.fund_fact.v1"},

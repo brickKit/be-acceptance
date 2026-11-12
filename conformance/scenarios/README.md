@@ -12,6 +12,7 @@
 | `test_finance.py` | 从订单到凭证：开具的账单（出账的事件）形成应收与已过账的凭证（应收借、收入与销项税贷，凭证号连续）；采购收货后登记供应商票据，多于已收进入差异、登记人不能批准，改成已收数量后匹配、过账成应付与凭证；会计制单不能审批、主管审批取号，会计看不到别的法人的凭证。格里没有 `erp/finance` 时跳过 | `erp/finance`、`erp/billing`、`erp/sales`、`erp/purchase`、`erp/inventory`、`infra/authz` |
 | `test_payment.py` | 收付款：为开具的账单登记收款，财务按资金事实核销这位客户的应收（最早到期的先分，已核销合计增加到账的金额）；采购收货、供应商票据过账后，付款申请提交时认领应付（认领中、可用为零），申请人不能批准，主管批准、出纳放行与登记执行后财务把应付核销到零。格里没有 `erp/payment` 或 `erp/finance` 时跳过 | `erp/payment`、`erp/finance`、`erp/billing`、`erp/sales`、`erp/purchase`、`erp/inventory` |
 | `test_costing.py` | 存货成本：采购收货的成本层按收货计价依据（订单价）计价、发存货借暂估贷的成本事实；更高价的供应商票据经主管批准差异、过账后替换依据，在库单位的差额出向上调整，两条成本事实都在财务过成凭证；销售交货后计价范围的数量跟上法人的库存（CN01 移动平均）；ES01 先进先出：交货取走全部旧库存与新收货的一个单位，采购退货问成本组件，两个被拒（`RETURN_EXCEEDS_COST_LAYER`）、在库的一个退回并按层价出退货事实。格里没有 `erp/costing` 时跳过 | `erp/costing`、`erp/purchase`、`erp/finance`、`erp/sales`、`erp/inventory`、`erp/credit` |
+| `test_opportunity.py` | 商机到订单（A71）：商机请求报价，销售生成一张没有明细、带商机参考与请求身份的报价草稿（商机上的请求变成已生成）；没有明细不能发出，补上明细后发出、接受成订单（订单带商机参考），确认订单后商机按订单的不含税合计自动赢单（格设 `OPPORTUNITY_AUTO_WIN=order_confirmed`，操作者 `system`）；`test.sales.cn` 只看到、只算自己的商机，别人的答 404。格里没有 `crm/opportunity` 时跳过 | `crm/opportunity`、`erp/sales`、`erp/inventory`、`erp/credit` |
 
 测试名写出对方组件（测试规范的命名规则），用 `-k` 按名字只跑两个组件之间的。
 
