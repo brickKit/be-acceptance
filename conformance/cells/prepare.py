@@ -148,7 +148,7 @@ ERP_KEYS = {
                                        "crm.opportunity.system.recover"]},
     # C7 (3.0.0): the unified worklist; its resources have no dimension (the candidates bound what one sees)
     "infra/workflow": {"resource_type": ["infra.workflow.task", "infra.workflow.projection", "infra.workflow.system"],
-                       "permission": ["infra.workflow.task.read", "infra.workflow.admin",
+                       "permission": ["infra.workflow.task.read", "infra.workflow.projection.read",
                                       "infra.workflow.system.recover"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
