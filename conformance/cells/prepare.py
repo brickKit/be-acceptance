@@ -4,6 +4,7 @@ every component's config file (the chain wired with $endpoint: references). Secr
 are referenced from config; the object storage keys come from the environment (BE_ACC_S3_ACCESS_KEY, _SECRET_KEY)."""
 from __future__ import annotations
 
+import base64
 import io
 import json
 import os
@@ -166,6 +167,15 @@ ERP_KEYS = {
                          "permission": ["infra.attachment.upload.confirm", "infra.attachment.download.read",
                                         "infra.attachment.system.manage", "infra.attachment.system.recover",
                                         "infra.attachment.system.resend"]},
+    # C10 (3.0.0): the DingTalk channel member; a binding is one's own, the rest an administrator's or the notifications'
+    "integration/im-dingtalk": {"resource_type": ["integration.im_dingtalk.my_binding", "integration.im_dingtalk.binding",
+                                                  "integration.im_dingtalk.callback", "integration.im_dingtalk.system"],
+                                "permission": ["integration.im_dingtalk.my_binding.manage",
+                                               "integration.im_dingtalk.binding.read", "integration.im_dingtalk.binding.end",
+                                               "integration.im_dingtalk.callback.read",
+                                               "integration.im_dingtalk.system.deliver",
+                                               "integration.im_dingtalk.system.recover",
+                                               "integration.im_dingtalk.system.resend"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -190,13 +200,14 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.purchase.flow": [], "erp.payment.flow": [], "infra.workflow.task": [],
               "infra.workflow.projection": [], "infra.notification.message": [], "infra.notification.preference": [],
               "infra.notification.rejection": [], "infra.attachment.upload": [],
-              "infra.attachment.download": [], "erp.costing.policy": ["legal_entity"],
+              "infra.attachment.download": [], "integration.im_dingtalk.my_binding": [],
+              "integration.im_dingtalk.binding": [], "integration.im_dingtalk.callback": [], "erp.costing.policy": ["legal_entity"],
               "erp.costing.valuation": ["legal_entity"], "crm.opportunity": ["legal_entity", "owner"]}
 # the components that only consume events: the bus, an implementation instance, no stream of their own to clean
 CONSUMERS = {"infra/workflow"}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
 PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance", "erp/payment",
-             "erp/costing", "crm/opportunity", "infra/notification", "infra/attachment"}
+             "erp/costing", "crm/opportunity", "infra/notification", "infra/attachment", "integration/im-dingtalk"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
@@ -562,6 +573,13 @@ def security_configs(c: Cell) -> None:
     senders = [s for s in ("erp/payment", "erp/purchase") if s in c.placed]  # their flow kernels send (P18.10)
     if "infra/notification" in files and senders:
         files["infra/notification"].append(f"NOTIFICATION_INTENT_SOURCES: {','.join(senders)}")
+    if "infra/notification" in files and "integration/im-dingtalk" in c.placed:  # the external channel (NT13)
+        files["infra/notification"].append("NOTIFICATION_CHANNELS: dingtalk=integration/im-dingtalk")
+    if "integration/im-dingtalk" in c.placed:  # the senders' approvals take the DingTalk buttons (P17.20)
+        for s in senders:
+            files[s].append("FLOW_ACTION_SOURCES: integration/im-dingtalk")
+    if "integration/im-dingtalk" in files:
+        files["integration/im-dingtalk"] += dingtalk_config(c)
     if "infra/attachment" in files:  # the presigned addresses as the suite (the browser) reaches the object store
         files["infra/attachment"].append("OBJECT_STORE_PUBLIC_URL: http://localhost:9000")
     sources = []  # the assembly's fact sources (erp/finance's ST01, AF01)
@@ -583,6 +601,34 @@ def security_configs(c: Cell) -> None:
                          "OBJECT_STORE_SECRET_KEY: ${BE_ACC_S3_SECRET_KEY}"]
             lines = [*lines, *profile_and_tiering(c, comp), *settings_of(c, comp)]
             (cfg / f"{file_of(comp)}.yaml").write_text(HEADER.format(cell=c.name) + "\n".join(lines) + "\n")
+
+
+# DingTalk as the cell's member reaches it: the suite's simulator (external/dingtalk.py) on the host, which the L3
+# scenarios start; the application's credentials are the cell's own (.secrets/dingtalk/), which the scenarios read to
+# sign callbacks as DingTalk would.
+DINGTALK_SIM_PORT = 17207
+DINGTALK_APP_KEY = "be-cell-app"
+
+
+def dingtalk_config(c: Cell) -> list[str]:
+    d = c.dir / ".secrets" / "dingtalk"
+    d.mkdir(parents=True, exist_ok=True)
+    made = {"app-secret": secrets_mod.token_urlsafe(24), "callback-token": secrets_mod.token_urlsafe(24),
+            # 43 base64 characters: 32 bytes less the final "=" (DingTalk's EncodingAESKey)
+            "callback-aes-key": base64.b64encode(os.urandom(32)).decode()[:43]}
+    for name, value in made.items():
+        if not (d / name).exists():  # kept across preparations: the running member and the scenarios agree
+            (d / name).write_text(value)
+        (d / name).chmod(0o644)
+    sim, port = f"http://{c.base_host}:{DINGTALK_SIM_PORT}", c.host_port("integration/im-dingtalk")
+    return [f"DINGTALK_API_URL: {sim}", f"DINGTALK_OAPI_URL: {sim}",
+            f"DINGTALK_LOGIN_URL: http://localhost:{DINGTALK_SIM_PORT}", f"DINGTALK_APP_KEY: {DINGTALK_APP_KEY}",
+            "DINGTALK_APP_SECRET: file://.secrets/dingtalk/app-secret",
+            "DINGTALK_CALLBACK_TOKEN: file://.secrets/dingtalk/callback-token",
+            "DINGTALK_CALLBACK_AES_KEY: file://.secrets/dingtalk/callback-aes-key",
+            "DINGTALK_CARD_TEMPLATE_ID: be-cell-card", "DINGTALK_LINK_BASE: http://localhost:5173",
+            f"DINGTALK_OAUTH_REDIRECT: http://localhost:{port}/api/im-dingtalk/bindings/callback",
+            "DINGTALK_BIND_RETURN: http://localhost:5173/settings/dingtalk"]
 
 
 def profile_and_tiering(c: Cell, comp: str) -> list[str]:
