@@ -85,5 +85,7 @@ def test_notification_the_approvers_preferences(bob, login, world):
     on_entry = worklist_entry(lead, "erp.purchase.requisition.approval", on["id"])
     eventually(lambda: message_of(lead, f"/workflow/tasks/{on_entry['task']['id']}"), seconds=60)
     assert message_of(lead, f"/workflow/tasks/{off_entry['task']['id']}") is None, "turned off when it was delivered"
-    prefs = {p["category"]: p for p in lead.get("infra/notification", "/api/notification/preferences")["preferences"]}
-    assert prefs["approval_task"]["enabled"] is True and prefs["security_alert"]["mandatory"] is True, prefs
+    prefs = {(p["category"], p["channel"]): p
+             for p in lead.get("infra/notification", "/api/notification/preferences")["preferences"]}
+    assert prefs[("approval_task", "in_app")]["enabled"] is True, prefs  # per category and channel (NT14)
+    assert prefs[("security_alert", "in_app")]["mandatory"] is True, prefs

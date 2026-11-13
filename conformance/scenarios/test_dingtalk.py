@@ -1,9 +1,11 @@
 """L3, the DingTalk channel (C10; the assembly project's protocol 10, be-protocol chapter 20): the purchasing lead binds
 their own DingTalk user through OAuth against the suite's DingTalk simulator (external/dingtalk.py); a submitted
-requisition's approval then reaches them as an interactive card besides the in-app message; clicking approve in
-DingTalk (a callback signed and encrypted as DingTalk pushes it) approves the task in erp/purchase; the same click
-pushed again and clicked again make no second decision; the other button afterwards is refused (GRANT_USED) with an
-in-app note; a card whose task was decided in the worklist meanwhile is refused with a note; a callback DingTalk did
+requisition's approval then reaches them as an interactive card besides the in-app message, with an approve button
+and no reject (purchase rejections need a comment, which a button cannot give: P17.19); clicking approve in DingTalk
+(a callback signed and encrypted as DingTalk pushes it) approves the task in erp/purchase; the same click pushed again
+and clicked again make no second decision and no note; a card whose task was decided in the worklist meanwhile is
+refused with an in-app note (another action on a used grant, GRANT_USED, needs a second button: the SDK's vectors and
+integration tests cover it); a callback DingTalk did
 not sign is dropped; a card forwarded to another DingTalk user is quarantined; unbound, the lead gets the in-app
 message only. Each test makes its own documents on top of the seed data; the tests run in this file's order."""
 from __future__ import annotations
@@ -105,15 +107,15 @@ def test_dingtalk_the_lead_binds_their_own_dingtalk(login, sim):
 
 
 def test_dingtalk_approve_from_the_card(bob, login, sim, keys, world):
-    """P17.19, P17.20, P20.6, P20.8: the requisition's approval is a card with approve and reject buttons and the link;
-    clicking approve approves the task; the same push again and a second click of approve make no second decision;
-    reject afterwards is refused as GRANT_USED and the lead is told in-app."""
+    """P17.19, P17.20, P20.6, P20.8: the requisition's approval is a card with an approve button (no reject: a purchase
+    rejection needs a comment) and the link; clicking approve approves the task; the same push again and a second click
+    of approve make no second decision and tell the lead nothing (a replay of the same action)."""
     lead = login("test.buyer.lead")
     req = submitted_requisition(bob, world)
     entry = worklist_entry(lead, TASK, req["id"])
     card = card_of(sim, entry)
     actions = {b.get("Action") for b in card["buttons"]}
-    assert {"approve", "reject"} <= actions, card
+    assert "approve" in actions and "reject" not in actions, card
     assert all(b["Value"].count(".") == 2 for b in card["buttons"] if b.get("Action")), "delivery.action.one-time value"
 
     click = dingtalk.click(card, "approve")
@@ -124,9 +126,8 @@ def test_dingtalk_approve_from_the_card(bob, login, sim, keys, world):
 
     assert push(lead, keys, click).status_code == 200, "the same push again: answered, processed once"
     assert push(lead, keys, dingtalk.click(card, "approve")).status_code == 200, "a second click of approve"
-    assert push(lead, keys, dingtalk.click(card, "reject")).status_code == 200
-    note = eventually(lambda: note_of(lead, entry), seconds=90)
-    assert "GRANT_USED" in note["title"], note
+    time.sleep(5)  # both were taken by now (the first took seconds)
+    assert note_of(lead, entry) is None, "a replay of the same action is no refusal"
     assert requisition(bob, req["id"])["state"] == "approved", "one decision: the first"
 
 

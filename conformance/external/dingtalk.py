@@ -86,9 +86,13 @@ class Sim:
     codes: dict[str, str] = field(default_factory=dict)   # an OAuth code -> the union id it was given to
     tokens: dict[str, str] = field(default_factory=dict)  # a user's access token -> union id
     users: dict[str, str] = field(default_factory=dict)   # union id -> the organisation's user id
-    app_token: str = field(default_factory=lambda: secrets.token_hex(16))
+    app_token: str = ""  # derived from the secret: a member's cached token stays valid across the simulator's restarts,
+    # as DingTalk's does for its two hours
     lock: threading.Lock = field(default_factory=threading.Lock)
     server: ThreadingHTTPServer | None = None
+
+    def __post_init__(self) -> None:
+        self.app_token = self.app_token or hashlib.sha256(f"{self.app_key}:{self.app_secret}".encode()).hexdigest()[:32]
 
     def grant(self, user_id: str) -> str:
         """An OAuth code DingTalk would give the user at the consent page."""
@@ -151,7 +155,7 @@ class Sim:
                     return self.answer(200, {"accessToken": token, "expireIn": 7200})
                 if u.path == "/topapi/user/getbyunionid":
                     if q.get("access_token") != sim.app_token:
-                        return self.answer(200, {"errcode": 88, "errmsg": "invalid access_token"})
+                        return self.answer(200, {"errcode": 40014, "errmsg": "invalid access_token"})
                     with sim.lock:
                         user = sim.users.get(b.get("unionid", ""))
                     if not user:
