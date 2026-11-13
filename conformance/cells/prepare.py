@@ -31,7 +31,9 @@ INFRA_KEYS = {
                                    "infra.authz.security_disposition.release",
                                    "infra.authz.system.read", "infra.authz.system.verify", "infra.authz.system.submit",
                                    "infra.authz.system.claim", "infra.authz.system.account_check", "infra.authz.system.replay",
-                                   "infra.authz.system.recover"]},
+                                   "infra.authz.system.recover",
+                                   # 3.0.55 on: the attachment categories' catalog, for infra/attachment only (C9)
+                                   "infra.authz.system.catalog_read"]},
     "infra/iam-casdoor": {"resource_type": ["infra.iam.session", "infra.iam.account_status", "infra.iam.account"],
                           "permission": ["infra.iam.session.exchange", "infra.iam.session.ended",
                                          "infra.iam.account_status.pull", "infra.iam.account_status.read", "infra.iam.account_status.resend",
@@ -109,7 +111,8 @@ ERP_KEYS = {
                                        "erp.purchase.system"],
                      "permission": ["erp.purchase.requisition.read", "erp.purchase.requisition.edit",
                                     "erp.purchase.requisition.approve", "erp.purchase.order.read",
-                                    "erp.purchase.order.edit", "erp.purchase.order.approve", "erp.purchase.receipt.read",
+                                    "erp.purchase.order.edit", "erp.purchase.order.approve", "erp.purchase.order.read_invoice",
+                                    "erp.purchase.receipt.read",
                                     "erp.purchase.receipt.create", "erp.purchase.return.read", "erp.purchase.return.edit",
                                     "erp.purchase.policy.read", "erp.purchase.policy.manage", "erp.purchase.flow.decide",
                                     "erp.purchase.flow.manage", "erp.purchase.system.read",
@@ -157,6 +160,12 @@ ERP_KEYS = {
                                           "infra.notification.preference.read", "infra.notification.preference.manage",
                                           "infra.notification.rejection.read", "infra.notification.system.recover",
                                           "infra.notification.system.resend"]},
+    # C9 (3.0.0): attachments for their owners; every user may confirm and download, the owner's credential bounds it
+    "infra/attachment": {"resource_type": ["infra.attachment.upload", "infra.attachment.download",
+                                           "infra.attachment.system"],
+                         "permission": ["infra.attachment.upload.confirm", "infra.attachment.download.read",
+                                        "infra.attachment.system.manage", "infra.attachment.system.recover",
+                                        "infra.attachment.system.resend"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -180,13 +189,14 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "erp.payment.statement": ["legal_entity"], "erp.payment.policy": ["legal_entity"],
               "erp.purchase.flow": [], "erp.payment.flow": [], "infra.workflow.task": [],
               "infra.workflow.projection": [], "infra.notification.message": [], "infra.notification.preference": [],
-              "infra.notification.rejection": [], "erp.costing.policy": ["legal_entity"],
+              "infra.notification.rejection": [], "infra.attachment.upload": [],
+              "infra.attachment.download": [], "erp.costing.policy": ["legal_entity"],
               "erp.costing.valuation": ["legal_entity"], "crm.opportunity": ["legal_entity", "owner"]}
 # the components that only consume events: the bus, an implementation instance, no stream of their own to clean
 CONSUMERS = {"infra/workflow"}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
 PRODUCERS = {"erp/inventory", "erp/credit", "erp/sales", "erp/billing", "erp/purchase", "erp/finance", "erp/payment",
-             "erp/costing", "crm/opportunity", "infra/notification"}
+             "erp/costing", "crm/opportunity", "infra/notification", "infra/attachment"}
 # the security members' streams (their definition.go; not named after the component)
 INFRA_STREAMS = {"infra/iam-casdoor": ["be.session.ended", "infra.iam.account_status"]}
 # each operation's resource type: the operation key less its last segment (mdm.partner_role.manage -> mdm.partner_role)
@@ -448,6 +458,8 @@ UNSET_ON_PURPOSE = {
                              "subscribes to none",
     "NOTIFICATION_INTENT_SOURCES": "set when the cell places erp/purchase or erp/payment (configs); without them the "
                                    "notification component subscribes to none",
+    "ATTACHMENT_RETENTION": "the retention is the customer's: every class is pending in a cell, so nothing is purged",
+    "OBJECT_STORE_REGION": "RustFS takes the SDK's default region",
     "WORKFLOW_STALE_AFTER": "infra/workflow marks a silent publisher's tasks after 15 minutes when unset",
     "VALUATION_GAP_WAIT": "erp/costing waits 5 minutes for a gap in a valuation sequence when unset (protocol 05b)",
     "VALUATION_BASIS_WAIT": "erp/costing waits 5 minutes for a purchase receipt's valuation basis when unset (protocol 05b; "
@@ -524,7 +536,9 @@ def security_configs(c: Cell) -> None:
                         "BUS_URL: file://.secrets/bus",
                         # 3.0.46 on: the employee member, the second internal source (links and appointments)
                         *(["EMPLOYEE_GRPC_URL: $endpoint:mdm/employee:grpc", "EMPLOYEE_COMPONENT: mdm/employee"]
-                          if "mdm/employee" in c.placed else [])],
+                          if "mdm/employee" in c.placed else []),
+                        # 3.0.55 on: the attachment member, the only reader of the category catalog (C9)
+                        *(["ATTACHMENT_COMPONENT: infra/attachment"] if "infra/attachment" in c.placed else [])],
         "infra/audit": [*common, *db("infra/audit"), *guarded("infra/audit")],
     }
     for comp in c.mdm:  # the master data components: a database, the bus, a service identity, guarded routes
@@ -548,6 +562,8 @@ def security_configs(c: Cell) -> None:
     senders = [s for s in ("erp/payment", "erp/purchase") if s in c.placed]  # their flow kernels send (P18.10)
     if "infra/notification" in files and senders:
         files["infra/notification"].append(f"NOTIFICATION_INTENT_SOURCES: {','.join(senders)}")
+    if "infra/attachment" in files:  # the presigned addresses as the suite (the browser) reaches the object store
+        files["infra/attachment"].append("OBJECT_STORE_PUBLIC_URL: http://localhost:9000")
     sources = []  # the assembly's fact sources (erp/finance's ST01, AF01)
     if "erp/payment" in c.placed:
         sources += [{"stream": "erp.payment", "type": "erp.payment.fund_fact.v1"},
