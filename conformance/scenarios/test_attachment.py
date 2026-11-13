@@ -28,8 +28,8 @@ def draft_order(bob, world, supplier) -> dict:  # noqa: F811
     return bob.post("erp/purchase", "/api/purchase/orders", {
         "legal_entity_id": world.le, "supplier_id": supplier, "currency": "CNY", "owner_id": bob.principal,
         "department_id": world.departments["PUR"],
-        "lines": [{"product_id": world.service["id"], "quantity": "1", "unit": world.service["base_unit"],
-                   "unit_price": "100"}]})
+        "lines": [{"product_id": world.goods["id"], "quantity": "1", "unit": world.goods["base_unit"],
+                   "unit_price": "100", "warehouse_id": world.shanghai}]})
 
 
 def session(user, order: dict, category: str, body: bytes, name: str = "file.pdf", declared: str = "application/pdf"):
