@@ -16,6 +16,10 @@ LANG = {"go": "Go", "py": "Python"}
 DOCKER = {
     "go": """# The Go probe built at its release tag (the code lives in probes/go); COMPONENT_ID picks this variant.
 FROM golang:1.27.2-alpine AS build
+# git and no checksum database for the brickKit modules: when the public proxy answers 404 for a release minutes old
+# (a cached failed fetch), go takes it from the repository itself (the assembly's C10 retro R2)
+RUN apk add --no-cache git
+ENV GONOSUMDB=github.com/brickKit/*
 RUN CGO_ENABLED=0 GOBIN=/out go install -trimpath github.com/brickKit/be-acceptance/probes/go/v3@v{version}
 
 FROM alpine:3.24.2

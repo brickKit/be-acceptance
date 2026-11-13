@@ -65,8 +65,9 @@ def bind(user, sim, dt_user: str) -> str:
     consent = urlparse(user.post(DT, "/api/im-dingtalk/bindings/start")["url"])
     q = parse_qs(consent.query)
     assert consent.path == "/oauth2/auth" and q["client_id"] == [DINGTALK_APP_KEY], consent
-    r = user.http.get(user.url(DT, "/api/im-dingtalk/bindings/callback"),
-                      params={"authCode": sim.grant(dt_user), "state": q["state"][0]})
+    r = user.http.get(user.url(DT, "/api/im-dingtalk/bindings/callback"),  # in the user's signed-in browser
+                      params={"authCode": sim.grant(dt_user), "state": q["state"][0]},
+                      headers={"Authorization": f"Bearer {user.token}"})
     assert r.status_code == 302, r.text
     return parse_qs(urlparse(r.headers["location"]).query)["dingtalk"][0]
 
@@ -96,8 +97,8 @@ def note_of(lead, entry: dict) -> dict | None:
 
 
 def test_dingtalk_the_lead_binds_their_own_dingtalk(login, sim):
-    """ID10, P20.9: started by the lead, DingTalk's code for the lead's DingTalk user binds it; the state is used once;
-    the lead sees their own binding."""
+    """ID10, P20.9: started by the lead, DingTalk's code for the lead's DingTalk user binds it in the lead's own
+    signed-in browser; the lead sees their own binding."""
     lead = login("test.buyer.lead")
     r = lead.http.delete(lead.url(DT, "/api/im-dingtalk/bindings/me"), headers={"Authorization": f"Bearer {lead.token}"})
     assert r.status_code in (200, 204, 404), r.text  # a rerun on the same cell starts unbound
@@ -116,6 +117,7 @@ def test_dingtalk_approve_from_the_card(bob, login, sim, keys, world):
     card = card_of(sim, entry)
     actions = {b.get("Action") for b in card["buttons"]}
     assert "approve" in actions and "reject" not in actions, card
+    assert "PR\\-CN01" in card["title"], "the title as plain text: the card's Markdown characters escaped (ID02)"
     assert all(b["Value"].count(".") == 2 for b in card["buttons"] if b.get("Action")), "delivery.action.one-time value"
 
     click = dingtalk.click(card, "approve")

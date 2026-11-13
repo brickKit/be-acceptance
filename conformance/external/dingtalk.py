@@ -1,7 +1,8 @@
 """A DingTalk simulator for the channel member integration/im-dingtalk (the assembly project's protocol 10; be-protocol
 chapter 20), modelled on DingTalk's public documents as the member is (its docs/design.md open questions): the old
-API's application token (GET /gettoken) and a union id's user (POST /topapi/user/getbyunionid), the new API's
-interactive card (POST /v1.0/im/interactiveCards/send), a user's OAuth token (POST /v1.0/oauth2/userAccessToken) and
+API's union id's user (POST /topapi/user/getbyunionid), the new API's application token (POST
+/v1.0/oauth2/accessToken, the secret in the body; the old GET /gettoken too), interactive card (POST
+/v1.0/im/interactiveCards/send), a user's OAuth token (POST /v1.0/oauth2/userAccessToken) and
 the user it was given to (GET /v1.0/contact/users/me). It keeps every card it took (`cards`); the suite grants an OAuth
 code for a DingTalk user (`grant`) and scripts the next sends' answers (`faults`). The callbacks' signature and
 encryption (`sign`, `encrypt`, `decrypt`, `callback`) are DingTalk's event subscription as the member checks them, so
@@ -143,6 +144,10 @@ class Sim:
                 u = urlparse(self.path)
                 q = {k: v[0] for k, v in parse_qs(u.query).items()}
                 b = self.body()
+                if u.path == "/v1.0/oauth2/accessToken":
+                    if b.get("appKey") != sim.app_key or b.get("appSecret") != sim.app_secret:
+                        return self.answer(400, {"code": "invalidClientIdOrSecret"})
+                    return self.answer(200, {"accessToken": sim.app_token, "expireIn": 7200})
                 if u.path == "/v1.0/oauth2/userAccessToken":
                     with sim.lock:
                         union = sim.codes.pop(b.get("code", ""), None)
