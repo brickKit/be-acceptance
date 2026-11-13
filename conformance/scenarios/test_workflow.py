@@ -50,7 +50,7 @@ def test_workflow_requisition_approved_from_the_worklist(bob, login, world):
                    "lines": [{"product_id": world.goods["id"], "quantity": "3", "unit": world.goods["base_unit"]}]})
     assert bob.post("erp/purchase", f"/api/purchase/requisitions/{req['id']}/submit")["state"] == "submitted"
     entry = worklist_entry(lead, "erp.purchase.requisition.approval", req["id"])
-    assert entry["action"] == {"component": "erp/purchase", "path": f"/be/flow/tasks/{entry['task']['id']}/decisions"}
+    assert entry["action"] == {"component": "erp/purchase", "path": f"/api/purchase/flow/tasks/{entry['task']['id']}/decisions"}
     assert entry["stale"] is False and lead.principal in entry["task"]["candidates"], entry
     assert bob.principal not in entry["task"]["candidates"], "the submitter's person is left out"
 
@@ -61,7 +61,7 @@ def test_workflow_requisition_approved_from_the_worklist(bob, login, world):
     assert first.status_code == 200, first.text
     again = decide(lead, entry, "approve", key)
     assert again.status_code == 200 and again.json()["version"] == first.json()["version"], again.text
-    task = lead.get("erp/purchase", f"/be/flow/tasks/{entry['task']['id']}")
+    task = lead.get("erp/purchase", f"/api/purchase/flow/tasks/{entry['task']['id']}")
     assert task["state"] == "decided" and task["decision"]["by"] == lead.principal, task
     assert bob.get("erp/purchase", f"/api/purchase/requisitions/{req['id']}")["state"] == "approved"
 

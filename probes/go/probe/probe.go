@@ -26,7 +26,7 @@ import (
 
 // Definition is one probe variant as the launcher and the shells take it.
 func Definition(v Variant) component.Definition {
-	return component.Definition{ID: v.ID, Version: Version, Keys: Keys(), Migrations: Migrations(), GRPCPort: v.GRPCPort,
+	return component.Definition{ID: v.ID, PublicPrefix: "/api/probe", Version: Version, Keys: Keys(), Migrations: Migrations(), GRPCPort: v.GRPCPort,
 		Streams: []events.Stream{{Name: v.Stream, Partitions: 4}, {Name: WatermarkStream(v), Partitions: 2,
 			Watermark: &events.Watermark{Operation: Prefix(v.ID) + ".pull", Pullers: append(append([]string{}, Callers...), Suite)},
 			// a watermark source's batch read and snapshot (P9.30, since 3.2.35): the writes made on this stream

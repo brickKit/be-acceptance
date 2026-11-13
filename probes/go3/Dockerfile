@@ -4,7 +4,7 @@ FROM golang:1.27.2-alpine AS build
 # (a cached failed fetch), go takes it from the repository itself (the assembly's C10 retro R2)
 RUN apk add --no-cache git
 ENV GONOSUMDB=github.com/brickKit/*
-RUN CGO_ENABLED=0 GOBIN=/out go install -trimpath github.com/brickKit/be-acceptance/probes/go/v3@v3.2.62
+RUN CGO_ENABLED=0 GOBIN=/out go install -trimpath github.com/brickKit/be-acceptance/probes/go/v3@v3.2.63
 
 FROM alpine:3.24.2
 COPY --from=build /out/go /probe-go
