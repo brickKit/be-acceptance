@@ -159,3 +159,21 @@ def test_every_probe_as_it_is_now_gets_every_key_it_declares(tmp_path, monkeypat
     c = Cell.load(tmp_path)
     prepare.configs(c)
     assert prepare.unset_keys(c) == []
+
+
+def test_a_file_reference_the_cell_does_not_have_is_named(tmp_path, monkeypatch):
+    """C11: the persisted queries were written one directory too deep and only brickkit up noticed; the preparation
+    names every file:// value whose file is missing."""
+    c = cell(tmp_path, monkeypatch, {})
+    (tmp_path / ".secrets" / "bff").mkdir()
+    (tmp_path / ".secrets" / "bff" / "list.json").write_text("{}")
+    (tmp_path / "config" / "infra-bff-mobile.yaml").write_text(
+        "BFF_PERSISTED_QUERIES: file://.secrets/bff/list.json\nX: file://.secrets/bff/.secrets/bff/list.json\n"
+        "Y: plain\n")
+    assert prepare.missing_files(c) == ["infra-bff-mobile.yaml: file://.secrets/bff/.secrets/bff/list.json"]
+
+
+def test_the_bff_list_lands_where_its_reference_points(tmp_path):
+    from cells import bffqueries
+    ref = bffqueries.write(tmp_path)
+    assert (tmp_path / ref).is_file() and ref == ".secrets/bff/persisted-queries.json"

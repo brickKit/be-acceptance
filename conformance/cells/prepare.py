@@ -486,6 +486,19 @@ UNSET_PREFIXES_ON_PURPOSE = {
 }
 
 
+def missing_files(c: Cell) -> list[str]:
+    """Every "<config file>: <path>" whose file:// value names a file the cell does not have: BrickKit reads them
+    from the project root (the cell's directory) only at generation, so the preparation checks them here."""
+    out = []
+    for f in sorted((c.dir / "config").glob("*.yaml")):
+        for line in f.read_text().splitlines():
+            _, _, value = line.partition(":")
+            value = value.strip().strip('"')
+            if value.startswith("file://") and not (c.dir / value[len("file://"):]).is_file():
+                out.append(f"{f.name}: {value}")
+    return out
+
+
 def unset_keys(c: Cell) -> list[str]:
     """Every "member: KEY" the cell's configuration leaves unset although the member's version declares it without a
     default (its description names one when the SDK has it) and it is not unset on purpose."""
@@ -810,4 +823,7 @@ async def prepare(directory: str | pathlib.Path) -> Cell:
     if problems := unset_keys(c):
         raise ValueError("declared without a default and left unset by the cell (set them in prepare.py, or add them "
                          "to UNSET_ON_PURPOSE with why): " + ", ".join(problems))
+    if missing := missing_files(c):
+        raise ValueError("file:// references to files the cell does not have (C11's persisted queries were written "
+                         "one directory too deep): " + ", ".join(missing))
     return c
