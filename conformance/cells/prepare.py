@@ -19,8 +19,8 @@ import asyncpg
 import yaml
 
 from besdk import testing
-from cells import homes
-from cells.spec import INSTANCES, SHELL_ROLES, Cell, file_of, schema_of, stream_of
+from cells import bffqueries, homes
+from cells.spec import INSTANCES, NO_DATABASE, SHELL_ROLES, Cell, file_of, schema_of, stream_of
 
 # The security members' own resource types and permission keys (their component definitions), for the registry the
 # authorization member checks submissions against.
@@ -176,6 +176,8 @@ ERP_KEYS = {
                                                "integration.im_dingtalk.system.deliver",
                                                "integration.im_dingtalk.system.recover",
                                                "integration.im_dingtalk.system.resend"]},
+    # C11 (3.0.0): the mobile aggregation; one entry without dimensions, the owners decide what each caller sees
+    "infra/bff-mobile": {"resource_type": ["infra.bff_mobile.entry"], "permission": ["infra.bff_mobile.entry.use"]},
     "infra/print": {"resource_type": ["infra.print.template", "infra.print.system"],
                     "permission": ["infra.print.template.read", "infra.print.template.preview",
                                    "infra.print.template.edit", "infra.print.system.read", "infra.print.system.render",
@@ -202,7 +204,7 @@ DIMENSIONS = {"erp.inventory.warehouse": ["legal_entity", "warehouse"], "erp.inv
               "infra.notification.rejection": [], "infra.attachment.upload": [],
               "infra.attachment.download": [], "integration.im_dingtalk.my_binding": [],
               "integration.im_dingtalk.binding": [], "integration.im_dingtalk.callback": [], "erp.costing.policy": ["legal_entity"],
-              "erp.costing.valuation": ["legal_entity"], "crm.opportunity": ["legal_entity", "owner"]}
+              "infra.bff_mobile.entry": [], "erp.costing.valuation": ["legal_entity"], "crm.opportunity": ["legal_entity", "owner"]}
 # the components that only consume events: the bus, an implementation instance, no stream of their own to clean
 CONSUMERS = {"infra/workflow"}
 # the components whose events go through the bus (infra/print publishes none and declares no bus)
@@ -248,7 +250,7 @@ async def databases(c: Cell) -> None:
         finally:
             await conn.close()
     hosted_by = {m: shell for shell, ms in c.shells.items() for m in ms}
-    for probe in c.placed:
+    for probe in (p for p in c.placed if p not in NO_DATABASE):
         s = schema_of(probe)
         shell_role = SHELL_ROLES[hosted_by[probe]] if probe in hosted_by else ""
         instance, database = c.home_of(probe)
@@ -556,6 +558,9 @@ def security_configs(c: Cell) -> None:
         files[comp] = [*common, *db(comp), *guarded(comp), "BUS_URL: file://.secrets/bus",
                        f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"]
     for comp in c.erp:  # the business components and print: a database, a service identity, guarded routes
+        if comp in NO_DATABASE:  # the mobile aggregation: guarded routes, nothing to migrate
+            files[comp] = ["DEPLOYMENT_ID: $var:DEPLOYMENT_ID", *guarded(comp)]
+            continue
         files[comp] = [*common, *db(comp), *guarded(comp)]
         if comp in PRODUCERS or comp in CONSUMERS:
             files[comp] += ["BUS_URL: file://.secrets/bus", f"IMPLEMENTATION_INSTANCE: {uuid.uuid4()}"]
@@ -580,6 +585,8 @@ def security_configs(c: Cell) -> None:
             files[s].append("FLOW_ACTION_SOURCES: integration/im-dingtalk")
     if "integration/im-dingtalk" in files:
         files["integration/im-dingtalk"] += dingtalk_config(c)
+    if "infra/bff-mobile" in files:  # the persisted queries as the mobile entry's build would list them (BM02)
+        files["infra/bff-mobile"].append(f"BFF_PERSISTED_QUERIES: file://{bffqueries.write(c.dir / '.secrets' / 'bff')}")
     if "infra/attachment" in files:  # the presigned addresses as the suite (the browser) reaches the object store
         files["infra/attachment"].append("OBJECT_STORE_PUBLIC_URL: http://localhost:9000")
     sources = []  # the assembly's fact sources (erp/finance's ST01, AF01)

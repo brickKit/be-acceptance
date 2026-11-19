@@ -19,8 +19,10 @@ MDM_PORTS = {"mdm/org": (8083, 9093), "mdm/currency": (8226, 9226), "mdm/partner
 ERP_PORTS = {"erp/inventory": (8086, 9096), "erp/credit": (8088, 9088), "erp/sales": (8084, 9094),
              "erp/billing": (8089, 9089), "erp/purchase": (8085, 9095), "erp/finance": (8087, 9097), "erp/payment": (8228, 9228), "erp/costing": (8229, 9229), "crm/opportunity": (8102, 9102), "infra/print": (8400, 9400),
              "infra/workflow": (8201, 9201), "infra/notification": (8202, 9202), "infra/attachment": (8204, 9204),
-             "integration/im-dingtalk": (8207, 9207)}
+             "integration/im-dingtalk": (8207, 9207), "infra/bff-mobile": (8500, 0)}
 PORTS = {**PROBE_PORTS, **INFRA_PORTS, **MDM_PORTS, **ERP_PORTS}
+# the components without a database (no schema, no roles, no migration): the mobile aggregation reads its owners
+NO_DATABASE = {"infra/bff-mobile"}
 SHELL_ROLES = {"be/go-core": "shell_go_core", "be/go-infra": "shell_go_infra", "be/py-render": "shell_py_render"}
 SHELL_PORTS = {"be/go-core": 8090, "be/go-infra": 8224, "be/py-render": 8402}
 # cells expose every port at 10000 + port (18090-18605): below Linux's ephemeral range (32768-60999), where any
