@@ -586,7 +586,7 @@ def security_configs(c: Cell) -> None:
     if "integration/im-dingtalk" in files:
         files["integration/im-dingtalk"] += dingtalk_config(c)
     if "infra/bff-mobile" in files:  # the persisted queries as the mobile entry's build would list them (BM02)
-        files["infra/bff-mobile"].append(f"BFF_PERSISTED_QUERIES: file://{bffqueries.write(c.dir / '.secrets' / 'bff')}")
+        files["infra/bff-mobile"].append(f"BFF_PERSISTED_QUERIES: file://{bffqueries.write(c.dir)}")
     if "infra/attachment" in files:  # the presigned addresses as the suite (the browser) reaches the object store
         files["infra/attachment"].append("OBJECT_STORE_PUBLIC_URL: http://localhost:9000")
     sources = []  # the assembly's fact sources (erp/finance's ST01, AF01)

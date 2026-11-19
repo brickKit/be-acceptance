@@ -49,6 +49,7 @@ def write(cell_dir: pathlib.Path) -> str:
     d = cell_dir / ".secrets" / "bff"
     d.mkdir(parents=True, exist_ok=True)
     path = d / "persisted-queries.json"
-    path.write_text(json.dumps({hash_of(n): q for n, q in QUERIES.items()}, indent=1))
+    # one line: it travels as one environment variable (BrickKit escapes $ and newlines; one line needs neither)
+    path.write_text(json.dumps({hash_of(n): q for n, q in QUERIES.items()}))
     path.chmod(0o644)
     return str(path.relative_to(cell_dir))
