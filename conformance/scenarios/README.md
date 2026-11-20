@@ -15,6 +15,10 @@
 | `test_opportunity.py` | 商机到订单（A71）：商机请求报价，销售生成一张没有明细、带商机参考与请求身份的报价草稿（商机上的请求变成已生成）；没有明细不能发出，补上明细后发出、接受成订单（订单带商机参考），确认订单后商机按订单的不含税合计自动赢单（格设 `OPPORTUNITY_AUTO_WIN=order_confirmed`，操作者 `system`）；`test.sales.cn` 只看到、只算自己的商机，别人的答 404。格里没有 `crm/opportunity` 时跳过 | `crm/opportunity`、`erp/sales`、`erp/inventory`、`erp/credit` |
 | `test_workflow.py` | 统一待办里的审批（C7）：提交的采购申请出现在采购主管（`test.buyer.lead`，任 CN01 的 `PUR-MGR`）的待办里，动作入口是 `erp/purchase` 的标准路由；提交人自己审批答 `SELF_APPROVAL`；主管的决定直达采购组件，同一个幂等键重试答同一个结果、只有一个决定；批准后订单能取用申请行；任务离开待办、进了已办。银行手续费的任务在财务主管（`test.finance.lead`，任 `FIN-MGR`）的待办里：没有意见的驳回答 `REQUEST_INVALID`，带意见驳回回草稿，再提交是新任务，批准即过账。格里没有 `infra/workflow`、`erp/purchase`、`erp/payment` 或 `mdm/employee` 时跳过 | `infra/workflow`、`erp/purchase`、`erp/payment`、`mdm/employee` |
 | `test_notification.py` | 审批的通知（C8）：提交的采购申请的任务成为采购主管的站内消息（未读、链接指向待办里的任务、模板 `be.flow.task.pending`），提交人收不到；主管标为已读，别人标答 404；任务决定后消息标为已撤回。主管关掉审批待办后，提交的申请进了待办但没有消息，开回去后下一张有；安全提醒关不掉（`REQUEST_INVALID`）。格里没有 `infra/notification`、`infra/workflow`、`erp/purchase` 或 `mdm/employee` 时跳过 | `infra/notification`、`infra/workflow`、`erp/purchase`、`mdm/employee` |
+| `test_attachment.py` | 附件（C9）：采购组件代用户向附件组件要上传地址，用户直传对象存储、在附件组件确认，附件组件复制到最终位置并核对；普通类别（合同）经预签名地址下载，严格类别（发票扫描件）凭一次性凭据在附件组件下载；采购员看不到发票扫描件，主管能。格里没有 `infra/attachment` 或 `erp/purchase` 时跳过 | `infra/attachment`、`erp/purchase`、`infra/authz` |
+| `test_dingtalk.py` | 钉钉渠道（C10）：采购主管经套件的钉钉模拟器绑定本人；提交的申请的审批同时以互动卡片到达（只有同意，驳回要意见）；在钉钉里点同意即批准，重推与再点不产生第二个决定；在待办里已决定的卡片被拒并写站内说明；未签名的回调丢弃，转给别人的卡片隔离；没绑定只收站内消息。格里缺 `integration/im-dingtalk`、`infra/notification`、`infra/workflow`、`erp/purchase` 或 `mdm/employee` 时跳过 | `integration/im-dingtalk`、`infra/notification`、`infra/workflow`、`erp/purchase` |
+| `test_bff.py` | 移动聚合（C11）：按摘要的持久化查询，每个字段以调用者自己的凭据读属主的用户面，所以经它看到的就是属主直接答这个账号的；“我的”是已核验的调用者；审批从任务的动作入口直达属主。格里缺它读的任一属主时跳过 | `infra/bff-mobile`、`infra/workflow`、`infra/notification`、`mdm/product`、`erp/inventory`、`mdm/partner`、`erp/sales`、`crm/opportunity`、`erp/purchase` |
+| `test_edge.py` | 格前面的边缘（C12）：像浏览器一样经边缘登录（身份成员的跳转、Casdoor 的登录、回调）得到会话 Cookie；边缘给每个组件的路由注入令牌、剥掉浏览器自带的 `Authorization`、拒绝缺 `BE-Request` 的写请求、只给活着的会话 `features`；“我的操作”与移动聚合经边缘；登出后留下的 Cookie 得到 `SESSION_ENDED` 并被清掉，也挡不住再登录（P11.12、P11.13，UI32）。地址是边缘的 `http://localhost:8200`。格的 `cell.yaml` 没有 `edge: true` 时跳过 | 边缘（`cells/edge.py`）、`infra/iam-casdoor`、`infra/authz`、`infra/bff-mobile` |
 
 测试名写出对方组件（测试规范的命名规则），用 `-k` 按名字只跑两个组件之间的。
 
@@ -26,7 +30,7 @@
 BE_ACC_CELL=<格的目录，绝对路径> BE_ACC_IAM_TEST_PASSWORD=<测试账号的密码> make -C .. scenarios   # 在 conformance/ 里：uv run pytest -q scenarios
 ```
 
-单跑的格与外壳的格用同一套：地址都是格的主机端口（`10000 + 端口`）。以 `test.bob`（种子与负载用户）建单据，以销售账号检查范围。
+单跑的格与外壳的格用同一套：地址都是格的主机端口（`10000 + 端口`）；`test_edge.py` 例外，经边缘的 `http://localhost:8200`。以 `test.bob`（种子与负载用户）建单据，以销售账号检查范围。
 
 ## 独立预期在哪里测
 

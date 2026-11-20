@@ -338,7 +338,7 @@ def certificates(c: Cell) -> None:
         if d.exists():
             shutil.rmtree(d)
     tls.mkdir(parents=True)
-    names = [*c.placed, "ops/recover"]
+    names = [*c.placed, "ops/recover", *(["infra/edge"] if c.edge else [])]
     if c.secured:
         issuer(c, "init")
         for comp in names:

@@ -89,6 +89,8 @@ class Cell:
     # (Podman Quadlet units, FRR-025)
     podman: str = ""
     units: str = ""
+    # C12: the edge in front of the cell (cells/edge.py): Traefik with be-edge on host port 8200, its certificate infra/edge
+    edge: bool = False
 
     @property
     def base_host(self) -> str:
@@ -123,7 +125,7 @@ class Cell:
                  replicas={k.split("@")[0]: int(v) for k, v in (spec.get("replicas") or {}).items()},
                  databases={k.split("@")[0]: str(v) for k, v in (spec.get("databases") or {}).items()},
                  settings={k.split("@")[0]: {kk: str(vv) for kk, vv in v.items()} for k, v in (spec.get("settings") or {}).items()},
-                 podman=spec.get("podman", ""), units=spec.get("units", ""))
+                 podman=spec.get("podman", ""), units=spec.get("units", ""), edge=bool(spec.get("edge", False)))
         if spec.get("deployment"):  # a cell of its own deployment (a recovery drill: the run profile keeps its state)
             c.deployment = str(spec["deployment"])
         if c.base not in ("", "cluster") or (c.base == "cluster" and c.row != "K"):
