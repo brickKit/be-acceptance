@@ -28,6 +28,8 @@ INFRA_KEYS = {
     "infra/authz": {"resource_type": ["infra.authz.security_record", "infra.authz.security_disposition", "infra.authz.system"],
                     "permission": ["infra.authz.security_record.read", "infra.authz.security_record.change",
                                    "infra.authz.security_record.tighten", "infra.authz.security_record.relinquish",
+                                   # 3.0.60 on: the caller's own operation keys (A177, C12)
+                                   "infra.authz.security_record.own_operations",
                                    "infra.authz.security_disposition.read", "infra.authz.security_disposition.dispose",
                                    "infra.authz.security_disposition.release",
                                    "infra.authz.system.read", "infra.authz.system.verify", "infra.authz.system.submit",
